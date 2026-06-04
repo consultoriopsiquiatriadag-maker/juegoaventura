@@ -48,6 +48,7 @@ let mobileYaw = Math.PI;
 let mobilePitch = 0;
 const joystick  = { active:false, id:null, baseX:0, baseY:0, nx:0, ny:0 };
 const lookTouch = { active:false, id:null, lastX:0, lastY:0 };
+let rotateLeft=false, rotateRight=false; // botones de rotación móvil
 
 // ── HELPERS ───────────────────────────────────────
 // mkMat: PBR MeshStandardMaterial — mejora visual base automática
@@ -109,7 +110,7 @@ function init(){
 
   setupLighting();
   buildWorld();
-  spawnNPCs();
+  if(!isMobile) spawnNPCs(); // NPCs civiles solo en desktop — mejora performance móvil
   spawnStaffNPCs();
   loadCabinCrew();
   setupPostProcessing();
@@ -120,6 +121,8 @@ function init(){
 
 // ── POST PROCESSING ────────────────────────────────
 function setupPostProcessing(){
+  // Sin postprocesado en móvil — ahorra GPU y mejora framerate
+  if(isMobile){ composer=null; return; }
   if(typeof THREE.EffectComposer==='undefined'){ composer=null; return; }
   composer=new THREE.EffectComposer(renderer);
   const renderPass=new THREE.RenderPass(scene,camera);
@@ -152,7 +155,7 @@ function setupLighting(){
   // Luz solar principal — sombras de alta resolución
   const sun=new THREE.DirectionalLight(0xfffae8,1.1);
   sun.position.set(60,120,50); sun.castShadow=true;
-  sun.shadow.mapSize.width=sun.shadow.mapSize.height=4096;
+  sun.shadow.mapSize.width=sun.shadow.mapSize.height=isMobile?1024:4096;
   sun.shadow.camera.left=-120; sun.shadow.camera.right=120;
   sun.shadow.camera.top=120; sun.shadow.camera.bottom=-120;
   sun.shadow.camera.far=400; sun.shadow.bias=-0.0005;
@@ -2479,10 +2482,25 @@ function onKeyUp(e){ switch(e.code){ case 'KeyW': case 'ArrowUp': movement.forwa
 // ══════════════════════════════════════════════════
 function setupMobileControls(){
   document.getElementById('mobile-joystick').classList.remove('hidden');
+  document.getElementById('mobile-rotate-btns').classList.remove('hidden');
   const crosshair=document.getElementById('crosshair');
   if(crosshair) crosshair.style.display='none';
   const hint=document.getElementById('controls-hint');
   if(hint) hint.querySelector('span').textContent='⬤ Izquierda: moverse  ·  Derecha: mirar  ·  Botones: acciones';
+
+  // Botones de rotación de cámara — pointerdown/up para respuesta inmediata
+  const btnRL=document.getElementById('btn-rotate-left');
+  const btnRR=document.getElementById('btn-rotate-right');
+  const setRL=(v)=>{ rotateLeft=v;  btnRL.classList.toggle('pressed',v); };
+  const setRR=(v)=>{ rotateRight=v; btnRR.classList.toggle('pressed',v); };
+  btnRL.addEventListener('pointerdown',(e)=>{ e.stopPropagation(); setRL(true);  });
+  btnRR.addEventListener('pointerdown',(e)=>{ e.stopPropagation(); setRR(true);  });
+  btnRL.addEventListener('pointerup',   ()=>setRL(false));
+  btnRL.addEventListener('pointercancel',()=>setRL(false));
+  btnRL.addEventListener('pointerleave', ()=>setRL(false));
+  btnRR.addEventListener('pointerup',   ()=>setRR(false));
+  btnRR.addEventListener('pointercancel',()=>setRR(false));
+  btnRR.addEventListener('pointerleave', ()=>setRR(false));
 
   const jHandle=document.getElementById('joystick-handle');
   const JOY_R=46;
@@ -2494,7 +2512,15 @@ function setupMobileControls(){
   const isUITarget=(e)=>{
     const tag=e.target.tagName;
     if(tag==='BUTTON'||tag==='A'||tag==='INPUT'||tag==='SELECT') return true;
-    if(e.target.closest) return !!e.target.closest('button, a, input, #bottom-bar .hud-action-btn, #btn-pause, .close-btn, .tab-btn, .zone-panel-actions, .breath-btns');
+    if(e.target.closest) return !!e.target.closest(
+      'button, a, input, ' +
+      '#bottom-bar .hud-action-btn, #btn-pause, .close-btn, .tab-btn, ' +
+      '.zone-panel-actions, .breath-btns, ' +
+      // Paneles con scroll — no interceptar sus toques
+      '#zone-panel, #breathing-modal, #pause-menu, ' +
+      // Botones de rotación
+      '#mobile-rotate-btns'
+    );
     return false;
   };
 
@@ -2646,7 +2672,10 @@ function animate(){
 
   if(isGameActive && !isPaused && (isMobile || controls.isLocked)){
     if(isMobile){
-      // Apply camera rotation from touch look
+      // Botones de rotación: velocidad 1.8 rad/s
+      if(rotateLeft)  mobileYaw+=1.8*delta;
+      if(rotateRight) mobileYaw-=1.8*delta;
+      // Apply camera rotation from touch look + rotation buttons
       camera.rotation.order='YXZ';
       camera.rotation.y=mobileYaw;
       camera.rotation.x=mobilePitch;
