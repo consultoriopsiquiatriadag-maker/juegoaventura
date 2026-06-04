@@ -40,6 +40,8 @@
 
     <!-- ===== MENÚ PRINCIPAL ===== -->
     <div id="main-menu" class="screen hidden">
+        <!-- Canvas de partículas — aviones lentos, solo desktop, respeta prefers-reduced-motion -->
+        <canvas id="menu-bg-canvas" aria-hidden="true"></canvas>
         <div class="menu-bg-overlay"></div>
         <nav class="menu-nav">
             <a href="../juegos.html" class="btn-back-menu">← Volver</a>
@@ -137,6 +139,9 @@
 
         <!-- Crosshair -->
         <div id="crosshair">+</div>
+
+        <!-- Flash de transición al entrar a una zona -->
+        <div id="zone-transition" aria-hidden="true"></div>
 
         <!-- Controls hint — persistente durante el juego (solo desktop) -->
         <div id="controls-hint" class="hidden">
@@ -293,6 +298,7 @@
             <div class="end-stats">
                 <div class="stat"><span class="stat-n">7</span><span>Zonas exploradas</span></div>
                 <div class="stat"><span class="stat-n" id="breath-count-stat">0</span><span>Respiraciones</span></div>
+                <div class="stat"><span class="stat-n" id="time-stat">—</span><span>Tiempo de recorrido</span></div>
             </div>
             <button id="btn-restart" class="btn-primary">Repetir Recorrido</button>
             <button id="btn-end-menu" class="btn-ghost">Menú Principal</button>

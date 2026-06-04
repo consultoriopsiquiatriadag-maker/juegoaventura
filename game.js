@@ -41,6 +41,10 @@ let npcs=[], ringMeshes=[], luggageBelt=null;
 let flightBoardCanvas, flightBoardCtx, flightBoardTexture;
 let boardTimer=0;
 let gltfLoader=null, cabinMixers=[];
+let ambientLight=null;          // referencia para ciclo de luz ambiental
+let gameStartTime=0;            // ms al iniciar recorrido
+let menuAnimId=null;            // requestAnimationFrame del canvas del menú
+const prefersReducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ── MOBILE ─────────────────────────────────────────
 const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
@@ -143,14 +147,15 @@ function animLoad(){
   const f=document.getElementById('loading-fill');
   f.style.animation='none'; f.style.width='0%';
   let w=0; const iv=setInterval(()=>{ w+=1.5; f.style.width=Math.min(w,100)+'%';
-    if(w>=100){ clearInterval(iv); setTimeout(()=>{ document.getElementById('loading-screen').classList.add('hidden'); document.getElementById('main-menu').classList.remove('hidden'); },400); }
+    if(w>=100){ clearInterval(iv); setTimeout(()=>{ document.getElementById('loading-screen').classList.add('hidden'); document.getElementById('main-menu').classList.remove('hidden'); startMenuAnimation(); },400); }
   },20);
 }
 
 // ── LIGHTING ──────────────────────────────────────
 function setupLighting(){
   // Ambiente suave con tonos cálidos de aeropuerto moderno
-  scene.add(new THREE.AmbientLight(0xfff0e0,0.28));
+  ambientLight=new THREE.AmbientLight(0xfff0e0,0.28);
+  scene.add(ambientLight);
 
   // Luz solar principal — sombras de alta resolución
   const sun=new THREE.DirectionalLight(0xfffae8,1.1);
@@ -2418,6 +2423,63 @@ function updateNPCs(delta){
 }
 
 // ══════════════════════════════════════════════════
+// FASE C — EFECTOS VISUALES Y ATMÓSFERA
+// ══════════════════════════════════════════════════
+
+// Flash sutil de color al entrar a una zona
+function flashZoneColor(hexColor){
+  if(prefersReducedMotion()) return;
+  const el=document.getElementById('zone-transition');
+  if(!el) return;
+  const r=(hexColor>>16)&255, g=(hexColor>>8)&255, b=hexColor&255;
+  el.style.background=`rgba(${r},${g},${b},1)`;
+  el.classList.remove('flash-active');
+  void el.offsetWidth; // fuerza reflow para reiniciar la animación
+  el.classList.add('flash-active');
+}
+
+// Animación de aviones flotantes en el menú
+function startMenuAnimation(){
+  if(menuAnimId||prefersReducedMotion()||isMobile) return;
+  const canvas=document.getElementById('menu-bg-canvas');
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  canvas.width=canvas.offsetWidth||window.innerWidth;
+  canvas.height=canvas.offsetHeight||window.innerHeight;
+  const planes=Array.from({length:11},()=>({
+    x:Math.random()*canvas.width,
+    y:Math.random()*canvas.height,
+    size:10+Math.random()*13,
+    speed:0.10+Math.random()*0.20,
+    alpha:0.038+Math.random()*0.065,
+    rot:-0.18+Math.random()*0.36
+  }));
+  const loop=()=>{
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    planes.forEach(p=>{
+      ctx.save();
+      ctx.globalAlpha=p.alpha;
+      ctx.translate(p.x,p.y);
+      ctx.rotate(p.rot);
+      ctx.font=`${p.size}px serif`;
+      ctx.fillStyle='#ffffff';
+      ctx.fillText('✈',0,0);
+      ctx.restore();
+      p.x+=p.speed;
+      if(p.x>canvas.width+40){ p.x=-40; p.y=Math.random()*canvas.height; }
+    });
+    menuAnimId=requestAnimationFrame(loop);
+  };
+  loop();
+}
+
+function stopMenuAnimation(){
+  if(menuAnimId){ cancelAnimationFrame(menuAnimId); menuAnimId=null; }
+  const canvas=document.getElementById('menu-bg-canvas');
+  if(canvas){ const ctx=canvas.getContext('2d'); ctx.clearRect(0,0,canvas.width,canvas.height); }
+}
+
+// ══════════════════════════════════════════════════
 // EVENTS & GAME LOGIC
 // ══════════════════════════════════════════════════
 function setupEvents(){
@@ -2580,6 +2642,8 @@ function setupMobileControls(){
 
 function showScreen(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden')); if(id) document.getElementById(id).classList.remove('hidden'); }
 function startGame(){
+  stopMenuAnimation();
+  gameStartTime=Date.now();
   showScreen(null);
   document.getElementById('game-hud').classList.remove('hidden');
   isGameActive=true; isPaused=false; currentZoneIndex=-1;
@@ -2602,7 +2666,7 @@ function startGame(){
 }
 function pauseGame(){ isPaused=true; if(!isMobile)controls.unlock(); document.getElementById('pause-menu').classList.remove('hidden'); }
 function resumeGame(){ isPaused=false; document.getElementById('pause-menu').classList.add('hidden'); if(!isMobile)controls.lock(); }
-function returnToMenu(){ isGameActive=false; isPaused=false; stopSpeech(); if(!isMobile)controls.unlock(); closeZonePanel(); closeBreathing(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('pause-menu').classList.add('hidden'); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); showScreen('main-menu'); }
+function returnToMenu(){ isGameActive=false; isPaused=false; stopSpeech(); if(!isMobile)controls.unlock(); closeZonePanel(); closeBreathing(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('pause-menu').classList.add('hidden'); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); showScreen('main-menu'); startMenuAnimation(); }
 function restartGame(){ showScreen(null); startGame(); }
 function resetProgressUI(){ document.getElementById('progress-fill').style.width='0%'; document.querySelectorAll('.step').forEach(s=>s.classList.remove('done','active')); }
 
@@ -2620,6 +2684,7 @@ function enterZone(i){
   visitedZones.add(i);
   updateProgress(i);
   if(first){
+    flashZoneColor(zone.color); // flash sutil del color de la zona
     if(i===0){
       // Bienvenida extendida en la primera zona
       const msg=isMobile
@@ -2639,7 +2704,21 @@ function enterZone(i){
   if(visitedZones.size>=ZONE_DATA.length) setTimeout(()=>endGame(),2000);
 }
 function updateProgress(i){ document.getElementById('progress-fill').style.width=((i+1)/ZONE_DATA.length*100)+'%'; document.querySelectorAll('.step').forEach((s,j)=>{ s.classList.remove('active','done'); if(j<i)s.classList.add('done'); else if(j===i)s.classList.add('active'); }); }
-function endGame(){ isGameActive=false; stopSpeech(); if(!isMobile)controls.unlock(); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); closeZonePanel(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('breath-count-stat').textContent=breathCount; showScreen('end-screen'); speak('¡Felicitaciones! Has completado el recorrido completo del aeropuerto. Ahora estás más preparado para tu próximo vuelo.'); }
+function endGame(){
+  isGameActive=false; stopSpeech();
+  if(!isMobile)controls.unlock();
+  document.getElementById('click-to-play').classList.add('hidden');
+  document.getElementById('controls-hint').classList.add('hidden');
+  closeZonePanel();
+  document.getElementById('game-hud').classList.add('hidden');
+  document.getElementById('breath-count-stat').textContent=breathCount;
+  // Tiempo total del recorrido
+  const secs=Math.floor((Date.now()-gameStartTime)/1000);
+  const m=Math.floor(secs/60), s=secs%60;
+  document.getElementById('time-stat').textContent=`${m}:${String(s).padStart(2,'0')}`;
+  showScreen('end-screen');
+  speak('¡Felicitaciones! Has completado el recorrido completo del aeropuerto. Ahora estás más preparado para tu próximo vuelo.');
+}
 
 function openZonePanel(i){ if(i<0||i>=ZONE_DATA.length)return; const z=ZONE_DATA[i]; document.getElementById('zone-icon-big').textContent=z.emoji; document.getElementById('zone-panel-title').textContent=z.name; document.getElementById('zone-panel-subtitle').textContent=z.subtitle; document.getElementById('zone-expect-list').innerHTML=z.expect.map(e=>`<li>${e}</li>`).join(''); document.getElementById('zone-health-content').innerHTML=z.health.map(h=>`<div class="health-tip">${h.text}</div>`).join(''); document.getElementById('zone-panic-content').innerHTML=z.panic.map(p=>`<div class="panic-tip"><div class="panic-title">${p.title}</div>${p.text}</div>`).join(''); document.querySelectorAll('.tab-btn').forEach((b,j)=>b.classList.toggle('active',j===0)); document.querySelectorAll('.tab-content').forEach((t,j)=>t.classList.toggle('active',j===0)); document.getElementById('zone-panel').classList.remove('hidden'); }
 function closeZonePanel(){ document.getElementById('zone-panel').classList.add('hidden'); }
@@ -2702,6 +2781,10 @@ function animate(){
   }
 
   updateNPCs(delta);
+
+  // Ciclo sutil de luz ambiental — simula variación de iluminación del aeropuerto
+  // Período ~52 s, amplitud ±0.03 → imperceptible pero da vida al espacio
+  if(ambientLight) ambientLight.intensity=0.28+Math.sin(t*0.12)*0.03;
 
   // Rings pulse
   ringTime+=delta;
