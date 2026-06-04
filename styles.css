@@ -813,6 +813,7 @@ button { font-family: var(--ff-body); cursor: pointer; border: none; outline: no
 
   /* Zone badge higher so it doesn't overlap joystick */
   #zone-badge {
+    top: auto;
     bottom: 90px;
     left: 50%;
     transform: translateX(-50%);

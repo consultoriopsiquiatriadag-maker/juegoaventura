@@ -31,6 +31,7 @@ let composer; // postprocessing
 let isGameActive=false, isPaused=false, currentZoneIndex=-1;
 let visitedZones=new Set(), breathCount=0;
 let speechSynth=window.speechSynthesis, isSpeaking=false;
+let cachedVoices=[];
 let breathInterval=null, breathPhaseTimer=null, breathCycles=0;
 const movement={forward:false,backward:false,left:false,right:false};
 const velocity=new THREE.Vector3();
@@ -2546,7 +2547,7 @@ function checkZones(){
 }
 function enterZone(i){ currentZoneIndex=i; const zone=ZONE_DATA[i]; const first=!visitedZones.has(i); visitedZones.add(i); updateProgress(i); if(first){ if(isMobile){ showToast(`${zone.emoji} ${zone.name} — pulsa 💡 para info`); narrateZone(i); } else { openZonePanel(i); narrateZone(i); showToast(`${zone.emoji} ${zone.name}`); } } if(visitedZones.size>=ZONE_DATA.length) setTimeout(()=>endGame(),2000); }
 function updateProgress(i){ document.getElementById('progress-fill').style.width=((i+1)/ZONE_DATA.length*100)+'%'; document.querySelectorAll('.step').forEach((s,j)=>{ s.classList.remove('active','done'); if(j<i)s.classList.add('done'); else if(j===i)s.classList.add('active'); }); }
-function endGame(){ isGameActive=false; stopSpeech(); controls.unlock(); closeZonePanel(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('breath-count-stat').textContent=breathCount; showScreen('end-screen'); speak('¡Felicitaciones! Has completado el recorrido completo del aeropuerto. Ahora estás más preparado para tu próximo vuelo.'); }
+function endGame(){ isGameActive=false; stopSpeech(); if(!isMobile)controls.unlock(); closeZonePanel(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('breath-count-stat').textContent=breathCount; showScreen('end-screen'); speak('¡Felicitaciones! Has completado el recorrido completo del aeropuerto. Ahora estás más preparado para tu próximo vuelo.'); }
 
 function openZonePanel(i){ if(i<0||i>=ZONE_DATA.length)return; const z=ZONE_DATA[i]; document.getElementById('zone-icon-big').textContent=z.emoji; document.getElementById('zone-panel-title').textContent=z.name; document.getElementById('zone-panel-subtitle').textContent=z.subtitle; document.getElementById('zone-expect-list').innerHTML=z.expect.map(e=>`<li>${e}</li>`).join(''); document.getElementById('zone-health-content').innerHTML=z.health.map(h=>`<div class="health-tip">${h.text}</div>`).join(''); document.getElementById('zone-panic-content').innerHTML=z.panic.map(p=>`<div class="panic-tip"><div class="panic-title">${p.title}</div>${p.text}</div>`).join(''); document.querySelectorAll('.tab-btn').forEach((b,j)=>b.classList.toggle('active',j===0)); document.querySelectorAll('.tab-content').forEach((t,j)=>t.classList.toggle('active',j===0)); document.getElementById('zone-panel').classList.remove('hidden'); }
 function closeZonePanel(){ document.getElementById('zone-panel').classList.add('hidden'); }
@@ -2554,7 +2555,7 @@ function openCurrentZonePanel(){ if(currentZoneIndex>=0) openZonePanel(currentZo
 
 function narrateZone(i){ if(i>=0&&i<ZONE_DATA.length) speak(ZONE_DATA[i].narration); }
 function narrateCurrentZone(){ if(currentZoneIndex>=0) narrateZone(currentZoneIndex); else speak('Avanza hacia la entrada del aeropuerto para comenzar tu recorrido.'); }
-function speak(text){ if(!speechSynth)return; stopSpeech(); const u=new SpeechSynthesisUtterance(text); u.lang='es-ES'; u.rate=0.88; u.pitch=1.0; u.volume=1.0; const v=speechSynth.getVoices().find(v=>v.lang.startsWith('es')&&!v.name.includes('Google'))||speechSynth.getVoices().find(v=>v.lang.startsWith('es')); if(v)u.voice=v; isSpeaking=true; u.onend=()=>{isSpeaking=false;}; speechSynth.speak(u); }
+function speak(text){ if(!speechSynth)return; stopSpeech(); const u=new SpeechSynthesisUtterance(text); u.lang='es-ES'; u.rate=0.88; u.pitch=1.0; u.volume=1.0; const voices=cachedVoices.length?cachedVoices:speechSynth.getVoices(); const v=voices.find(v=>v.lang.startsWith('es')&&!v.name.includes('Google'))||voices.find(v=>v.lang.startsWith('es')); if(v)u.voice=v; isSpeaking=true; u.onend=()=>{isSpeaking=false;}; speechSynth.speak(u); }
 function stopSpeech(){ if(speechSynth){speechSynth.cancel();isSpeaking=false;} }
 
 function openBreathing(){ closeZonePanel(); if(!isMobile)controls.unlock(); document.getElementById('breathing-modal').classList.remove('hidden'); resetBreathUI(); }
@@ -2630,6 +2631,10 @@ function animate(){
 // BOOT
 // ══════════════════════════════════════════════════
 window.addEventListener('load',()=>{
-  if(speechSynth&&speechSynth.onvoiceschanged!==undefined) speechSynth.onvoiceschanged=()=>{};
+  if(speechSynth){
+    const loadVoices=()=>{ cachedVoices=speechSynth.getVoices(); };
+    if(speechSynth.onvoiceschanged!==undefined) speechSynth.onvoiceschanged=loadVoices;
+    loadVoices(); // carga inmediata en Chrome/Firefox donde ya están disponibles
+  }
   init();
 });

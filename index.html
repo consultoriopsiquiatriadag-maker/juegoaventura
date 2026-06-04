@@ -137,6 +137,24 @@
         <!-- Crosshair -->
         <div id="crosshair">+</div>
 
+        <!-- Controls hint (desktop) -->
+        <div id="controls-hint" class="hidden">
+            <span>WASD Mover · Mouse Mirar · Click Activar · ESC Pausa</span>
+        </div>
+
+        <!-- Mobile joystick (visible solo en táctil) -->
+        <div id="mobile-joystick" class="hidden">
+            <div id="joystick-base">
+                <div id="joystick-handle"></div>
+            </div>
+            <div class="joystick-label">Mover</div>
+        </div>
+
+        <!-- Mobile look hint -->
+        <div id="mobile-look-hint" class="hidden">
+            <span>Arrastrá para mirar</span>
+        </div>
+
         <!-- Zona actual -->
         <div id="zone-badge"></div>
 
@@ -251,25 +269,8 @@
             <button id="btn-restart" class="btn-primary">Repetir Recorrido</button>
             <button id="btn-end-menu" class="btn-ghost">Menú Principal</button>
         </div>
-        <!-- Controles hint -->
-        <div id="controls-hint" class="hidden">
-            <span>WASD Mover · Mouse Mirar · Click Activar · ESC Pausa</span>
-        </div>
 
-        <!-- Mobile joystick (visible solo en táctil) -->
-        <div id="mobile-joystick" class="hidden">
-            <div id="joystick-base">
-                <div id="joystick-handle"></div>
-            </div>
-            <div class="joystick-label">Mover</div>
-        </div>
-
-        <!-- Mobile look hint -->
-        <div id="mobile-look-hint" class="hidden">
-            <span>Arrastrá para mirar</span>
-        </div>
-
-    </div><!-- /game-hud -->
+    </div><!-- /end-screen -->
 
     <!-- Notificación flotante -->
     <div id="toast" class="hidden"></div>
