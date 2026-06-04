@@ -2430,6 +2430,14 @@ function setupEvents(){
   document.getElementById('btn-tips').addEventListener('click',openCurrentZonePanel);
   document.getElementById('btn-close-zone').addEventListener('click',closeZonePanel);
   document.getElementById('btn-close-hint').addEventListener('click',()=>document.getElementById('controls-hint').classList.add('hidden'));
+
+  // Overlay click-to-play
+  // Click en toda la tarjeta → activar
+  document.querySelector('.ctp-inner').addEventListener('click',()=>{ controls.lock(); });
+  // Botón principal — stopPropagation para no disparar dos veces
+  document.getElementById('btn-ctp-activate').addEventListener('click',(e)=>{ e.stopPropagation(); controls.lock(); });
+  // Botón secundario Volver — no propagar al ctp-inner
+  document.getElementById('btn-ctp-back').addEventListener('click',(e)=>{ e.stopPropagation(); returnToMenu(); });
   document.getElementById('btn-panel-breathe').addEventListener('click',openBreathing);
   document.getElementById('btn-panel-narrate').addEventListener('click',()=>{ narrateZone(currentZoneIndex); closeZonePanel(); });
   document.getElementById('btn-close-breath').addEventListener('click',closeBreathing);
@@ -2561,6 +2569,8 @@ function startGame(){
     camera.rotation.set(0,Math.PI,0);
     document.getElementById('click-to-play').classList.remove('hidden');
     document.getElementById('controls-hint').classList.remove('hidden');
+    // Auto-focus en el botón principal para que Enter/Espacio funcionen sin mouse
+    setTimeout(()=>{ const b=document.getElementById('btn-ctp-activate'); if(b) b.focus(); },80);
   }
   resetProgressUI();
 }

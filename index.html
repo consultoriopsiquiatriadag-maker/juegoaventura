@@ -145,12 +145,22 @@
         </div>
 
         <!-- Overlay "click para activar" — desktop, antes del primer click -->
-        <div id="click-to-play" class="hidden">
+        <div id="click-to-play" class="hidden"
+             role="dialog" aria-modal="true"
+             aria-labelledby="ctp-title" aria-describedby="ctp-desc">
             <div class="ctp-inner">
-                <div class="ctp-icon">🖱</div>
-                <h3>Hacé click para activar los controles</h3>
-                <p>El cursor se ocultará y podrás mirar alrededor con el mouse</p>
-                <p class="ctp-sub">Presioná <kbd>ESC</kbd> en cualquier momento para pausar</p>
+                <div class="ctp-icon" aria-hidden="true">🖱</div>
+                <h3 id="ctp-title">Hacé click para comenzar<br>y activar los controles</h3>
+                <p id="ctp-desc">El cursor se ocultará y vas a poder mirar alrededor con el mouse.</p>
+                <p class="ctp-sub">Podés presionar <kbd>ESC</kbd> en cualquier momento para pausar.</p>
+                <div class="ctp-actions">
+                    <button id="btn-ctp-activate" class="btn-ctp-primary" type="button">
+                        🖱 Activar controles
+                    </button>
+                    <button id="btn-ctp-back" class="btn-ctp-ghost" type="button">
+                        ← Volver al menú
+                    </button>
+                </div>
             </div>
         </div>
 
