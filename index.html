@@ -42,6 +42,7 @@
     <div id="main-menu" class="screen hidden">
         <div class="menu-bg-overlay"></div>
         <nav class="menu-nav">
+            <a href="../juegos.html" class="btn-back-menu">← Volver</a>
             <span class="logo">✈ AeroCalma</span>
         </nav>
         <div class="menu-hero">
@@ -137,9 +138,20 @@
         <!-- Crosshair -->
         <div id="crosshair">+</div>
 
-        <!-- Controls hint (desktop) -->
+        <!-- Controls hint — persistente durante el juego (solo desktop) -->
         <div id="controls-hint" class="hidden">
-            <span>WASD Mover · Mouse Mirar · Click Activar · ESC Pausa</span>
+            <span>WASD / ↑↓←→ Moverse &nbsp;·&nbsp; Mouse Mirar &nbsp;·&nbsp; Click Activar cámara &nbsp;·&nbsp; ESC Pausar &nbsp;·&nbsp; E Zona actual &nbsp;·&nbsp; B Respirar</span>
+            <button id="btn-close-hint" aria-label="Cerrar ayuda">✕</button>
+        </div>
+
+        <!-- Overlay "click para activar" — desktop, antes del primer click -->
+        <div id="click-to-play" class="hidden">
+            <div class="ctp-inner">
+                <div class="ctp-icon">🖱</div>
+                <h3>Hacé click para activar los controles</h3>
+                <p>El cursor se ocultará y podrás mirar alrededor con el mouse</p>
+                <p class="ctp-sub">Presioná <kbd>ESC</kbd> en cualquier momento para pausar</p>
+            </div>
         </div>
 
         <!-- Mobile joystick (visible solo en táctil) -->

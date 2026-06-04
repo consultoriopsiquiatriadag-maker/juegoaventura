@@ -2429,6 +2429,7 @@ function setupEvents(){
   document.getElementById('btn-narrate').addEventListener('click',narrateCurrentZone);
   document.getElementById('btn-tips').addEventListener('click',openCurrentZonePanel);
   document.getElementById('btn-close-zone').addEventListener('click',closeZonePanel);
+  document.getElementById('btn-close-hint').addEventListener('click',()=>document.getElementById('controls-hint').classList.add('hidden'));
   document.getElementById('btn-panel-breathe').addEventListener('click',openBreathing);
   document.getElementById('btn-panel-narrate').addEventListener('click',()=>{ narrateZone(currentZoneIndex); closeZonePanel(); });
   document.getElementById('btn-close-breath').addEventListener('click',closeBreathing);
@@ -2445,11 +2446,24 @@ function setupEvents(){
     renderer.setSize(innerWidth,innerHeight);
     if(composer) composer.setSize(innerWidth,innerHeight);
   });
+  controls.addEventListener('lock',()=>{ document.getElementById('click-to-play').classList.add('hidden'); });
   controls.addEventListener('unlock',()=>{ if(!isMobile&&isGameActive&&!isPaused){ isPaused=true; document.getElementById('pause-menu').classList.remove('hidden'); } });
   if(isMobile) setupMobileControls();
 }
 
-function onKeyDown(e){ if(!isGameActive) return; switch(e.code){ case 'KeyW': case 'ArrowUp': movement.forward=true; break; case 'KeyS': case 'ArrowDown': movement.backward=true; break; case 'KeyA': case 'ArrowLeft': movement.left=true; break; case 'KeyD': case 'ArrowRight': movement.right=true; break; case 'KeyB': openBreathing(); break; case 'KeyE': openCurrentZonePanel(); break; } }
+function onKeyDown(e){
+  // ESC con juego pausado → reanudar (el pointer lock ya se liberó; este ESC es el segundo)
+  if(e.code==='Escape'&&isGameActive&&isPaused){ resumeGame(); return; }
+  if(!isGameActive) return;
+  switch(e.code){
+    case 'KeyW': case 'ArrowUp':    movement.forward=true;  break;
+    case 'KeyS': case 'ArrowDown':  movement.backward=true; break;
+    case 'KeyA': case 'ArrowLeft':  movement.left=true;     break;
+    case 'KeyD': case 'ArrowRight': movement.right=true;    break;
+    case 'KeyB': openBreathing();        break;
+    case 'KeyE': openCurrentZonePanel(); break;
+  }
+}
 function onKeyUp(e){ switch(e.code){ case 'KeyW': case 'ArrowUp': movement.forward=false; break; case 'KeyS': case 'ArrowDown': movement.backward=false; break; case 'KeyA': case 'ArrowLeft': movement.left=false; break; case 'KeyD': case 'ArrowRight': movement.right=false; break; } }
 
 // ══════════════════════════════════════════════════
@@ -2531,10 +2545,28 @@ function setupMobileControls(){
 }
 
 function showScreen(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden')); if(id) document.getElementById(id).classList.remove('hidden'); }
-function startGame(){ showScreen(null); document.getElementById('game-hud').classList.remove('hidden'); document.getElementById('controls-hint').classList.remove('hidden'); setTimeout(()=>document.getElementById('controls-hint').classList.add('hidden'),8000); isGameActive=true; isPaused=false; currentZoneIndex=-1; visitedZones.clear(); breathCount=0; document.getElementById('breath-count-stat').textContent='0'; camera.position.set(0,PLAYER_HEIGHT,52); if(isMobile){ mobileYaw=Math.PI; mobilePitch=0; camera.rotation.order='YXZ'; camera.rotation.y=mobileYaw; camera.rotation.x=mobilePitch; } else { camera.rotation.set(0,Math.PI,0); controls.lock(); } resetProgressUI(); showToast('✈ ¡Bienvenido! Avanza hacia la entrada del aeropuerto.'); }
+function startGame(){
+  showScreen(null);
+  document.getElementById('game-hud').classList.remove('hidden');
+  isGameActive=true; isPaused=false; currentZoneIndex=-1;
+  visitedZones.clear(); breathCount=0;
+  document.getElementById('breath-count-stat').textContent='0';
+  camera.position.set(0,PLAYER_HEIGHT,52);
+  if(isMobile){
+    mobileYaw=Math.PI; mobilePitch=0;
+    camera.rotation.order='YXZ';
+    camera.rotation.y=mobileYaw; camera.rotation.x=mobilePitch;
+    showToast('✈ Avanzá hacia la entrada. Usá 💡 Consejos, 🫁 Respirar y 🔊 Escuchar.');
+  } else {
+    camera.rotation.set(0,Math.PI,0);
+    document.getElementById('click-to-play').classList.remove('hidden');
+    document.getElementById('controls-hint').classList.remove('hidden');
+  }
+  resetProgressUI();
+}
 function pauseGame(){ isPaused=true; if(!isMobile)controls.unlock(); document.getElementById('pause-menu').classList.remove('hidden'); }
 function resumeGame(){ isPaused=false; document.getElementById('pause-menu').classList.add('hidden'); if(!isMobile)controls.lock(); }
-function returnToMenu(){ isGameActive=false; isPaused=false; stopSpeech(); if(!isMobile)controls.unlock(); closeZonePanel(); closeBreathing(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('pause-menu').classList.add('hidden'); showScreen('main-menu'); }
+function returnToMenu(){ isGameActive=false; isPaused=false; stopSpeech(); if(!isMobile)controls.unlock(); closeZonePanel(); closeBreathing(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('pause-menu').classList.add('hidden'); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); showScreen('main-menu'); }
 function restartGame(){ showScreen(null); startGame(); }
 function resetProgressUI(){ document.getElementById('progress-fill').style.width='0%'; document.querySelectorAll('.step').forEach(s=>s.classList.remove('done','active')); }
 
@@ -2545,9 +2577,33 @@ function checkZones(){
   if(nd<18){ const zone=ZONE_DATA[ni]; document.getElementById('approach-text').textContent=nd<zone.radius?zone.name:`Avanza hacia: ${zone.name}`; hintEl.classList.remove('hidden'); badgeEl.textContent=`${zone.emoji} ${zone.name}`; badgeEl.classList.add('visible'); } else { hintEl.classList.add('hidden'); badgeEl.classList.remove('visible'); }
   if(nd<ZONE_DATA[ni].radius&&ni!==currentZoneIndex) enterZone(ni);
 }
-function enterZone(i){ currentZoneIndex=i; const zone=ZONE_DATA[i]; const first=!visitedZones.has(i); visitedZones.add(i); updateProgress(i); if(first){ if(isMobile){ showToast(`${zone.emoji} ${zone.name} — pulsa 💡 para info`); narrateZone(i); } else { openZonePanel(i); narrateZone(i); showToast(`${zone.emoji} ${zone.name}`); } } if(visitedZones.size>=ZONE_DATA.length) setTimeout(()=>endGame(),2000); }
+function enterZone(i){
+  currentZoneIndex=i;
+  const zone=ZONE_DATA[i];
+  const first=!visitedZones.has(i);
+  visitedZones.add(i);
+  updateProgress(i);
+  if(first){
+    if(i===0){
+      // Bienvenida extendida en la primera zona
+      const msg=isMobile
+        ? '✈ ¡Primera zona! Tocá 💡 Consejos para leer info, 🫁 para respirar y 🔊 para escuchar la guía.'
+        : '✈ Primera zona alcanzada. Se abrirá el panel de información de cada zona al llegar. Podés usar E, B y 🔊 en cualquier momento.';
+      showToast(msg);
+    }
+    if(isMobile){
+      if(i!==0) showToast(`${zone.emoji} ${zone.name} — tocá 💡 para info`);
+      narrateZone(i);
+    } else {
+      openZonePanel(i);
+      narrateZone(i);
+      if(i!==0) showToast(`${zone.emoji} ${zone.name}`);
+    }
+  }
+  if(visitedZones.size>=ZONE_DATA.length) setTimeout(()=>endGame(),2000);
+}
 function updateProgress(i){ document.getElementById('progress-fill').style.width=((i+1)/ZONE_DATA.length*100)+'%'; document.querySelectorAll('.step').forEach((s,j)=>{ s.classList.remove('active','done'); if(j<i)s.classList.add('done'); else if(j===i)s.classList.add('active'); }); }
-function endGame(){ isGameActive=false; stopSpeech(); if(!isMobile)controls.unlock(); closeZonePanel(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('breath-count-stat').textContent=breathCount; showScreen('end-screen'); speak('¡Felicitaciones! Has completado el recorrido completo del aeropuerto. Ahora estás más preparado para tu próximo vuelo.'); }
+function endGame(){ isGameActive=false; stopSpeech(); if(!isMobile)controls.unlock(); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); closeZonePanel(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('breath-count-stat').textContent=breathCount; showScreen('end-screen'); speak('¡Felicitaciones! Has completado el recorrido completo del aeropuerto. Ahora estás más preparado para tu próximo vuelo.'); }
 
 function openZonePanel(i){ if(i<0||i>=ZONE_DATA.length)return; const z=ZONE_DATA[i]; document.getElementById('zone-icon-big').textContent=z.emoji; document.getElementById('zone-panel-title').textContent=z.name; document.getElementById('zone-panel-subtitle').textContent=z.subtitle; document.getElementById('zone-expect-list').innerHTML=z.expect.map(e=>`<li>${e}</li>`).join(''); document.getElementById('zone-health-content').innerHTML=z.health.map(h=>`<div class="health-tip">${h.text}</div>`).join(''); document.getElementById('zone-panic-content').innerHTML=z.panic.map(p=>`<div class="panic-tip"><div class="panic-title">${p.title}</div>${p.text}</div>`).join(''); document.querySelectorAll('.tab-btn').forEach((b,j)=>b.classList.toggle('active',j===0)); document.querySelectorAll('.tab-content').forEach((t,j)=>t.classList.toggle('active',j===0)); document.getElementById('zone-panel').classList.remove('hidden'); }
 function closeZonePanel(){ document.getElementById('zone-panel').classList.add('hidden'); }
