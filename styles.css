@@ -814,6 +814,80 @@ button { font-family: var(--ff-body); cursor: pointer; border: none; outline: no
 }
 
 /* ================================
+   FASE D — CONTENIDO CLÍNICO
+================================ */
+
+/* Tab "Para el día real" — reutiliza .health-tip con acento diferente */
+.prepare-tip {
+  padding: 16px 18px;
+  border-radius: var(--radius-sm);
+  background: #fef9ec;
+  border-left: 4px solid #f59e0b;
+  color: #3d2e00;
+  font-size: 0.9rem; line-height: 1.65;
+  margin-bottom: 10px;
+}
+.prepare-tip::before { content: "✓ "; font-weight: 700; color: #d97706; }
+
+/* 4° tab — fuente más pequeña para que quepan 4 tabs */
+.zone-tabs .tab-btn { font-size: 0.74rem; padding: 10px 5px; }
+
+/* Modal Grounding */
+.grounding-box {
+  background: #fff; border-radius: 24px;
+  padding: 44px 38px 36px; text-align: center;
+  position: relative; max-width: 400px; width: 90%;
+  box-shadow: var(--shadow-lg);
+}
+.grounding-box h2 {
+  font-family: var(--ff-display); font-size: 1.6rem;
+  color: var(--deep); margin-bottom: 6px;
+}
+.grounding-subtitle { color: var(--text-light); font-size: 0.85rem; margin-bottom: 28px; }
+.grounding-num-big {
+  font-family: var(--ff-display); font-size: 4rem;
+  color: var(--accent); line-height: 1; margin-bottom: 8px;
+  transition: all .3s ease;
+}
+.grounding-sense {
+  font-size: 1.1rem; font-weight: 700; color: var(--deep);
+  margin-bottom: 14px; letter-spacing: 0.5px;
+}
+.grounding-instruction {
+  color: var(--text-light); font-size: 0.9rem;
+  line-height: 1.7; margin-bottom: 24px; min-height: 60px;
+}
+.grounding-progress-track {
+  display: flex; gap: 10px; justify-content: center;
+  margin-bottom: 24px;
+}
+.grounding-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #e0eaf3; transition: background .3s;
+}
+.grounding-dot.active { background: var(--accent); transform: scale(1.2); }
+.grounding-dot.done { background: var(--green); }
+.grounding-btns { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
+.grounding-tip {
+  background: #e8f8f2; border-radius: 10px; padding: 12px 14px;
+  font-size: 0.80rem; line-height: 1.6; color: #1a4032; text-align: left;
+}
+
+/* Pantalla final — botón compartir */
+.end-share-btn {
+  width: 100%; justify-content: center;
+  margin-bottom: 10px;
+  color: var(--deep);
+}
+.share-feedback {
+  background: #e8f8f2; border-radius: 10px;
+  padding: 10px 16px; margin-bottom: 14px;
+  font-size: 0.85rem; color: #1a4032;
+  text-align: center;
+  animation: fadeIn .3s ease;
+}
+
+/* ================================
    ZONE PANEL — contenido fade-in
 ================================ */
 #zone-panel-inner {

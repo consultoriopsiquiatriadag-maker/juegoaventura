@@ -5,13 +5,13 @@
 'use strict';
 
 const ZONE_DATA = [
-  { id:'entrance', name:'Entrada al Aeropuerto', emoji:'🚪', subtitle:'El primer paso. El aeropuerto te da la bienvenida.', position:{x:0,z:48}, radius:9, color:0x4a9eff, expect:['Encontrarás señales digitales con vuelos de salida y llegada','Habrá mostradores de información y personal dispuesto a ayudarte','Verás carritos portaequipajes disponibles — muchos son gratuitos','Las puertas son anchas y bien señalizadas con código de colores','Agentes de seguridad en la entrada realizan revisiones rápidas y rutinarias'], health:[{text:'Respira: si sientes el corazón acelerado al entrar, es adrenalina normal. Tu cuerpo se prepara, no hay peligro real.'},{text:'Observa a las personas a tu alrededor: la mayoría está tranquila, concentrada en sus vuelos.'},{text:'Truco de grounding: nombra 5 cosas que puedes ver, 4 que puedes tocar, 3 que escuchas.'}], panic:[{title:'Si sientes agitación al entrar',text:'Para un momento. Coloca una mano en el pecho, otra en el abdomen. Cuando el ritmo baje, avanza.'},{title:'Recuerda',text:'Puedes salir en cualquier momento. El aeropuerto no te atrapa.'}], narration:'Bienvenido al aeropuerto. Acabas de dar el primer paso. Esta entrada es solo el comienzo de una aventura que millones de personas viven cada día. Mira las señales, siente el ambiente. Aquí comienza tu viaje.' },
-  { id:'checkin', name:'Facturación – Check-in', emoji:'🧳', subtitle:'Presenta tu documentación y entrega tu maleta.', position:{x:0,z:28}, radius:9, color:0x8b5cf6, expect:['Mostrarás tu pasaporte o DNI y tu código de reserva','Un agente pesará tu maleta — el límite habitual es 23 kg','Recibirás tu tarjeta de embarque: guárdala bien','Te darán una etiqueta para tu equipaje facturado','El proceso dura entre 3 y 8 minutos por persona'], health:[{text:'Si tienes todo preparado (pasaporte, reserva), este paso es rápido y rutinario.'},{text:'No necesitas memorizar nada. El agente te irá diciendo exactamente qué hacer.'},{text:'Si hay cola larga, practica respiración profunda mientras esperas.'}], panic:[{title:'Si sientes que no recuerdas algo',text:'Los agentes están entrenados para ayudarte. No estás solo.'},{title:'Ante el miedo a olvidar',text:'En el aeropuerto hay soluciones para casi todo. Nada es irrecuperable.'}], narration:'Estás en la zona de facturación. Aquí entregas tu equipaje y obtienes tu pase de abordar. Muestra tu documentación al agente, responde sus preguntas con calma. En pocos minutos, este paso habrá terminado.' },
-  { id:'security', name:'Control de Seguridad', emoji:'🔍', subtitle:'Un proceso breve que garantiza la seguridad de todos.', position:{x:0,z:8}, radius:9, color:0xf59e0b, expect:['Colocarás tu equipaje de mano y chaqueta en una bandeja','El portátil y líquidos van en bandeja separada','Pasarás por un arco detector de metales','Si el arco suena, un agente hará una revisión rápida','Todo el proceso dura entre 2 y 5 minutos'], health:[{text:'El control puede sentirse invasivo, pero su único propósito es tu protección.'},{text:'Si tienes implantes o dispositivos médicos, informa al agente antes de entrar.'},{text:'Solo sigue las instrucciones en voz alta del personal.'}], panic:[{title:'Si el arco detecta algo',text:'No te asustes. Puede ser un botón o unas llaves. El agente te indicará qué hacer.'},{title:'Técnica de calma rápida',text:'Inhala 4 segundos, aguanta 2, exhala 6 segundos. Repite 3 veces.'}], narration:'Zona de control de seguridad. Prepara tus pertenencias: saca el portátil, los líquidos y quítate el cinturón. Pasa despacio por el arco. En pocos momentos habrás cruzado este punto.' },
-  { id:'lounge', name:'Sala de Embarque', emoji:'🛋', subtitle:'Tu espacio de espera. Aquí puedes descansar y prepararte.', position:{x:0,z:-10}, radius:9, color:0x10b981, expect:['Encontrarás asientos cómodos, zonas de carga y WiFi gratuito','Habrá tiendas, cafeterías y restaurantes','Las pantallas muestran el estado de tu vuelo','El embarque se anuncia 30–45 minutos antes de la salida','Los vuelos se embarcan por grupos'], health:[{text:'La sala de espera es tu zona segura. Tienes tiempo y nada que hacer excepto esperar.'},{text:'Si tienes ansiedad anticipatoria, distráete: lee, escucha música, explora la tienda.'},{text:'Hidratación: bebe agua antes del vuelo. La hidratación reduce la fatiga y la ansiedad.'}], panic:[{title:'Si la espera se hace larga',text:'Cambia de actividad cada 15–20 minutos. Caminar por la terminal libera tensión física.'},{title:'Si empiezan pensamientos catastróficos',text:'Los aviones tienen 99.99997% de tasa de llegada segura.'}], narration:'La sala de embarque. Has superado los controles. Ahora tienes tiempo para ti. Siéntate, descansa, toma un café. Cuando llegue el momento, escucharás el anuncio de embarque.' },
-  { id:'boarding', name:'Embarque – Acceso al Avión', emoji:'✈', subtitle:'El momento de subir. Ya casi estás en tu asiento.', position:{x:0,z:-28}, radius:9, color:0xef4444, expect:['Un agente escaneará tu tarjeta de embarque','Caminarás por el finger hasta la puerta del avión','Los auxiliares te darán la bienvenida','Encontrarás el número de tu asiento','El equipaje de mano se guarda en los compartimentos superiores'], health:[{text:'El momento de entrar puede generar picos de ansiedad. Concéntrate en tareas concretas.'},{text:'Los auxiliares son profesionales altamente entrenados. No dudes en hablarles.'},{text:'El asiento de ventanilla reduce náuseas. El de pasillo da sensación de control.'}], panic:[{title:'Si sientes el impulso de salir',text:'Es un pensamiento, no una orden. La incomodidad es temporal.'},{title:'Al sentarte',text:'Ponte el cinturón. Siente el asiento bajo tu cuerpo. Estás físicamente seguro.'}], narration:'Estás embarcando. Muestra tu tarjeta al agente, sigue el pasillo, encuentra tu asiento. Una vez sentado, ponte el cinturón y relájate.' },
-  { id:'plane', name:'A Bordo del Avión', emoji:'🛫', subtitle:'Despegue, vuelo y llegada. Todo bajo control.', position:{x:0,z:-46}, radius:10, color:0x6366f1, expect:['El safety briefing muestra las salidas de emergencia','El despegue dura entre 2 y 4 minutos','La turbulencia es como baches — incómoda pero completamente segura','A 10.000m el piloto anunciará modo de dispositivos','En vuelos largos habrá servicio de bebidas y comida'], health:[{text:'La turbulencia NUNCA ha derribado un avión moderno. Los aviones soportan fuerzas 3 veces superiores.'},{text:'Los sonidos extraños son completamente normales. Los pilotos los esperan.'},{text:'Distracción activa: escucha un podcast, mira una película.'}], panic:[{title:'En caso de turbulencia',text:'Ajusta el cinturón, toma los apoyabrazos y respira con la técnica 4-7-8.'},{title:'Si el miedo escala',text:'Informa a un auxiliar. Están entrenados para ayudar a pasajeros ansiosos.'}], narration:'Estás a bordo. Escucha el briefing de seguridad. Al despegar, sentirás cómo el suelo se aleja. Respira. Pronto estarás entre las nubes, a 10.000 metros de altura, volando.' },
-  { id:'arrival', name:'Llegada y Recogida de Equipaje', emoji:'🏁', subtitle:'¡Lo lograste! Ahora, el último paso del viaje.', position:{x:0,z:-62}, radius:9, color:0xf97316, expect:['Al aterrizar, el avión rodará hasta la puerta','Sigue las señales hacia Baggage Claim','El carrusel muestra el número de tu vuelo en pantalla','El equipaje tarda entre 15 y 30 minutos','Si tu maleta no aparece, hay un mostrador de Lost & Found'], health:[{text:'¡Lo lograste! Cada vuelo que completas reduce el miedo al siguiente.'},{text:'Si experimentaste ansiedad, eso es valiente, no débil.'},{text:'Anota cómo te sientes ahora vs. cómo creías que te sentirías.'}], panic:[{title:'Si la maleta tarda',text:'El 99.5% de las maletas llegan en el mismo vuelo. Espera 40 minutos.'},{title:'Para el próximo vuelo',text:'Recuerda este momento. Lo completaste. Tu sistema nervioso ya empezó a adaptarse.'}], narration:'¡Bienvenido a tu destino! Has aterrizado con éxito. Sigue las señales, recoge tu maleta y dirígete a la salida. El viaje completo ha sido un éxito.' }
+  { id:'entrance', name:'Entrada al Aeropuerto', emoji:'🚪', subtitle:'El primer paso. El aeropuerto te da la bienvenida.', position:{x:0,z:48}, radius:9, color:0x4a9eff, expect:['Encontrarás señales digitales con vuelos de salida y llegada','Habrá mostradores de información y personal dispuesto a ayudarte','Verás carritos portaequipajes disponibles — muchos son gratuitos','Las puertas son anchas y bien señalizadas con código de colores','Agentes de seguridad en la entrada realizan revisiones rápidas y rutinarias'], health:[{text:'Respira: si sientes el corazón acelerado al entrar, es adrenalina normal. Tu cuerpo se prepara, no hay peligro real.'},{text:'Observa a las personas a tu alrededor: la mayoría está tranquila, concentrada en sus vuelos.'},{text:'Truco de grounding: nombra 5 cosas que puedes ver, 4 que puedes tocar, 3 que escuchas.'}], panic:[{title:'Si sentís agitación al entrar',text:'Pará un momento. Colocá una mano en el pecho, otra en el abdomen. Cuando el ritmo baje, avanzá.'},{title:'Recordá',text:'Podés salir en cualquier momento. El aeropuerto no te atrapa.'}], narration:'Bienvenido al aeropuerto. Acabás de dar el primer paso. Esta entrada es solo el comienzo de una aventura que millones de personas viven cada día. Mirá las señales, sentí el ambiente. Acá empieza tu viaje.', prepare:['Llegá al aeropuerto con 2.5 a 3 horas de anticipación para vuelos internacionales, 2 horas para nacionales.','Buscá la pantalla de salidas (Departures) y confirmá tu terminal y número de vuelo.','Pedí ayuda al personal de información si algo no está claro — están para eso.','Tené el pasaporte o DNI y el código de reserva (QR o papel) a mano desde que entrás.','Los carritos de equipaje suelen ser gratuitos cerca de las puertas de entrada.'] },
+  { id:'checkin', name:'Facturación – Check-in', emoji:'🧳', subtitle:'Presenta tu documentación y entrega tu maleta.', position:{x:0,z:28}, radius:9, color:0x8b5cf6, expect:['Mostrarás tu pasaporte o DNI y tu código de reserva','Un agente pesará tu maleta — el límite habitual es 23 kg','Recibirás tu tarjeta de embarque: guárdala bien','Te darán una etiqueta para tu equipaje facturado','El proceso dura entre 3 y 8 minutos por persona'], health:[{text:'Si tenés todo preparado (pasaporte, reserva), este paso es rápido y rutinario.'},{text:'No necesitás memorizar nada. El agente te irá diciendo exactamente qué hacer.'},{text:'Si hay cola larga, practicá respiración profunda mientras esperás.'}], panic:[{title:'Si sentís que no recordás algo',text:'Los agentes están entrenados para ayudarte. No estás solo.'},{title:'Ante el miedo a olvidar',text:'En el aeropuerto hay soluciones para casi todo. Nada es irrecuperable.'}], narration:'Estás en la zona de facturación. Acá entregás tu equipaje y obtenés tu pase de abordar. Mostrá tu documentación al agente, respondé sus preguntas con calma. En pocos minutos, este paso habrá terminado.', prepare:['Llegá con todo preparado: pasaporte/DNI, reserva electrónica o impresa.','El límite habitual de equipaje es 23 kg en bodega. Pesá tu valija antes de salir de casa.','Hacé el check-in online 24-48 horas antes si podés — ahorrás tiempo en el aeropuerto.','Las colas de check-in pueden durar 20-40 minutos. Calculalo en tu llegada.','Si tenés dudas sobre el equipaje de mano, revisá las medidas de la aerolínea por adelantado.'] },
+  { id:'security', name:'Control de Seguridad', emoji:'🔍', subtitle:'Un proceso breve que garantiza la seguridad de todos.', position:{x:0,z:8}, radius:9, color:0xf59e0b, expect:['Colocarás tu equipaje de mano y chaqueta en una bandeja','El portátil y líquidos van en bandeja separada','Pasarás por un arco detector de metales','Si el arco suena, un agente hará una revisión rápida','Todo el proceso dura entre 2 y 5 minutos'], health:[{text:'El control puede sentirse invasivo, pero su único propósito es tu protección.'},{text:'Si tenés implantes o dispositivos médicos, informá al agente antes de entrar.'},{text:'Seguí las instrucciones en voz alta del personal — son claras y breves.'}], panic:[{title:'Si el arco detecta algo',text:'No te asustes. Puede ser un botón o unas llaves. El agente te va a indicar qué hacer.'},{title:'Técnica de calma rápida',text:'Inhalá 4 segundos, aguantá 2, exhalá 6 segundos. Repetí 3 veces.'}], narration:'Zona de control de seguridad. Prepará tus pertenencias: sacá el portátil, los líquidos y quitáte el cinturón. Pasá despacio por el arco. En pocos momentos habrás cruzado este punto.', prepare:['Antes de llegar a seguridad, sacá el portátil de la mochila y preparalo en una bandeja separada.','Poné líquidos (< 100 ml) en una bolsa zip transparente de 1 litro — una por persona.','Quitáte el cinturón, reloj y monedas antes de entrar al arco para evitar que suene.','Si llevás medicamentos o implantes, informá al agente antes de pasar por el arco.','El proceso dura entre 2 y 5 minutos. Una vez del otro lado, podés rearmarte con calma.'] },
+  { id:'lounge', name:'Sala de Embarque', emoji:'🛋', subtitle:'Tu espacio de espera. Aquí puedes descansar y prepararte.', position:{x:0,z:-10}, radius:9, color:0x10b981, expect:['Encontrarás asientos cómodos, zonas de carga y WiFi gratuito','Habrá tiendas, cafeterías y restaurantes','Las pantallas muestran el estado de tu vuelo','El embarque se anuncia 30–45 minutos antes de la salida','Los vuelos se embarcan por grupos'], health:[{text:'La sala de espera es tu zona segura. Tenés tiempo y nada que hacer excepto esperar.'},{text:'Si tenés ansiedad anticipatoria, distraéte: leé, escuchá música, explorá la tienda.'},{text:'Hidratación: tomá agua antes del vuelo. La hidratación reduce la fatiga y la ansiedad.'}], panic:[{title:'Si la espera se hace larga',text:'Cambiá de actividad cada 15–20 minutos. Caminar por la terminal libera tensión física.'},{title:'Si empiezan pensamientos catastróficos',text:'Los aviones tienen 99.99997% de tasa de llegada segura. Ese número es real.'}], narration:'La sala de embarque. Superaste los controles. Ahora tenés tiempo para vos. Sentáte, descansá, tomá un café. Cuando llegue el momento, escucharás el anuncio de embarque.', prepare:['Anotá el número de tu gate (puerta de embarque) y verificá la pantalla cada 30 minutos — puede cambiar.','El embarque suele anunciarse 40-50 minutos antes de la salida. Esté cerca de tu gate para ese momento.','Hidratate antes de subir al avión: los aviones tienen baja humedad y eso puede aumentar la fatiga.','Llevá algo para entretenerte: podcast, libro, playlist de música tranquila.','Podés comprar agua del otro lado de seguridad si no la trajiste.'] },
+  { id:'boarding', name:'Embarque – Acceso al Avión', emoji:'✈', subtitle:'El momento de subir. Ya casi estás en tu asiento.', position:{x:0,z:-28}, radius:9, color:0xef4444, expect:['Un agente escaneará tu tarjeta de embarque','Caminarás por el finger hasta la puerta del avión','Los auxiliares te darán la bienvenida','Encontrarás el número de tu asiento','El equipaje de mano se guarda en los compartimentos superiores'], health:[{text:'El momento de entrar puede generar picos de ansiedad. Enfocate en tareas concretas: guardar la mochila, buscar el asiento.'},{text:'Los auxiliares son profesionales altamente entrenados. No dudés en hablarles.'},{text:'El asiento de ventanilla reduce náuseas. El de pasillo da sensación de control y acceso libre.'}], panic:[{title:'Si sentís el impulso de salir',text:'Es un pensamiento, no una orden. La incomodidad es temporal y va a pasar.'},{title:'Al sentarte',text:'Ponete el cinturón. Sentí el asiento bajo tu cuerpo. Estás físicamente seguro.'}], narration:'Estás embarcando. Mostrá tu tarjeta al agente, seguí el pasillo, encontrá tu asiento. Una vez sentado, ponete el cinturón y relajate.', prepare:['Cuando llamen tu grupo, acercate con el boarding pass (digital o papel) y el documento listo.','Los compartimentos superiores se llenan rápido — al entrar, guardá tu equipaje de mano enseguida.','Si necesitás asistencia especial, pedila en el mostrador antes del embarque.','El asiento de pasillo te da sensación de control y fácil acceso al baño.','Los auxiliares están en la puerta para recibírte — podés decirles si tenés ansiedad al volar.'] },
+  { id:'plane', name:'A Bordo del Avión', emoji:'🛫', subtitle:'Despegue, vuelo y llegada. Todo bajo control.', position:{x:0,z:-46}, radius:10, color:0x6366f1, expect:['El safety briefing muestra las salidas de emergencia','El despegue dura entre 2 y 4 minutos','La turbulencia es como baches — incómoda pero completamente segura','A 10.000m el piloto anunciará modo de dispositivos','En vuelos largos habrá servicio de bebidas y comida'], health:[{text:'La turbulencia NUNCA ha derribado un avión moderno. Los aviones soportan fuerzas 3 veces superiores a cualquier turbulencia real.'},{text:'Los sonidos extraños son completamente normales — el tren de aterrizaje, los flaps, la presurización. Los pilotos los esperan.'},{text:'Distracción activa: escuchá un podcast, mirá una película, leé. Tu mente necesita ocupación.'}], panic:[{title:'En caso de turbulencia',text:'Ajustá el cinturón, tomá los apoyabrazos y respirá con la técnica 4-7-8. La turbulencia no es peligrosa.'},{title:'Si el miedo escala',text:'Informá a un auxiliar. Están entrenados para acompañar a pasajeros con ansiedad — es parte de su trabajo.'}], narration:'Estás a bordo. Escuchá el briefing de seguridad. Al despegar, sentirás cómo el suelo se aleja. Respirá. Pronto vas a estar entre las nubes, a 10.000 metros de altura, volando.', prepare:['Cuando estés sentado, ponete el cinturón enseguida — es un gesto concreto que ancla tu cuerpo.','Descargá contenido offline (música, podcast, serie) antes del vuelo. El WiFi en aviones suele ser caro o lento.','Llevá auriculares — reducen el ruido del motor y te ayudan a crear tu propio espacio.','Si esperás sentir ansiedad durante el vuelo, avisale a un auxiliar al subir.','El vuelo promedio en Latinoamérica dura entre 1.5 y 4 horas. Podés descansar, escuchar o mirar por la ventanilla.'] },
+  { id:'arrival', name:'Llegada y Recogida de Equipaje', emoji:'🏁', subtitle:'¡Lo lograste! Ahora, el último paso del viaje.', position:{x:0,z:-62}, radius:9, color:0xf97316, expect:['Al aterrizar, el avión rodará hasta la puerta','Sigue las señales hacia Baggage Claim','El carrusel muestra el número de tu vuelo en pantalla','El equipaje tarda entre 15 y 30 minutos','Si tu maleta no aparece, hay un mostrador de Lost & Found'], health:[{text:'¡Lo lograste! Cada vuelo que completás reduce el miedo al siguiente. Tu sistema nervioso ya empezó a adaptarse.'},{text:'Si experimentaste ansiedad durante el viaje, eso es valentía — no debilidad.'},{text:'Anotá cómo te sentís ahora versus cómo creías que te ibas a sentir. La diferencia suele sorprender.'}], panic:[{title:'Si la maleta tarda',text:'El 99.5% de las maletas llegan en el mismo vuelo. Esperá 40 minutos antes de reportarlo.'},{title:'Para el próximo vuelo',text:'Recordá este momento. Lo completaste. Cada vuelo que hacés es una exposición que reduce el miedo.'}], narration:'¡Bienvenido a tu destino! Aterrizaste con éxito. Seguí las señales, recogé tu maleta y dirigite a la salida. El viaje completo fue un éxito.', prepare:['Al aterrizar, esperá a que el avión se detenga completamente antes de levantarte.','Seguí las señales verdes "Baggage Claim" o "Recogida de equipaje" — están en todos los aeropuertos.','El carrusel de tu vuelo está indicado en las pantallas del área de equipajes.','Si tu maleta no llega, reportalo en el mostrador de la aerolínea — suele resolverse el mismo día.','¡Felicitaciones! Ya sos alguien que voló. Recordá este momento para el próximo viaje.'] }
 ];
 
 const FLIGHTS = [
@@ -45,6 +45,16 @@ let ambientLight=null;          // referencia para ciclo de luz ambiental
 let gameStartTime=0;            // ms al iniciar recorrido
 let menuAnimId=null;            // requestAnimationFrame del canvas del menú
 const prefersReducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ── GROUNDING 5-4-3-2-1 ───────────────────────────
+let groundingStep=0;
+const GROUNDING_STEPS=[
+  {num:'5', sense:'👁 Cosas que VÉS',    instruction:'Nombrá mentalmente 5 cosas que podés ver ahora mismo.\nUna ventana, un asiento, una persona, el techo, tus manos…'},
+  {num:'4', sense:'✋ Cosas que TOCÁS',  instruction:'Nombrá 4 cosas que podés tocar.\nSentí la textura del asiento, tu ropa, el apoyabrazos, tus propias manos.'},
+  {num:'3', sense:'👂 Cosas que ESCUCHÁS',instruction:'Nombrá 3 sonidos que escuchás ahora.\nEl motor, la ventilación, voces lejanas, el silencio mismo.'},
+  {num:'2', sense:'👃 Cosas que OLÉS',   instruction:'Nombrá 2 cosas que podés oler.\nEl aire del avión, el aroma de tu ropa, algo en tu bolso o mochila.'},
+  {num:'1', sense:'👅 Cosa que SABOREÁS',instruction:'Nombrá 1 cosa que podés saborear.\n¿Tenés algo en la boca? ¿Cómo saboreás el aire de este momento?'}
+];
 
 // ── MOBILE ─────────────────────────────────────────
 const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
@@ -2504,12 +2514,17 @@ function setupEvents(){
   // Botón secundario Volver — no propagar al ctp-inner
   document.getElementById('btn-ctp-back').addEventListener('click',(e)=>{ e.stopPropagation(); returnToMenu(); });
   document.getElementById('btn-panel-breathe').addEventListener('click',openBreathing);
+  document.getElementById('btn-panel-grounding').addEventListener('click',openGrounding);
   document.getElementById('btn-panel-narrate').addEventListener('click',()=>{ narrateZone(currentZoneIndex); closeZonePanel(); });
   document.getElementById('btn-close-breath').addEventListener('click',closeBreathing);
   document.getElementById('btn-start-breath').addEventListener('click',startBreathing);
   document.getElementById('btn-stop-breath').addEventListener('click',stopBreathing);
   document.getElementById('btn-restart').addEventListener('click',restartGame);
+  document.getElementById('btn-share').addEventListener('click',shareWithTherapist);
   document.getElementById('btn-end-menu').addEventListener('click',returnToMenu);
+  document.getElementById('btn-close-grounding').addEventListener('click',closeGrounding);
+  document.getElementById('btn-grounding-next').addEventListener('click',advanceGrounding);
+  document.getElementById('btn-grounding-restart').addEventListener('click',()=>{ groundingStep=0; renderGroundingStep(); document.getElementById('btn-grounding-restart').classList.add('hidden'); });
   document.querySelectorAll('.tab-btn').forEach(btn=>{ btn.addEventListener('click',()=>{ document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active')); btn.classList.add('active'); document.getElementById('tab-'+btn.dataset.tab).classList.add('active'); }); });
   renderer.domElement.addEventListener('click',()=>{ if(!isMobile&&isGameActive&&!isPaused) controls.lock(); });
   document.addEventListener('keydown',onKeyDown);
@@ -2720,9 +2735,93 @@ function endGame(){
   speak('¡Felicitaciones! Has completado el recorrido completo del aeropuerto. Ahora estás más preparado para tu próximo vuelo.');
 }
 
-function openZonePanel(i){ if(i<0||i>=ZONE_DATA.length)return; const z=ZONE_DATA[i]; document.getElementById('zone-icon-big').textContent=z.emoji; document.getElementById('zone-panel-title').textContent=z.name; document.getElementById('zone-panel-subtitle').textContent=z.subtitle; document.getElementById('zone-expect-list').innerHTML=z.expect.map(e=>`<li>${e}</li>`).join(''); document.getElementById('zone-health-content').innerHTML=z.health.map(h=>`<div class="health-tip">${h.text}</div>`).join(''); document.getElementById('zone-panic-content').innerHTML=z.panic.map(p=>`<div class="panic-tip"><div class="panic-title">${p.title}</div>${p.text}</div>`).join(''); document.querySelectorAll('.tab-btn').forEach((b,j)=>b.classList.toggle('active',j===0)); document.querySelectorAll('.tab-content').forEach((t,j)=>t.classList.toggle('active',j===0)); document.getElementById('zone-panel').classList.remove('hidden'); }
+function openZonePanel(i){
+  if(i<0||i>=ZONE_DATA.length) return;
+  const z=ZONE_DATA[i];
+  document.getElementById('zone-icon-big').textContent=z.emoji;
+  document.getElementById('zone-panel-title').textContent=z.name;
+  document.getElementById('zone-panel-subtitle').textContent=z.subtitle;
+  document.getElementById('zone-expect-list').innerHTML=z.expect.map(e=>`<li>${e}</li>`).join('');
+  document.getElementById('zone-health-content').innerHTML=z.health.map(h=>`<div class="health-tip">${h.text}</div>`).join('');
+  document.getElementById('zone-panic-content').innerHTML=z.panic.map(p=>`<div class="panic-tip"><div class="panic-title">${p.title}</div>${p.text}</div>`).join('');
+  // 4° tab: Para el día real
+  const prepHTML=z.prepare?z.prepare.map(t=>`<div class="prepare-tip">${t}</div>`).join(''):'<p style="color:var(--text-light);padding:12px">Información no disponible para esta zona.</p>';
+  document.getElementById('zone-prepare-content').innerHTML=prepHTML;
+  // Botón grounding solo en zona del avión
+  const isPlane=z.id==='plane';
+  document.getElementById('btn-panel-grounding').classList.toggle('hidden',!isPlane);
+  // Resetear tabs al primero
+  document.querySelectorAll('.tab-btn').forEach((b,j)=>b.classList.toggle('active',j===0));
+  document.querySelectorAll('.tab-content').forEach((t,j)=>t.classList.toggle('active',j===0));
+  document.getElementById('zone-panel').classList.remove('hidden');
+}
 function closeZonePanel(){ document.getElementById('zone-panel').classList.add('hidden'); }
 function openCurrentZonePanel(){ if(currentZoneIndex>=0) openZonePanel(currentZoneIndex); else showToast('Acércate a una zona del aeropuerto primero.'); }
+
+// ── GROUNDING MODAL ───────────────────────────────
+function openGrounding(){
+  groundingStep=0;
+  closeZonePanel();
+  if(!isMobile) controls.unlock();
+  document.getElementById('grounding-modal').classList.remove('hidden');
+  renderGroundingStep();
+}
+function closeGrounding(){
+  document.getElementById('grounding-modal').classList.add('hidden');
+  if(!isMobile&&isGameActive&&!isPaused) controls.lock();
+}
+function renderGroundingStep(){
+  const s=GROUNDING_STEPS[groundingStep];
+  document.getElementById('grounding-num').textContent=s.num;
+  document.getElementById('grounding-sense').textContent=s.sense;
+  document.getElementById('grounding-instruction').innerHTML=s.instruction.replace('\n','<br>');
+  // Dots
+  document.querySelectorAll('.grounding-dot').forEach((d,i)=>{
+    d.classList.remove('active','done');
+    if(i<groundingStep) d.classList.add('done');
+    else if(i===groundingStep) d.classList.add('active');
+  });
+  const isLast=groundingStep===GROUNDING_STEPS.length-1;
+  document.getElementById('btn-grounding-next').textContent=isLast?'✓ Terminado':'Siguiente →';
+  document.getElementById('btn-grounding-restart').classList.toggle('hidden',!isLast);
+}
+function advanceGrounding(){
+  if(groundingStep<GROUNDING_STEPS.length-1){ groundingStep++; renderGroundingStep(); }
+  else closeGrounding();
+}
+
+// ── COMPARTIR CON TERAPEUTA ───────────────────────
+function generateShareText(){
+  const secs=Math.floor((Date.now()-gameStartTime)/1000);
+  const m=Math.floor(secs/60), s=secs%60;
+  const date=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const zonas=Array.from(visitedZones).sort((a,b)=>a-b).map(i=>`✓ ${ZONE_DATA[i].emoji} ${ZONE_DATA[i].name}`).join('\n');
+  return `AeroCalma – Resumen del recorrido\n` +
+    `Fecha: ${date}\n` +
+    `Tiempo total: ${m}:${String(s).padStart(2,'0')}\n` +
+    `Zonas recorridas: ${visitedZones.size}/7\n` +
+    `Ejercicios de respiración: ${breathCount}\n\n` +
+    `Zonas visitadas:\n${zonas}\n\n` +
+    `Consultorio Dr. Pedro Dagnino – Psiquiatría\nhttps://aerocalma.netlify.app/`;
+}
+function shareWithTherapist(){
+  const text=generateShareText();
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=>showShareFeedback()).catch(()=>fallbackCopy(text));
+  } else { fallbackCopy(text); }
+}
+function fallbackCopy(text){
+  const ta=document.createElement('textarea');
+  ta.value=text; ta.style.cssText='position:fixed;top:-9999px';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); showShareFeedback(); }catch(e){ alert(text); }
+  document.body.removeChild(ta);
+}
+function showShareFeedback(){
+  const el=document.getElementById('share-feedback');
+  el.classList.remove('hidden');
+  setTimeout(()=>el.classList.add('hidden'),4000);
+}
 
 function narrateZone(i){ if(i>=0&&i<ZONE_DATA.length) speak(ZONE_DATA[i].narration); }
 function narrateCurrentZone(){ if(currentZoneIndex>=0) narrateZone(currentZoneIndex); else speak('Avanza hacia la entrada del aeropuerto para comenzar tu recorrido.'); }

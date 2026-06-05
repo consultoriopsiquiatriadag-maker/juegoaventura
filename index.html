@@ -235,6 +235,7 @@
                 <button class="tab-btn active" data-tab="expect">¿Qué esperar?</button>
                 <button class="tab-btn" data-tab="health">Salud mental</button>
                 <button class="tab-btn" data-tab="panic">Ante el pánico</button>
+                <button class="tab-btn" data-tab="prepare">📋 Día real</button>
             </div>
 
             <div id="tab-expect" class="tab-content active">
@@ -246,9 +247,13 @@
             <div id="tab-panic" class="tab-content">
                 <div id="zone-panic-content"></div>
             </div>
+            <div id="tab-prepare" class="tab-content">
+                <div id="zone-prepare-content"></div>
+            </div>
 
             <div class="zone-panel-actions">
                 <button id="btn-panel-breathe" class="btn-secondary">🫁 Respirar ahora</button>
+                <button id="btn-panel-grounding" class="btn-secondary hidden">🧠 Grounding</button>
                 <button id="btn-panel-narrate" class="btn-primary">🔊 Escuchar</button>
             </div>
         </div>
@@ -285,6 +290,38 @@
         </div>
     </div>
 
+    <!-- ===== MODAL GROUNDING 5-4-3-2-1 ===== -->
+    <div id="grounding-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="grounding-title">
+        <div class="grounding-box">
+            <button id="btn-close-grounding" class="close-btn" aria-label="Cerrar ejercicio de grounding">✕</button>
+            <h2 id="grounding-title">Técnica Grounding 5-4-3-2-1</h2>
+            <p class="grounding-subtitle">Anclá tu atención al momento presente</p>
+
+            <div id="grounding-step-display">
+                <div class="grounding-num-big" id="grounding-num">5</div>
+                <div class="grounding-sense" id="grounding-sense">👁 Cosas que VÉS</div>
+                <p class="grounding-instruction" id="grounding-instruction">
+                    Nombrá mentalmente 5 cosas que podés ver ahora mismo.<br>
+                    Una ventana, un asiento, una persona, el techo, tus manos…
+                </p>
+            </div>
+
+            <div class="grounding-progress-track">
+                <div class="grounding-dot active" data-dot="1"></div>
+                <div class="grounding-dot" data-dot="2"></div>
+                <div class="grounding-dot" data-dot="3"></div>
+                <div class="grounding-dot" data-dot="4"></div>
+                <div class="grounding-dot" data-dot="5"></div>
+            </div>
+
+            <div class="grounding-btns">
+                <button id="btn-grounding-next" class="btn-primary" type="button">Siguiente →</button>
+                <button id="btn-grounding-restart" class="btn-ghost hidden" type="button">↺ Repetir</button>
+            </div>
+            <p class="grounding-tip">💡 Esta técnica activa el córtex prefrontal y reduce la respuesta de la amígdala — el «detector de peligro» del cerebro.</p>
+        </div>
+    </div>
+
     <!-- ===== PANTALLA FINAL ===== -->
     <div id="end-screen" class="screen hidden">
         <div class="end-inner">
@@ -301,6 +338,8 @@
                 <div class="stat"><span class="stat-n" id="time-stat">—</span><span>Tiempo de recorrido</span></div>
             </div>
             <button id="btn-restart" class="btn-primary">Repetir Recorrido</button>
+            <button id="btn-share" class="btn-secondary end-share-btn" type="button">📋 Compartir con mi terapeuta</button>
+            <div id="share-feedback" class="share-feedback hidden">¡Copiado al portapapeles! Pegalo en un mensaje para tu terapeuta.</div>
             <button id="btn-end-menu" class="btn-ghost">Menú Principal</button>
         </div>
 
