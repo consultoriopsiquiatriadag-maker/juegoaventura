@@ -232,6 +232,12 @@ function buildWorld(){
   buildEntrance(); buildCheckIn(); buildSecurity();
   buildLounge(); buildBoarding(); buildPlane(); buildArrival();
   buildShops(); buildDirectionSigns(); buildFlightBoard();
+  // ── FASE 2: Estructuras base del hall ──────────
+  buildTransitionBenches();
+  buildInfoPosts();
+  buildSidewallWindows();
+  buildCorridorEdgeMarkers();
+  // ───────────────────────────────────────────────
   buildExterior(); buildZoneRings();
 }
 
@@ -1341,6 +1347,220 @@ function drawFlightBoard(){
 // ══════════════════════════════════════════════════
 // EXTERIOR
 // ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// FASE 2 — ESTRUCTURAS BASE DEL HALL
+// Bancos · Postes info · Ventanales laterales
+// Marcadores de corredor
+// ══════════════════════════════════════════════════
+
+// ─── BANCOS DE TRANSICIÓN ────────────────────────
+// Pares de bancos entre zonas del recorrido.
+// Posición lateral (x=±11) para no bloquear el corredor.
+function buildTransitionBenches(){
+  [{z:+38},{z:+16},{z:-2},{z:-20}].forEach(({z})=>{
+    buildAirportBench(-11,z,-Math.PI/2); // izquierda, cara al centro
+    buildAirportBench( 11,z, Math.PI/2); // derecha, cara al centro
+  });
+}
+
+function buildAirportBench(x,z,ry){
+  const g=new THREE.Group();
+  const seatM=mkStd(0x374558,0.75,0.02);   // azul pizarra
+  const frameM=mkStd(0x8899aa,0.28,0.28);  // metal cepillado
+
+  // 4 asientos conectados
+  for(let i=0;i<4;i++){
+    const sx=-1.6+i*1.08;
+    const seat=new THREE.Mesh(mkBox(1.0,0.09,0.72),seatM);
+    seat.position.set(sx,0.47,0); g.add(seat);
+    const back=new THREE.Mesh(mkBox(1.0,0.55,0.07),seatM);
+    back.position.set(sx,0.80,0.33); g.add(back);
+  }
+  // Apoyabrazos: extremos + central
+  [-1.65,0,1.65].forEach(ax=>{
+    const arm=new THREE.Mesh(mkBox(0.07,0.22,0.60),frameM);
+    arm.position.set(ax,0.59,0.02); g.add(arm);
+  });
+  // Estructura metálica: 2 grupos de patas
+  [-0.85,0.85].forEach(fx=>{
+    const v=new THREE.Mesh(mkBox(0.06,0.47,0.06),frameM);
+    v.position.set(fx,0.24,0); g.add(v);
+    const h=new THREE.Mesh(mkBox(0.06,0.06,0.84),frameM);
+    h.position.set(fx,0.06,0); g.add(h);
+    const vb=new THREE.Mesh(mkBox(0.06,0.68,0.06),frameM);
+    vb.position.set(fx,0.50,0.33); g.add(vb);
+  });
+  // Barra superior del respaldo
+  const topBar=new THREE.Mesh(mkBox(3.58,0.06,0.06),frameM);
+  topBar.position.set(0,1.02,0.33); g.add(topBar);
+
+  g.position.set(x,0,z); g.rotation.y=ry;
+  g.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}});
+  scene.add(g);
+}
+
+// ─── POSTES DE INFORMACIÓN DIGITAL ───────────────
+// 3 pares en zonas de transición (x=±7).
+// No bloquean el corredor — están en el área de tiendas.
+function buildInfoPosts(){
+  buildInfoPost(-7,+36,'ℹ INFORMACIÓN',0x5ba4d4);
+  buildInfoPost(+7,+36,'ℹ INFORMACIÓN',0x5ba4d4);
+  buildInfoPost(-7,+14,'⚡ CARGA · WiFi',0x4ecdc4);
+  buildInfoPost(+7,+14,'⚡ CARGA · WiFi',0x4ecdc4);
+  buildInfoPost(-7,-16,'🚻 SERVICIOS',0x52b788);
+  buildInfoPost(+7,-16,'🚻 SERVICIOS',0x52b788);
+}
+
+function buildInfoPost(x,z,label,col){
+  const g=new THREE.Group();
+  const frameMat=mkStd(0x607d8b,0.35,0.18);
+  const baseMat=mkStd(0x2d4a63,0.5,0.08);
+
+  // Base hexagonal
+  const base=new THREE.Mesh(new THREE.CylinderGeometry(0.30,0.34,0.11,6),baseMat);
+  base.position.set(0,0.06,0); g.add(base);
+  // Columna
+  const col_=new THREE.Mesh(new THREE.CylinderGeometry(0.052,0.062,1.32,8),frameMat);
+  col_.position.set(0,0.71,0); g.add(col_);
+  // Cabezal
+  const head=new THREE.Mesh(mkBox(0.48,0.36,0.09),mkStd(0x1a2230,0.4,0.1));
+  head.position.set(0,1.55,0); g.add(head);
+  // Pantalla con canvas
+  const screenTex=tex(256,192,(ctx)=>{
+    ctx.fillStyle='#06101e'; ctx.fillRect(0,0,256,192);
+    const accent='#'+col.toString(16).padStart(6,'0');
+    ctx.fillStyle=accent; ctx.fillRect(0,0,256,4);
+    ctx.fillStyle='#fff'; ctx.font='bold 22px Arial'; ctx.textAlign='center';
+    ctx.fillText(label,128,52);
+    ctx.fillStyle='rgba(255,255,255,0.48)'; ctx.font='14px Arial';
+    ctx.fillText('Toque para consultar',128,86);
+    ctx.fillText('Touch to inquire',128,106);
+    // QR decorativo
+    ctx.fillStyle='#fff'; ctx.fillRect(96,128,64,46);
+    ctx.fillStyle='#111';
+    for(let qi=0;qi<4;qi++) for(let qj=0;qj<4;qj++)
+      if((qi+qj+qi*qj)%2===0) ctx.fillRect(98+qi*13,130+qj*10,11,8);
+  });
+  const screenM=new THREE.MeshLambertMaterial({
+    map:screenTex,
+    emissive:new THREE.Color(col).multiplyScalar(0.10),
+    emissiveIntensity:1
+  });
+  const screen=new THREE.Mesh(mkBox(0.42,0.30,0.04),screenM);
+  screen.position.set(0,1.55,-0.05); g.add(screen);
+  // Luz sutil
+  const pl=new THREE.PointLight(col,0.16,3.2);
+  pl.position.set(0,1.8,-0.7); g.add(pl);
+
+  g.position.set(x,0,z);
+  g.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}});
+  scene.add(g);
+}
+
+// ─── VENTANALES LATERALES ─────────────────────────
+// 3 ventanas por lado en los huecos entre tiendas.
+// Vista procedural: cielo + plataforma + avión lejano.
+function buildSidewallWindows(){
+  // z=+42 → zona entrada (sin tiendas)
+  // z=+10 → entre café y pharmacie (pequeño hueco)
+  // z=-16 → entre duty-free y sala espera
+  [+42, +10, -16].forEach(wz=>{
+    buildSideWindow(-17, wz); // pared izquierda
+    buildSideWindow(+17, wz); // pared derecha
+  });
+}
+
+function buildSideWindow(wx, wz){
+  const inward=wx<0?1:-1; // hacia interior (+x izq, -x der)
+
+  // Marco exterior empotrado en la pared
+  const frame=new THREE.Mesh(mkBox(0.26,4.4,3.7),mkStd(0xd0c8bc,0.65,0.02));
+  frame.position.set(wx,6.2,wz); scene.add(frame);
+
+  // Textura de exterior: cielo + plataforma + avión
+  const extT=tex(384,256,(ctx)=>{
+    const sky=ctx.createLinearGradient(0,0,0,256);
+    sky.addColorStop(0,'#6aaecb'); sky.addColorStop(0.55,'#9dcfef'); sky.addColorStop(1,'#bde0f8');
+    ctx.fillStyle=sky; ctx.fillRect(0,0,384,256);
+    // Suelo exterior
+    ctx.fillStyle='#5a6a50'; ctx.fillRect(0,192,384,64);
+    ctx.fillStyle='#434452'; ctx.fillRect(0,210,384,46);
+    // Líneas de pista
+    ctx.strokeStyle='rgba(255,255,255,0.28)'; ctx.lineWidth=2;
+    ctx.setLineDash([22,16]);
+    ctx.beginPath(); ctx.moveTo(0,232); ctx.lineTo(384,232); ctx.stroke();
+    ctx.setLineDash([]);
+    // Avión lejano
+    ctx.fillStyle='#dde0e8';
+    ctx.beginPath(); ctx.ellipse(290,178,56,11,0,0,Math.PI*2); ctx.fill();
+    ctx.fillRect(238,176,56,3);    // ala
+    ctx.fillRect(230,167,5,13);    // cola
+    ctx.fillStyle='rgba(160,200,228,0.9)';
+    for(let pw=0;pw<5;pw++) ctx.fillRect(253+pw*10,175,7,4); // ventanas
+    // Vehículo de pista
+    ctx.fillStyle='#e08a1a';
+    ctx.fillRect(55,212,20,9); ctx.fillRect(51,211,4,11);
+  });
+
+  const glassMat=new THREE.MeshLambertMaterial({
+    map:extT, transparent:true, opacity:0.91,
+    side:THREE.DoubleSide
+  });
+  const glass=new THREE.Mesh(mkBox(0.10,4.0,3.35),glassMat);
+  glass.position.set(wx+inward*0.09,6.2,wz); scene.add(glass);
+
+  // Cruz divisoria del ventanal (2×2 panes)
+  const barH=new THREE.Mesh(mkBox(0.24,0.09,3.72),mkStd(0xc8c0b8,0.60,0.02));
+  barH.position.set(wx,6.2,wz); scene.add(barH);
+  const barV=new THREE.Mesh(mkBox(0.24,4.2,0.09),mkStd(0xc8c0b8,0.60,0.02));
+  barV.position.set(wx,6.2,wz); scene.add(barV);
+  // Antepecho
+  const sill=new THREE.Mesh(mkBox(0.42,0.09,3.75),mkStd(0xdad2c8,0.55,0.0));
+  sill.position.set(wx+inward*0.10,4.25,wz); scene.add(sill);
+  // Luz natural simulada
+  const wl=new THREE.PointLight(0xfff8f0,0.20,6);
+  wl.position.set(wx+inward*2,5.5,wz); scene.add(wl);
+}
+
+// ─── MARCADORES DE BORDE DEL CORREDOR ────────────
+// Jardineras/columnitas bajas en x=±10 a intervalos.
+// Definen visualmente el límite corredor↔zona de tiendas.
+// Altura 0.6 m — no bloquean la vista. Alternadas: con/sin planta.
+function buildCorridorEdgeMarkers(){
+  const positions=[+44,+34,+22,+10,-1,-14,-25,-38];
+  positions.forEach((mz,idx)=>{
+    [-10,10].forEach(mx=>{
+      const g=new THREE.Group();
+      const stoneMat=mkStd(0xd2cac0,0.68,0.02);
+
+      // Base cuadrada
+      const base=new THREE.Mesh(mkBox(0.60,0.50,0.60),stoneMat);
+      base.position.set(0,0.25,0); g.add(base);
+      // Moldura superior
+      const top=new THREE.Mesh(mkBox(0.72,0.07,0.72),mkStd(0xc8c0b4,0.55,0.03));
+      top.position.set(0,0.54,0); g.add(top);
+
+      // Alterna: jardinera con plantita vs. columna lisa
+      if(idx%2===0){
+        const soil=new THREE.Mesh(mkBox(0.56,0.16,0.56),mkStd(0x2a3a2a,0.8,0.0));
+        soil.position.set(0,0.66,0); g.add(soil);
+        const lm=mkStd(0x3d7a38,0.75,0.0);
+        [[-0.11,0.08],[0.11,0.08],[0,-0.11],[0,0.11]].forEach(([dx,dz])=>{
+          const leaf=new THREE.Mesh(new THREE.SphereGeometry(0.13,5,5),lm);
+          leaf.position.set(dx,0.88,dz); leaf.scale.y=0.52; g.add(leaf);
+        });
+        // Centro de la planta
+        const center=new THREE.Mesh(new THREE.SphereGeometry(0.10,5,5),lm);
+        center.position.set(0,0.92,0); center.scale.y=0.5; g.add(center);
+      }
+
+      g.position.set(mx,0,mz);
+      g.traverse(c=>{if(c.isMesh){c.castShadow=true;c.receiveShadow=true;}});
+      scene.add(g);
+    });
+  });
+}
+
 function buildExterior(){
   buildDetailedPlane(-28,0,-44,0.12);
   buildDetailedPlane(26,0,-30,-0.15);
