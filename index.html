@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="description" content="Simulador terapéutico de aeropuerto — Consultorio Dr. Pedro Dagnino · Psiquiatría">
     <title>AeroCalma – Simulador Terapéutico de Aeropuerto</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -38,6 +40,30 @@
         </div>
     </div>
 
+    <!-- ===== PANTALLA DE ANSIEDAD PRE-JUEGO ===== -->
+    <div id="anxiety-pre-screen" class="screen hidden">
+        <div class="screen-inner anxiety-screen">
+            <button class="btn-back" id="btn-back-anxiety" type="button">← Volver al menú</button>
+            <div class="anxiety-icon" aria-hidden="true">🧘</div>
+            <h2>Antes de empezar</h2>
+            <p>¿Cómo calificarías tu nivel de ansiedad en este momento?</p>
+            <p class="scale-hint"><strong>0</strong> = nada de ansiedad &nbsp;·&nbsp; <strong>10</strong> = ansiedad muy alta</p>
+            <div id="anxiety-scale-pre" class="anxiety-scale"
+                 role="group" aria-label="Escala de ansiedad del 0 al 10">
+                <!-- Generado por JS -->
+            </div>
+            <div class="anxiety-pre-btns">
+                <button id="btn-confirm-anxiety" class="btn-primary" type="button" disabled aria-label="Confirmar nivel de ansiedad y comenzar el recorrido">
+                    Comenzar el recorrido →
+                </button>
+                <button id="btn-skip-anxiety" class="btn-ghost" type="button" aria-label="Comenzar sin calificar la ansiedad">
+                    Continuar sin calificar
+                </button>
+            </div>
+            <p class="anxiety-privacy">🔒 Este dato queda solo en tu dispositivo. No se envía a ningún servidor.</p>
+        </div>
+    </div>
+
     <!-- ===== MENÚ PRINCIPAL ===== -->
     <div id="main-menu" class="screen hidden">
         <!-- Canvas de partículas — aviones lentos, solo desktop, respeta prefers-reduced-motion -->
@@ -64,7 +90,22 @@
                 </button>
                 <span class="calm-hint">Para ansiedad alta o sensibilidad sensorial</span>
             </div>
+            <div class="calm-mode-row guided-row">
+                <button id="btn-toggle-guided" class="btn-calm-toggle btn-guided-toggle" aria-pressed="true" aria-label="Alternar entre modo guiado y modo libre de exploración">
+                    📍 Modo Guiado
+                </button>
+                <span class="calm-hint">En modo libre explorás sin que el panel se abra solo</span>
+            </div>
+            <div id="diary-display" class="diary-display hidden" aria-live="polite"></div>
         </div>
+        <footer class="menu-footer">
+            Desarrollado por el <strong>Consultorio Dr. Pedro Dagnino · Psiquiatría</strong>
+            &nbsp;·&nbsp;
+            <a href="mailto:consultoriopsiquiatriadag@gmail.com" class="footer-link">
+                Contacto
+            </a>
+        </footer>
+
         <div class="menu-zones-preview">
             <div class="zone-pill">🚪 Entrada</div>
             <div class="zone-pill">🧳 Check-in</div>
@@ -343,7 +384,7 @@
         <div class="end-inner">
             <div class="end-trophy">🏆</div>
             <h1>¡Lo lograste!</h1>
-            <p class="end-subtitle">Has completado el recorrido completo del aeropuerto de forma exitosa.</p>
+            <p class="end-subtitle" id="end-subtitle">Completaste el recorrido completo del aeropuerto.</p>
             <div class="end-message">
                 <p>Ahora conoces exactamente lo que te espera en cada zona. Con práctica, la ansiedad se transforma en preparación.</p>
                 <p><strong>Recuerda:</strong> el avión es el medio de transporte más seguro del mundo. Un vuelo comercial tiene una tasa de accidente de 1 en 11 millones.</p>
@@ -353,10 +394,34 @@
                 <div class="stat"><span class="stat-n" id="breath-count-stat">0</span><span>Respiraciones</span></div>
                 <div class="stat"><span class="stat-n" id="time-stat">—</span><span>Tiempo de recorrido</span></div>
             </div>
+            <!-- Comparación de ansiedad pre/post (solo si el paciente completó la escala) -->
+            <div id="anxiety-result" class="anxiety-result hidden">
+                <p id="anxiety-pre-display" class="anxiety-pre-label"></p>
+                <p class="anxiety-post-prompt">¿Cómo te sentís ahora?</p>
+                <div id="anxiety-scale-post" class="anxiety-scale anxiety-scale-post"
+                     role="group" aria-label="Escala de ansiedad post-recorrido del 0 al 10">
+                    <!-- Generado por JS en endGame() -->
+                </div>
+                <p id="anxiety-comparison" class="anxiety-comparison hidden" aria-live="polite"></p>
+            </div>
+
             <button id="btn-restart" class="btn-primary">Repetir Recorrido</button>
             <button id="btn-share" class="btn-secondary end-share-btn" type="button">📋 Compartir con mi terapeuta</button>
             <div id="share-feedback" class="share-feedback hidden">¡Copiado al portapapeles! Pegalo en un mensaje para tu terapeuta.</div>
+
+            <!-- Practicar una zona específica -->
+            <details id="zone-repeat-section" class="zone-repeat-section">
+                <summary class="zone-repeat-summary">🗺 Practicar una zona en particular</summary>
+                <div id="zone-repeat-grid" class="zone-repeat-grid"><!-- generado por JS --></div>
+            </details>
+
+            <a href="mailto:consultoriopsiquiatriadag@gmail.com"
+               class="btn-contact"
+               aria-label="Contactar al Consultorio Dr. Dagnino">
+                💬 Hablar con mi terapeuta
+            </a>
             <button id="btn-end-menu" class="btn-ghost">Menú Principal</button>
+            <p class="end-branding">AeroCalma · Consultorio Dr. Pedro Dagnino · Psiquiatría</p>
         </div>
 
     </div><!-- /end-screen -->

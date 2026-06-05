@@ -47,6 +47,11 @@ let menuAnimId=null;            // requestAnimationFrame del canvas del menú
 const prefersReducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let calmMode=false;             // Modo Calma: estimulación reducida
 let textScale=1;                // Escala de texto del panel de zona (0.85 – 1.4)
+let guidedMode=true;            // true = panel abre automático al entrar a zona
+let startAtZone=-1;             // índice de zona para ir directo al iniciar (goToZone)
+const DIARY_KEY='aerocalma_diary';
+let anxietyPre=-1;              // nivel de ansiedad antes del recorrido (0-10, -1 = no seleccionó)
+let anxietyPost=-1;             // nivel de ansiedad al terminar el recorrido
 
 // ── GROUNDING 5-4-3-2-1 ───────────────────────────
 let groundingStep=0;
@@ -159,7 +164,7 @@ function animLoad(){
   const f=document.getElementById('loading-fill');
   f.style.animation='none'; f.style.width='0%';
   let w=0; const iv=setInterval(()=>{ w+=1.5; f.style.width=Math.min(w,100)+'%';
-    if(w>=100){ clearInterval(iv); setTimeout(()=>{ document.getElementById('loading-screen').classList.add('hidden'); document.getElementById('main-menu').classList.remove('hidden'); startMenuAnimation(); },400); }
+    if(w>=100){ clearInterval(iv); setTimeout(()=>{ document.getElementById('loading-screen').classList.add('hidden'); document.getElementById('main-menu').classList.remove('hidden'); startMenuAnimation(); updateDiaryDisplay(); },400); }
   },20);
 }
 
@@ -2486,6 +2491,99 @@ function startMenuAnimation(){
   loop();
 }
 
+// ══════════════════════════════════════════════════
+// FASE F — GAMIFICACIÓN SUAVE
+// ══════════════════════════════════════════════════
+
+// ── DIARIO LOCAL ──────────────────────────────────
+function loadDiary(){
+  try{
+    const d=JSON.parse(localStorage.getItem(DIARY_KEY));
+    return d&&typeof d==='object'?d:{completedCount:0,totalBreaths:0,totalSessions:0,lastDate:null,bestTime:null};
+  }catch(e){ return {completedCount:0,totalBreaths:0,totalSessions:0,lastDate:null,bestTime:null}; }
+}
+function saveDiary(data){
+  try{ localStorage.setItem(DIARY_KEY,JSON.stringify(data)); }catch(e){}
+}
+function updateDiaryDisplay(){
+  const d=loadDiary();
+  const el=document.getElementById('diary-display');
+  if(!el) return;
+  if(d.completedCount===0&&d.totalSessions===0){ el.classList.add('hidden'); return; }
+  let txt='';
+  if(d.completedCount>0){
+    txt=`Recorridos completos: ${d.completedCount}`;
+    if(d.lastDate) txt+=` · Última visita: ${d.lastDate}`;
+    if(d.totalBreaths>0) txt+=` · Respiraciones totales: ${d.totalBreaths}`;
+  } else {
+    txt=`Recorridos iniciados: ${d.totalSessions}`;
+  }
+  el.textContent=txt;
+  el.classList.remove('hidden');
+}
+
+// ── ESCALA DE ANSIEDAD 0-10 ──────────────────────
+function renderAnxietyScale(containerId, onSelect){
+  const el=document.getElementById(containerId);
+  if(!el) return;
+  el.innerHTML=Array.from({length:11},(_,i)=>
+    `<button class="anxiety-btn" data-level="${i}" type="button" aria-label="${i} de 10">${i}</button>`
+  ).join('');
+  el.querySelectorAll('.anxiety-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      el.querySelectorAll('.anxiety-btn').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      onSelect(parseInt(btn.dataset.level));
+    });
+  });
+}
+
+function showAnxietyPre(){
+  showScreen('anxiety-pre-screen');
+  anxietyPre=-1;
+  document.getElementById('btn-confirm-anxiety').disabled=true;
+  document.querySelectorAll('#anxiety-scale-pre .anxiety-btn').forEach(b=>b.classList.remove('selected'));
+}
+
+function initAnxietyScales(){
+  renderAnxietyScale('anxiety-scale-pre',(level)=>{
+    anxietyPre=level;
+    document.getElementById('btn-confirm-anxiety').disabled=false;
+  });
+}
+
+// ── MODO GUIADO / LIBRE ───────────────────────────
+function toggleGuidedMode(){
+  guidedMode=!guidedMode;
+  const btn=document.getElementById('btn-toggle-guided');
+  if(btn){
+    btn.setAttribute('aria-pressed',String(guidedMode));
+    btn.firstChild.textContent=guidedMode?' 📍 Modo Guiado':' 🗺 Modo Libre';
+  }
+  const hint=btn?btn.parentElement.querySelector('.calm-hint'):null;
+  if(hint) hint.textContent=guidedMode?'Los paneles se abren automáticamente':'Explorás libremente sin interrupciones';
+}
+
+// ── IR DIRECTO A UNA ZONA ─────────────────────────
+function goToZone(i){
+  startAtZone=i;
+  startGame();
+  if(isMobile){
+    // En mobile no hay pointer lock, posicionamos directo
+    const z=ZONE_DATA[i];
+    camera.position.set(z.position.x,PLAYER_HEIGHT,z.position.z+z.radius+1.5);
+    startAtZone=-1;
+  }
+}
+
+// ── SELLO SEGÚN RECORRIDOS COMPLETADOS ───────────
+function getCompletionMessage(count){
+  if(count===1) return 'Completaste tu primer recorrido completo del aeropuerto.';
+  if(count<=3)  return `Este es tu recorrido número ${count}. El aeropuerto ya es un lugar más familiar.`;
+  if(count<=7)  return `${count} recorridos completos. Tu sistema nervioso sigue adaptándose.`;
+  return `${count} recorridos. El aeropuerto ya no te es desconocido.`;
+}
+
 // ── MODO CALMA ────────────────────────────────────
 function toggleCalmMode(){
   calmMode=!calmMode;
@@ -2517,15 +2615,20 @@ function stopMenuAnimation(){
 // EVENTS & GAME LOGIC
 // ══════════════════════════════════════════════════
 function setupEvents(){
-  document.getElementById('btn-start').addEventListener('click',startGame);
+  // btn-start ahora muestra la pantalla de ansiedad antes de iniciar
+  document.getElementById('btn-start').addEventListener('click',showAnxietyPre);
+  document.getElementById('btn-confirm-anxiety').addEventListener('click',startGame);
+  document.getElementById('btn-skip-anxiety').addEventListener('click',startGame);
+  document.getElementById('btn-back-anxiety').addEventListener('click',()=>showScreen('main-menu'));
   document.getElementById('btn-toggle-calm').addEventListener('click',toggleCalmMode);
+  document.getElementById('btn-toggle-guided').addEventListener('click',toggleGuidedMode);
   document.getElementById('btn-calm-pause').addEventListener('click',toggleCalmMode);
   document.getElementById('btn-emergency-exit').addEventListener('click',returnToMenu);
   document.getElementById('btn-text-increase').addEventListener('click',()=>setTextScale(0.15));
   document.getElementById('btn-text-decrease').addEventListener('click',()=>setTextScale(-0.15));
   document.getElementById('btn-info').addEventListener('click',()=>showScreen('info-screen'));
   document.getElementById('btn-back-info').addEventListener('click',()=>showScreen('main-menu'));
-  document.getElementById('btn-start-from-info').addEventListener('click',startGame);
+  document.getElementById('btn-start-from-info').addEventListener('click',showAnxietyPre);
   document.getElementById('btn-pause').addEventListener('click',pauseGame);
   document.getElementById('btn-resume').addEventListener('click',resumeGame);
   document.getElementById('btn-to-menu').addEventListener('click',returnToMenu);
@@ -2563,7 +2666,15 @@ function setupEvents(){
     renderer.setSize(innerWidth,innerHeight);
     if(composer) composer.setSize(innerWidth,innerHeight);
   });
-  controls.addEventListener('lock',()=>{ document.getElementById('click-to-play').classList.add('hidden'); });
+  controls.addEventListener('lock',()=>{
+    document.getElementById('click-to-play').classList.add('hidden');
+    // Si se pidió ir directo a una zona (goToZone), posicionar ahora que el lock está activo
+    if(startAtZone>=0){
+      const z=ZONE_DATA[startAtZone];
+      camera.position.set(z.position.x,PLAYER_HEIGHT,z.position.z+z.radius+1.5);
+      startAtZone=-1;
+    }
+  });
   controls.addEventListener('unlock',()=>{ if(!isMobile&&isGameActive&&!isPaused){ isPaused=true; document.getElementById('pause-menu').classList.remove('hidden'); } });
   if(isMobile) setupMobileControls();
 }
@@ -2688,6 +2799,10 @@ function showScreen(id){ document.querySelectorAll('.screen').forEach(s=>s.class
 function startGame(){
   stopMenuAnimation();
   gameStartTime=Date.now();
+  // Registrar sesión iniciada en el diario
+  const d=loadDiary();
+  d.totalSessions=(d.totalSessions||0)+1;
+  saveDiary(d);
   showScreen(null);
   document.getElementById('game-hud').classList.remove('hidden');
   isGameActive=true; isPaused=false; currentZoneIndex=-1;
@@ -2710,9 +2825,15 @@ function startGame(){
 }
 function pauseGame(){ isPaused=true; if(!isMobile)controls.unlock(); document.getElementById('pause-menu').classList.remove('hidden'); }
 function resumeGame(){ isPaused=false; document.getElementById('pause-menu').classList.add('hidden'); if(!isMobile)controls.lock(); }
-function returnToMenu(){ isGameActive=false; isPaused=false; stopSpeech(); if(!isMobile)controls.unlock(); closeZonePanel(); closeBreathing(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('pause-menu').classList.add('hidden'); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); showScreen('main-menu'); startMenuAnimation(); }
+function returnToMenu(){ isGameActive=false; isPaused=false; stopSpeech(); if(!isMobile)controls.unlock(); closeZonePanel(); closeGrounding(); closeBreathing(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('pause-menu').classList.add('hidden'); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); showScreen('main-menu'); startMenuAnimation(); updateDiaryDisplay(); }
 function restartGame(){ showScreen(null); startGame(); }
-function resetProgressUI(){ document.getElementById('progress-fill').style.width='0%'; document.querySelectorAll('.step').forEach(s=>s.classList.remove('done','active')); }
+function resetProgressUI(){
+  document.getElementById('progress-fill').style.width='0%';
+  document.querySelectorAll('.step').forEach(s=>{
+    s.classList.remove('done','active','step-pop');
+    delete s.dataset.animated;
+  });
+}
 
 function checkZones(){
   const pos=camera.position; let ni=0,nd=Infinity;
@@ -2736,18 +2857,41 @@ function enterZone(i){
         : '✈ Primera zona alcanzada. Se abrirá el panel de información de cada zona al llegar. Podés usar E, B y 🔊 en cualquier momento.';
       showToast(msg);
     }
-    if(isMobile){
-      if(i!==0) showToast(`${zone.emoji} ${zone.name} — tocá 💡 para info`);
-      narrateZone(i);
+    if(guidedMode){
+      if(isMobile){
+        if(i!==0) showToast(`${zone.emoji} ${zone.name} — tocá 💡 para info`);
+        narrateZone(i);
+      } else {
+        openZonePanel(i);
+        narrateZone(i);
+        if(i!==0) showToast(`${zone.emoji} ${zone.name}`);
+      }
     } else {
-      openZonePanel(i);
-      narrateZone(i);
-      if(i!==0) showToast(`${zone.emoji} ${zone.name}`);
+      // Modo libre: solo toast suave, sin panel ni narración automática
+      showToast(`${zone.emoji} ${zone.name}`);
     }
   }
   if(visitedZones.size>=ZONE_DATA.length) setTimeout(()=>endGame(),2000);
 }
-function updateProgress(i){ document.getElementById('progress-fill').style.width=((i+1)/ZONE_DATA.length*100)+'%'; document.querySelectorAll('.step').forEach((s,j)=>{ s.classList.remove('active','done'); if(j<i)s.classList.add('done'); else if(j===i)s.classList.add('active'); }); }
+function updateProgress(i){
+  document.getElementById('progress-fill').style.width=((i+1)/ZONE_DATA.length*100)+'%';
+  document.querySelectorAll('.step').forEach((s,j)=>{
+    s.classList.remove('active','done');
+    if(j<i){
+      s.classList.add('done');
+      // Animación suave solo la primera vez que se completa ese paso
+      if(!s.dataset.animated){
+        s.dataset.animated='1';
+        if(!prefersReducedMotion()&&!calmMode){
+          s.classList.add('step-pop');
+          setTimeout(()=>s.classList.remove('step-pop'),500);
+        }
+      }
+    } else if(j===i){
+      s.classList.add('active');
+    }
+  });
+}
 function endGame(){
   isGameActive=false; stopSpeech();
   if(!isMobile)controls.unlock();
@@ -2760,8 +2904,54 @@ function endGame(){
   const secs=Math.floor((Date.now()-gameStartTime)/1000);
   const m=Math.floor(secs/60), s=secs%60;
   document.getElementById('time-stat').textContent=`${m}:${String(s).padStart(2,'0')}`;
+
+  // Actualizar diario en localStorage
+  const d=loadDiary();
+  d.completedCount=(d.completedCount||0)+1;
+  d.totalBreaths=(d.totalBreaths||0)+breathCount;
+  d.lastDate=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  if(!d.bestTime||secs<d.bestTime) d.bestTime=secs;
+  saveDiary(d);
+
+  // Mensaje personalizado según recorridos completados (sello discreto)
+  const subEl=document.getElementById('end-subtitle');
+  if(subEl) subEl.textContent=getCompletionMessage(d.completedCount);
+
+  // Ansiedad post-juego
+  anxietyPost=-1;
+  const anxResult=document.getElementById('anxiety-result');
+  if(anxietyPre>=0&&anxResult){
+    document.getElementById('anxiety-pre-display').textContent=
+      `Empezaste el recorrido con ansiedad: ${anxietyPre}/10`;
+    anxResult.classList.remove('hidden');
+    document.getElementById('anxiety-comparison').classList.add('hidden');
+    renderAnxietyScale('anxiety-scale-post',(level)=>{
+      anxietyPost=level;
+      const diff=anxietyPre-level;
+      let msg=`${anxietyPre}/10 → ${level}/10`;
+      if(diff>0)      msg+=` · Bajó ${diff} ${diff===1?'punto':'puntos'} 🌿`;
+      else if(diff<0) msg+=` · Subió ${Math.abs(diff)} ${Math.abs(diff)===1?'punto':'puntos'} — es normal después del esfuerzo.`;
+      else            msg+=` · Se mantuvo igual.`;
+      const compEl=document.getElementById('anxiety-comparison');
+      compEl.textContent=msg; compEl.classList.remove('hidden');
+    });
+  } else if(anxResult){
+    anxResult.classList.add('hidden');
+  }
+
+  // Generar botones de zona para "Practicar zona"
+  const grid=document.getElementById('zone-repeat-grid');
+  if(grid){
+    grid.innerHTML=ZONE_DATA.map((z,i)=>
+      `<button class="btn-zone-repeat" data-zone="${i}" type="button">${z.emoji} ${z.name}</button>`
+    ).join('');
+    grid.querySelectorAll('.btn-zone-repeat').forEach(btn=>{
+      btn.addEventListener('click',()=>goToZone(parseInt(btn.dataset.zone)));
+    });
+  }
+
   showScreen('end-screen');
-  speak('¡Felicitaciones! Has completado el recorrido completo del aeropuerto. Ahora estás más preparado para tu próximo vuelo.');
+  speak('¡Felicitaciones! Completaste el recorrido completo del aeropuerto. Ahora estás más preparado para tu próximo vuelo.');
 }
 
 function openZonePanel(i){
@@ -2825,13 +3015,16 @@ function generateShareText(){
   const m=Math.floor(secs/60), s=secs%60;
   const date=new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const zonas=Array.from(visitedZones).sort((a,b)=>a-b).map(i=>`✓ ${ZONE_DATA[i].emoji} ${ZONE_DATA[i].name}`).join('\n');
-  return `AeroCalma – Resumen del recorrido\n` +
+  let txt=`AeroCalma – Resumen del recorrido\n` +
     `Fecha: ${date}\n` +
     `Tiempo total: ${m}:${String(s).padStart(2,'0')}\n` +
     `Zonas recorridas: ${visitedZones.size}/7\n` +
-    `Ejercicios de respiración: ${breathCount}\n\n` +
-    `Zonas visitadas:\n${zonas}\n\n` +
+    `Ejercicios de respiración: ${breathCount}\n`;
+  if(anxietyPre>=0)  txt+=`Ansiedad inicial: ${anxietyPre}/10\n`;
+  if(anxietyPost>=0) txt+=`Ansiedad final:   ${anxietyPost}/10\n`;
+  txt+=`\nZonas visitadas:\n${zonas}\n\n` +
     `Consultorio Dr. Pedro Dagnino – Psiquiatría\nhttps://aerocalma.netlify.app/`;
+  return txt;
 }
 function shareWithTherapist(){
   const text=generateShareText();
@@ -2968,6 +3161,8 @@ window.addEventListener('load',()=>{
     if(speechSynth.onvoiceschanged!==undefined) speechSynth.onvoiceschanged=loadVoices;
     loadVoices();
   }
+  // Inicializar escalas de ansiedad 0-10
+  initAnxietyScales();
   // Auto-activar modo calma si el sistema tiene prefers-reduced-motion
   if(prefersReducedMotion()){
     calmMode=true;

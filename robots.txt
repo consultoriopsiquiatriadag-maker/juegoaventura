@@ -1,0 +1,9 @@
+# AeroCalma — Simulador terapéutico de aeropuerto
+# Consultorio Dr. Pedro Dagnino · Psiquiatría
+#
+# Este sitio es una herramienta clínica de uso interno.
+# Se desactiva la indexación para que el juego no aparezca
+# descontextualizado en buscadores.
+
+User-agent: *
+Disallow: /

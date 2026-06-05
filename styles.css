@@ -814,6 +814,198 @@ button { font-family: var(--ff-body); cursor: pointer; border: none; outline: no
 }
 
 /* ================================
+   FASE G — INTEGRACIÓN CONSULTORIO
+================================ */
+
+/* Footer del menú */
+.menu-footer {
+  position: absolute; bottom: 14px;
+  left: 0; right: 0;
+  text-align: center;
+  color: rgba(255,255,255,0.28);
+  font-size: 0.72rem;
+  z-index: 2;
+  pointer-events: all;
+  letter-spacing: 0.2px;
+}
+.menu-footer strong { color: rgba(255,255,255,0.38); font-weight: 600; }
+.footer-link {
+  color: rgba(91,164,212,0.60);
+  text-decoration: none; transition: color .2s;
+}
+.footer-link:hover { color: var(--accent); }
+
+/* Pantalla de ansiedad pre-juego */
+.anxiety-screen {
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center; max-width: 560px; margin: 0 auto;
+  padding: 60px 40px;
+}
+.anxiety-icon { font-size: 2.8rem; margin-bottom: 18px; line-height: 1; }
+.anxiety-screen h2 {
+  font-family: var(--ff-display); font-size: 2rem;
+  color: var(--deep); margin-bottom: 14px;
+}
+.anxiety-screen > p { color: var(--text-light); font-size: 1rem; line-height: 1.7; margin-bottom: 8px; }
+.scale-hint { font-size: 0.84rem; color: var(--text-light); margin-bottom: 4px; }
+
+/* Escala 0-10 */
+.anxiety-scale {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  justify-content: center; margin: 22px 0;
+  width: 100%;
+}
+.anxiety-btn {
+  width: 46px; height: 46px;
+  border-radius: 12px;
+  background: #f0f6fb;
+  border: 1.5px solid rgba(26,46,66,0.12);
+  color: var(--deep); font-size: 1rem; font-weight: 600;
+  cursor: pointer; transition: all .15s;
+  font-family: var(--ff-body);
+  display: flex; align-items: center; justify-content: center;
+}
+.anxiety-btn:hover { background: #e0edf8; border-color: var(--accent); }
+.anxiety-btn.selected {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(91,164,212,0.4);
+  transform: scale(1.1);
+}
+.anxiety-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 480px) {
+  .anxiety-btn { width: 40px; height: 40px; font-size: 0.92rem; border-radius: 10px; }
+}
+
+.anxiety-pre-btns { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 340px; margin-top: 4px; }
+.anxiety-privacy { font-size: 0.78rem; color: rgba(26,46,66,0.4); margin-top: 18px; }
+
+/* Botón "Hablar con terapeuta" en end-screen */
+.btn-contact {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 13px 24px;
+  background: #e8f8f2;
+  border: 1.5px solid rgba(82,183,136,0.35);
+  border-radius: 50px;
+  color: #1a5032; font-size: 0.95rem; font-weight: 600;
+  text-decoration: none; cursor: pointer;
+  transition: all .2s; margin-bottom: 10px;
+  font-family: var(--ff-body);
+}
+.btn-contact:hover { background: #d4f2e5; border-color: var(--green); }
+
+/* Comparación de ansiedad en end-screen */
+.anxiety-result {
+  background: #f0f6fb;
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+.anxiety-pre-label {
+  font-size: 0.9rem; color: var(--text-light);
+  margin-bottom: 14px; font-weight: 500;
+}
+.anxiety-post-prompt {
+  font-size: 0.92rem; font-weight: 600; color: var(--deep);
+  margin-bottom: 4px;
+}
+.anxiety-scale-post { margin: 14px 0 10px !important; }
+.anxiety-comparison {
+  margin-top: 14px; padding: 12px 16px;
+  background: #fff; border-radius: 10px;
+  font-size: 0.92rem; font-weight: 600; color: var(--deep);
+  border: 1px solid rgba(26,46,66,0.1);
+  animation: fadeIn .3s ease;
+}
+
+/* Branding en end-screen */
+.end-branding {
+  font-size: 0.72rem; color: rgba(26,46,66,0.35);
+  margin-top: 20px; letter-spacing: 0.2px;
+}
+
+/* ================================
+   FASE F — GAMIFICACIÓN SUAVE
+================================ */
+
+/* Separación visual del toggle guiado */
+.guided-row { margin-top: 8px !important; }
+.btn-guided-toggle[aria-pressed="true"] {
+  background: rgba(91,164,212,0.28);
+  border-color: rgba(91,164,212,0.65);
+  color: #fff; font-weight: 600;
+}
+.btn-guided-toggle[aria-pressed="true"]::before { content: "✓ "; }
+.btn-guided-toggle[aria-pressed="false"] {
+  background: rgba(91,164,212,0.08);
+  border-color: rgba(91,164,212,0.24);
+}
+
+/* Diario de recorrido — texto muy sutil en el menú */
+.diary-display {
+  margin-top: 14px;
+  color: rgba(255,255,255,0.42);
+  font-size: 0.76rem;
+  letter-spacing: 0.3px;
+  text-align: center;
+  position: relative; z-index: 2;
+}
+
+/* Animación de logro al completar un paso */
+.step.step-pop { animation: stepPop 0.5s ease-out; }
+@keyframes stepPop {
+  0%   { transform: translateY(-50%) scale(1.7); box-shadow: 0 0 22px rgba(82,183,136,0.85); }
+  60%  { transform: translateY(-50%) scale(0.92); }
+  100% { transform: translateY(-50%) scale(1); box-shadow: 0 0 12px rgba(82,183,136,0.5); }
+}
+
+/* Sección "Practicar zona" en la pantalla final */
+.zone-repeat-section {
+  margin: 16px 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(26,46,66,0.12);
+  overflow: hidden;
+}
+.zone-repeat-summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  font-size: 0.88rem; font-weight: 600;
+  color: var(--text-light);
+  list-style: none;
+  user-select: none;
+  background: rgba(26,46,66,0.04);
+  transition: background .15s;
+}
+.zone-repeat-summary::-webkit-details-marker { display: none; }
+.zone-repeat-summary:hover { background: rgba(26,46,66,0.08); }
+.zone-repeat-section[open] .zone-repeat-summary { color: var(--deep); }
+.zone-repeat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px; padding: 14px;
+}
+.btn-zone-repeat {
+  padding: 10px 12px;
+  background: #f7fafd;
+  border: 1px solid rgba(26,46,66,0.1);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem; font-weight: 500;
+  color: var(--deep); cursor: pointer;
+  text-align: left; transition: all .15s;
+  font-family: var(--ff-body);
+}
+.btn-zone-repeat:hover {
+  background: #e8f0f9;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+@media (max-width: 480px) {
+  .zone-repeat-grid { grid-template-columns: 1fr; }
+}
+
+/* ================================
    FASE E — ACCESIBILIDAD Y MODO CALMA
 ================================ */
 

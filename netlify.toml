@@ -1,0 +1,25 @@
+# netlify.toml — AeroCalma
+# Consultorio Dr. Pedro Dagnino · Psiquiatría
+# Configuración de headers HTTP para control de indexación y seguridad
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Evita que buscadores indexen el sitio (refuerza el meta noindex del HTML)
+    X-Robots-Tag = "noindex, nofollow"
+
+    # Seguridad básica
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+    # Caché para assets estáticos
+[[headers]]
+  for = "/game.js"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+[[headers]]
+  for = "/styles.css"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
