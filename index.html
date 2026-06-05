@@ -52,11 +52,17 @@
             <h1>Conoce el aeropuerto.<br>Pierde el miedo a volar.</h1>
             <p class="hero-sub">Un recorrido guiado y seguro por todas las zonas del aeropuerto, con consejos de salud mental y guía auditiva en cada paso.</p>
             <div class="hero-actions">
-                <button id="btn-start" class="btn-primary">
+                <button id="btn-start" class="btn-primary" aria-label="Iniciar el recorrido por el aeropuerto">
                     <span>Iniciar Recorrido</span>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </button>
-                <button id="btn-info" class="btn-ghost">¿Cómo funciona?</button>
+                <button id="btn-info" class="btn-ghost" aria-label="Ver cómo funciona AeroCalma">¿Cómo funciona?</button>
+            </div>
+            <div class="calm-mode-row">
+                <button id="btn-toggle-calm" class="btn-calm-toggle" aria-pressed="false" aria-label="Activar o desactivar el Modo Calma con estimulación reducida">
+                    🧘 Modo Calma
+                </button>
+                <span class="calm-hint">Para ansiedad alta o sensibilidad sensorial</span>
             </div>
         </div>
         <div class="menu-zones-preview">
@@ -134,7 +140,7 @@
                     <span class="step" data-zone="6">🏁</span>
                 </div>
             </div>
-            <button id="btn-pause" class="hud-btn">⏸ Pausa</button>
+            <button id="btn-pause" class="hud-btn" aria-label="Pausar el juego">⏸ Pausa</button>
         </div>
 
         <!-- Crosshair -->
@@ -142,6 +148,11 @@
 
         <!-- Flash de transición al entrar a una zona -->
         <div id="zone-transition" aria-hidden="true"></div>
+
+        <!-- Botón de salida de emergencia — siempre visible durante el juego -->
+        <button id="btn-emergency-exit" aria-label="Salir del juego y volver al menú principal">
+            ← Salir
+        </button>
 
         <!-- Controls hint — persistente durante el juego (solo desktop) -->
         <div id="controls-hint" class="hidden">
@@ -193,13 +204,13 @@
 
         <!-- Botones inferiores -->
         <div id="bottom-bar">
-            <button id="btn-breathe" class="hud-action-btn breathe-btn">
+            <button id="btn-breathe" class="hud-action-btn breathe-btn" aria-label="Abrir ejercicio de respiración 4-7-8">
                 🫁 <span>Respirar</span>
             </button>
-            <button id="btn-narrate" class="hud-action-btn narrate-btn">
+            <button id="btn-narrate" class="hud-action-btn narrate-btn" aria-label="Escuchar la guía de audio de esta zona">
                 🔊 <span>Escuchar guía</span>
             </button>
-            <button id="btn-tips" class="hud-action-btn tips-btn">
+            <button id="btn-tips" class="hud-action-btn tips-btn" aria-label="Ver consejos e información de esta zona">
                 💡 <span>Consejos</span>
             </button>
         </div>
@@ -217,8 +228,9 @@
             <h2>Pausa</h2>
             <p>Tómate tu tiempo. No hay prisa.</p>
             <div class="breathing-reminder">🫁 Respira. Todo está bajo control.</div>
-            <button id="btn-resume" class="btn-primary">Continuar</button>
-            <button id="btn-to-menu" class="btn-ghost">Menú Principal</button>
+            <button id="btn-resume" class="btn-primary" aria-label="Continuar el recorrido">Continuar</button>
+            <button id="btn-calm-pause" class="btn-ghost calm-pause-btn" aria-pressed="false" aria-label="Activar o desactivar Modo Calma durante el juego">🧘 Modo Calma: <span id="calm-status-label">OFF</span></button>
+            <button id="btn-to-menu" class="btn-ghost" aria-label="Volver al menú principal">Menú Principal</button>
         </div>
 
     </div>
@@ -226,7 +238,11 @@
     <!-- ===== PANEL DE ZONA (slide-in) ===== -->
     <div id="zone-panel" class="hidden">
         <div id="zone-panel-inner">
-            <button id="btn-close-zone" class="close-btn">✕</button>
+            <button id="btn-close-zone" class="close-btn" aria-label="Cerrar panel de zona">✕</button>
+            <div class="text-size-controls" role="group" aria-label="Tamaño del texto">
+                <button id="btn-text-decrease" class="btn-text-size" aria-label="Reducir tamaño del texto">A−</button>
+                <button id="btn-text-increase" class="btn-text-size" aria-label="Aumentar tamaño del texto">A+</button>
+            </div>
             <div id="zone-icon-big"></div>
             <h2 id="zone-panel-title"></h2>
             <p id="zone-panel-subtitle"></p>
@@ -347,6 +363,10 @@
 
     <!-- Notificación flotante -->
     <div id="toast" class="hidden"></div>
+
+    <!-- Subtítulos TTS — visibles cuando habla la guía de audio -->
+    <div id="tts-subtitle" class="tts-subtitle hidden"
+         role="status" aria-live="polite" aria-atomic="true"></div>
 
 </div>
 

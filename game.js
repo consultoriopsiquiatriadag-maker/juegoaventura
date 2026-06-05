@@ -45,6 +45,8 @@ let ambientLight=null;          // referencia para ciclo de luz ambiental
 let gameStartTime=0;            // ms al iniciar recorrido
 let menuAnimId=null;            // requestAnimationFrame del canvas del menú
 const prefersReducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let calmMode=false;             // Modo Calma: estimulación reducida
+let textScale=1;                // Escala de texto del panel de zona (0.85 – 1.4)
 
 // ── GROUNDING 5-4-3-2-1 ───────────────────────────
 let groundingStep=0;
@@ -2323,7 +2325,8 @@ function updateNPCs(delta){
 
     // ── WALKING NPCs
     if(ud.isWalking){
-      ud.progress+=delta*ud.spd*0.055;
+      const walkMult=calmMode?0.15:1.0; // muy lentos en modo calma
+      ud.progress+=delta*ud.spd*0.055*walkMult;
       if(ud.progress>=1){ ud.progress=0; const tmp=ud.start.clone(); ud.start.copy(ud.dest); ud.dest.copy(tmp); }
       const pos=ud.start.clone().lerp(ud.dest,ud.progress);
       npc.position.copy(pos);
@@ -2483,6 +2486,27 @@ function startMenuAnimation(){
   loop();
 }
 
+// ── MODO CALMA ────────────────────────────────────
+function toggleCalmMode(){
+  calmMode=!calmMode;
+  document.body.classList.toggle('calm-mode',calmMode);
+  // Actualizar aria-pressed en ambos botones
+  const pressed=String(calmMode);
+  const btnMenu=document.getElementById('btn-toggle-calm');
+  const btnPause=document.getElementById('btn-calm-pause');
+  if(btnMenu) btnMenu.setAttribute('aria-pressed',pressed);
+  if(btnPause) btnPause.setAttribute('aria-pressed',pressed);
+  const label=document.getElementById('calm-status-label');
+  if(label) label.textContent=calmMode?'ON':'OFF';
+  if(isGameActive) showToast(calmMode?'🧘 Modo Calma activado':'⚡ Modo normal activado');
+}
+
+// ── TAMAÑO DE TEXTO EN EL PANEL ───────────────────
+function setTextScale(delta){
+  textScale=Math.max(0.85,Math.min(1.4,textScale+delta));
+  document.documentElement.style.setProperty('--panel-text-scale',textScale);
+}
+
 function stopMenuAnimation(){
   if(menuAnimId){ cancelAnimationFrame(menuAnimId); menuAnimId=null; }
   const canvas=document.getElementById('menu-bg-canvas');
@@ -2494,6 +2518,11 @@ function stopMenuAnimation(){
 // ══════════════════════════════════════════════════
 function setupEvents(){
   document.getElementById('btn-start').addEventListener('click',startGame);
+  document.getElementById('btn-toggle-calm').addEventListener('click',toggleCalmMode);
+  document.getElementById('btn-calm-pause').addEventListener('click',toggleCalmMode);
+  document.getElementById('btn-emergency-exit').addEventListener('click',returnToMenu);
+  document.getElementById('btn-text-increase').addEventListener('click',()=>setTextScale(0.15));
+  document.getElementById('btn-text-decrease').addEventListener('click',()=>setTextScale(-0.15));
   document.getElementById('btn-info').addEventListener('click',()=>showScreen('info-screen'));
   document.getElementById('btn-back-info').addEventListener('click',()=>showScreen('main-menu'));
   document.getElementById('btn-start-from-info').addEventListener('click',startGame);
@@ -2825,8 +2854,28 @@ function showShareFeedback(){
 
 function narrateZone(i){ if(i>=0&&i<ZONE_DATA.length) speak(ZONE_DATA[i].narration); }
 function narrateCurrentZone(){ if(currentZoneIndex>=0) narrateZone(currentZoneIndex); else speak('Avanza hacia la entrada del aeropuerto para comenzar tu recorrido.'); }
-function speak(text){ if(!speechSynth)return; stopSpeech(); const u=new SpeechSynthesisUtterance(text); u.lang='es-ES'; u.rate=0.88; u.pitch=1.0; u.volume=1.0; const voices=cachedVoices.length?cachedVoices:speechSynth.getVoices(); const v=voices.find(v=>v.lang.startsWith('es')&&!v.name.includes('Google'))||voices.find(v=>v.lang.startsWith('es')); if(v)u.voice=v; isSpeaking=true; u.onend=()=>{isSpeaking=false;}; speechSynth.speak(u); }
-function stopSpeech(){ if(speechSynth){speechSynth.cancel();isSpeaking=false;} }
+function speak(text){
+  if(!speechSynth) return;
+  stopSpeech();
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang='es-ES';
+  u.rate=calmMode?0.72:0.88; // más lento en modo calma
+  u.pitch=1.0; u.volume=1.0;
+  const voices=cachedVoices.length?cachedVoices:speechSynth.getVoices();
+  const v=voices.find(v=>v.lang.startsWith('es')&&!v.name.includes('Google'))||voices.find(v=>v.lang.startsWith('es'));
+  if(v) u.voice=v;
+  isSpeaking=true;
+  // Mostrar subtítulo visual
+  const sub=document.getElementById('tts-subtitle');
+  if(sub){ sub.textContent=text; sub.classList.remove('hidden'); }
+  u.onend=()=>{ isSpeaking=false; if(sub) sub.classList.add('hidden'); };
+  speechSynth.speak(u);
+}
+function stopSpeech(){
+  if(speechSynth){ speechSynth.cancel(); isSpeaking=false; }
+  const sub=document.getElementById('tts-subtitle');
+  if(sub) sub.classList.add('hidden');
+}
 
 function openBreathing(){ closeZonePanel(); if(!isMobile)controls.unlock(); document.getElementById('breathing-modal').classList.remove('hidden'); resetBreathUI(); }
 function closeBreathing(){ document.getElementById('breathing-modal').classList.add('hidden'); stopBreathing(); if(!isMobile&&isGameActive&&!isPaused)controls.lock(); }
@@ -2885,9 +2934,15 @@ function animate(){
   // Período ~52 s, amplitud ±0.03 → imperceptible pero da vida al espacio
   if(ambientLight) ambientLight.intensity=0.28+Math.sin(t*0.12)*0.03;
 
-  // Rings pulse
+  // Rings pulse — más suave en modo calma
   ringTime+=delta;
-  ringMeshes.forEach((ring,i)=>{ ring.material.opacity=0.25+Math.sin(ringTime*1.5+i*0.8)*0.2; ring.rotation.z+=delta*(0.2+i*0.04); const s=1+Math.sin(ringTime*2+i)*0.05; ring.scale.set(s,1,s); });
+  ringMeshes.forEach((ring,i)=>{
+    const amp=calmMode?0.06:0.2, rotSpd=calmMode?0.08:0.2;
+    ring.material.opacity=0.25+Math.sin(ringTime*1.5+i*0.8)*amp;
+    ring.rotation.z+=delta*(rotSpd+i*0.02);
+    const s=1+Math.sin(ringTime*2+i)*(calmMode?0.015:0.05);
+    ring.scale.set(s,1,s);
+  });
 
   // Luggage belt rotate
   if(luggageBelt) luggageBelt.rotation.z+=delta*0.45;
@@ -2899,8 +2954,8 @@ function animate(){
   // Actualizar animaciones de modelos GLTF (Mixamo)
   if(cabinMixers.length>0) cabinMixers.forEach(m=>m.update(delta));
 
-  // Render con postprocesado (bloom) o fallback a render normal
-  if(composer) composer.render(delta);
+  // Render: sin bloom en móvil o en modo calma
+  if(composer && !calmMode) composer.render(delta);
   else renderer.render(scene,camera);
 }
 
@@ -2911,7 +2966,16 @@ window.addEventListener('load',()=>{
   if(speechSynth){
     const loadVoices=()=>{ cachedVoices=speechSynth.getVoices(); };
     if(speechSynth.onvoiceschanged!==undefined) speechSynth.onvoiceschanged=loadVoices;
-    loadVoices(); // carga inmediata en Chrome/Firefox donde ya están disponibles
+    loadVoices();
+  }
+  // Auto-activar modo calma si el sistema tiene prefers-reduced-motion
+  if(prefersReducedMotion()){
+    calmMode=true;
+    document.body.classList.add('calm-mode');
+    const btn=document.getElementById('btn-toggle-calm');
+    if(btn) btn.setAttribute('aria-pressed','true');
+    const lbl=document.getElementById('calm-status-label');
+    if(lbl) lbl.textContent='ON';
   }
   init();
 });
