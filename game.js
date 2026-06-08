@@ -237,6 +237,8 @@ function buildWorld(){
   buildInfoPosts();
   buildSidewallWindows();
   buildCorridorEdgeMarkers();
+  // ── FASE 3: Puestos funcionales del hall ───────
+  buildServicePosts();
   // ───────────────────────────────────────────────
   buildExterior(); buildZoneRings();
 }
@@ -1559,6 +1561,81 @@ function buildCorridorEdgeMarkers(){
       scene.add(g);
     });
   });
+}
+
+// ─── FASE 3: PUESTOS FUNCIONALES DEL HALL ────────
+// Mostradores modulares que dan identidad aeroportuaria
+// sin invadir el corredor central (|x|>=9, lejos de
+// los radios de activación de zona — distancia > 9).
+// Reutilizan el patrón Group + mkBox/mkStd ya usado
+// en bancos, postes y ventanas (Fase 2).
+function buildServicePosts(){
+  buildServiceDesk(-9, 33, Math.PI/2,  {label:'CHECK-IN ADICIONAL', sub:'Aerolíneas asociadas · Partner counters', col:0x8b5cf6, icon:'🧳'});
+  buildServiceDesk( 9, -5, -Math.PI/2, {label:'INFORMACIÓN Y ORIENTACIÓN', sub:'Mapas · Horarios · Ayuda general', col:0x5ba4d4, icon:'ℹ'});
+  buildServiceDesk(-9,-33, Math.PI/2,  {label:'ASISTENCIA Y ACCESO', sub:'Movilidad reducida · Apoyo al pasajero', col:0x52b788, icon:'🤝'});
+}
+
+function buildServiceDesk(x,z,ry,cfg){
+  const g=new THREE.Group();
+  const bodyM=mkStd(0x2d4a63,0.6,0.15);
+  const topM=mkStd(0x9fb3c8,0.4,0.25);
+  const hexCol='#'+cfg.col.toString(16).padStart(6,'0');
+
+  // Cuerpo del mostrador y superficie
+  const front=new THREE.Mesh(mkBox(3.4,1.15,0.7),bodyM);
+  front.position.set(0,0.575,0); g.add(front);
+  const top=new THREE.Mesh(mkBox(3.7,0.1,0.85),topM);
+  top.position.set(0,1.2,0); g.add(top);
+  // Zócalo de color institucional (franja inferior)
+  const stripe=new THREE.Mesh(mkBox(3.42,0.16,0.02),mkStd(cfg.col,0.5,0.1,{emissive:cfg.col,emissiveIntensity:0.18}));
+  stripe.position.set(0,0.12,0.36); g.add(stripe);
+
+  // Panel frontal con identificación (texto + ícono)
+  const dt=tex(512,256,(ctx)=>{
+    ctx.fillStyle='#16202c'; ctx.fillRect(0,0,512,256);
+    const grad=ctx.createLinearGradient(0,0,512,256);
+    grad.addColorStop(0,hexCol); grad.addColorStop(1,'#16202c');
+    ctx.globalAlpha=0.30; ctx.fillStyle=grad; ctx.fillRect(0,0,512,256); ctx.globalAlpha=1;
+    ctx.fillStyle='#fff'; ctx.font='bold 38px Arial'; ctx.textAlign='center';
+    ctx.fillText(`${cfg.icon}  ${cfg.label}`,256,108);
+    ctx.fillStyle='#cbd5e1'; ctx.font='21px Arial';
+    ctx.fillText(cfg.sub,256,156);
+  });
+  const panel=new THREE.Mesh(mkBox(3.1,0.78,0.04),new THREE.MeshLambertMaterial({map:dt}));
+  panel.position.set(0,0.62,0.37); g.add(panel);
+
+  // Monitores sobre el mostrador (geometría simple, reutiliza estética de addMonitor)
+  [-0.95,0.95].forEach(mx=>{
+    const base=new THREE.Mesh(mkBox(0.1,0.22,0.06),mkStd(0x333344,0.6));
+    base.position.set(mx,1.32,-0.18); g.add(base);
+    const screen=new THREE.Mesh(mkBox(0.78,0.55,0.05),mkStd(0x1a1a2e,0.5));
+    screen.position.set(mx,1.65,-0.2); g.add(screen);
+    const glow=new THREE.Mesh(mkBox(0.7,0.46,0.02),new THREE.MeshLambertMaterial({color:0x1a4a7a,emissive:0x1a3355,emissiveIntensity:0.4}));
+    glow.position.set(mx,1.65,-0.175); g.add(glow);
+  });
+
+  // Banderín colgante de identificación (visible desde lejos)
+  const pt=tex(256,128,(ctx)=>{
+    ctx.fillStyle=hexCol; ctx.fillRect(0,0,256,128);
+    ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.fillRect(0,98,256,30);
+    ctx.fillStyle='#fff'; ctx.font='bold 30px Arial'; ctx.textAlign='center';
+    ctx.fillText(`${cfg.icon}  ${cfg.label.split(' ')[0]}`,128,58);
+    ctx.fillStyle='#fff'; ctx.font='16px Arial'; ctx.fillText(cfg.label.split(' ').slice(1).join(' '),128,86);
+  });
+  const flag=new THREE.Mesh(mkBox(1.7,0.85,0.05),new THREE.MeshLambertMaterial({map:pt,emissive:0x111111,emissiveIntensity:0.25}));
+  flag.position.set(0,2.55,0); g.add(flag);
+  const pole=new THREE.Mesh(mkBox(0.05,1.35,0.05),mkStd(0x8899aa,0.3,0.3));
+  pole.position.set(0,1.95,0); g.add(pole);
+
+  // Banqueta tras el mostrador (presencia funcional, sin NPC fijo)
+  const stool=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.22,0.5,10),mkStd(0x374151,0.7,0.05));
+  stool.position.set(0,0.25,-0.55); g.add(stool);
+  const stoolTop=new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.27,0.06,10),mkStd(0x4a5568,0.6,0.05));
+  stoolTop.position.set(0,0.51,-0.55); g.add(stoolTop);
+
+  g.position.set(x,0,z); g.rotation.y=ry;
+  g.traverse(c=>{if(c.isMesh){c.castShadow=true; c.receiveShadow=true;}});
+  scene.add(g);
 }
 
 function buildExterior(){
