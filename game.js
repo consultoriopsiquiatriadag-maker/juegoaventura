@@ -46,6 +46,15 @@ let gameStartTime=0;            // ms al iniciar recorrido
 let menuAnimId=null;            // requestAnimationFrame del canvas del menú
 const prefersReducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let calmMode=false;             // Modo Calma: estimulación reducida
+
+// ── AMBIENTE SONORO (Fase 5) ──────────────────────
+// Apagado por defecto: el recorrido empieza siempre sin audio.
+// El usuario lo activa voluntariamente (botón en menú o pausa).
+let audioEnabled=false;
+let audioCtx=null, ambientMaster=null, musicGainNode=null, hallGainNode=null;
+let ambientNodes=null;            // referencias para detener/limpiar al salir
+const AMBIENT_MUSIC_BASE=0.05;    // música — volumen bajo, no invasivo
+const AMBIENT_HALL_BASE=0.032;    // murmullo de hall — muy tenue
 let textScale=1;                // Escala de texto del panel de zona (0.85 – 1.4)
 let guidedMode=true;            // true = panel abre automático al entrar a zona
 let startAtZone=-1;             // índice de zona para ir directo al iniciar (goToZone)
@@ -2994,6 +3003,11 @@ function toggleCalmMode(){
   const label=document.getElementById('calm-status-label');
   if(label) label.textContent=calmMode?'ON':'OFF';
   if(isGameActive) showToast(calmMode?'🧘 Modo Calma activado':'⚡ Modo normal activado');
+  // El Modo Calma reduce el volumen del ambiente sonoro (nunca lo aumenta)
+  if(audioEnabled&&audioCtx){
+    applyCalmAudioGains();
+    setAmbientMasterTarget(calmMode?0.45:1.0,1.6);
+  }
 }
 
 // ── TAMAÑO DE TEXTO EN EL PANEL ───────────────────
@@ -3020,6 +3034,8 @@ function setupEvents(){
   document.getElementById('btn-toggle-calm').addEventListener('click',toggleCalmMode);
   document.getElementById('btn-toggle-guided').addEventListener('click',toggleGuidedMode);
   document.getElementById('btn-calm-pause').addEventListener('click',toggleCalmMode);
+  document.getElementById('btn-toggle-sound').addEventListener('click',toggleAmbientSound);
+  document.getElementById('btn-sound-pause').addEventListener('click',toggleAmbientSound);
   document.getElementById('btn-emergency-exit').addEventListener('click',returnToMenu);
   document.getElementById('btn-text-increase').addEventListener('click',()=>setTextScale(0.15));
   document.getElementById('btn-text-decrease').addEventListener('click',()=>setTextScale(-0.15));
@@ -3219,10 +3235,11 @@ function startGame(){
     setTimeout(()=>{ const b=document.getElementById('btn-ctp-activate'); if(b) b.focus(); },80);
   }
   resetProgressUI();
+  resumeAmbientAudioIfEnabled();
 }
-function pauseGame(){ isPaused=true; if(!isMobile)controls.unlock(); document.getElementById('pause-menu').classList.remove('hidden'); }
-function resumeGame(){ isPaused=false; document.getElementById('pause-menu').classList.add('hidden'); if(!isMobile)controls.lock(); }
-function returnToMenu(){ isGameActive=false; isPaused=false; stopSpeech(); if(!isMobile)controls.unlock(); closeZonePanel(); closeGrounding(); closeBreathing(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('pause-menu').classList.add('hidden'); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); showScreen('main-menu'); startMenuAnimation(); updateDiaryDisplay(); }
+function pauseGame(){ isPaused=true; if(!isMobile)controls.unlock(); document.getElementById('pause-menu').classList.remove('hidden'); suspendAmbientAudio(); }
+function resumeGame(){ isPaused=false; document.getElementById('pause-menu').classList.add('hidden'); if(!isMobile)controls.lock(); resumeAmbientAudioIfEnabled(); }
+function returnToMenu(){ isGameActive=false; isPaused=false; stopSpeech(); stopAmbientAudio(); if(!isMobile)controls.unlock(); closeZonePanel(); closeGrounding(); closeBreathing(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('pause-menu').classList.add('hidden'); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); showScreen('main-menu'); startMenuAnimation(); updateDiaryDisplay(); }
 function restartGame(){ showScreen(null); startGame(); }
 function resetProgressUI(){
   document.getElementById('progress-fill').style.width='0%';
@@ -3290,7 +3307,7 @@ function updateProgress(i){
   });
 }
 function endGame(){
-  isGameActive=false; stopSpeech();
+  isGameActive=false; stopSpeech(); stopAmbientAudio();
   if(!isMobile)controls.unlock();
   document.getElementById('click-to-play').classList.add('hidden');
   document.getElementById('controls-hint').classList.add('hidden');
@@ -3440,6 +3457,221 @@ function showShareFeedback(){
   const el=document.getElementById('share-feedback');
   el.classList.remove('hidden');
   setTimeout(()=>el.classList.add('hidden'),4000);
+}
+
+// ════════════════════════════════════════════════════════════
+// AMBIENTE SONORO DEL HALL — Fase 5
+// Música suave tipo "pad" generada con osciladores + filtro,
+// más un murmullo de hall muy tenue generado con ruido filtrado.
+// Todo es procedural (Web Audio API): no requiere archivos de audio.
+// Apagado por defecto — el usuario lo activa desde el menú o pausa.
+// ════════════════════════════════════════════════════════════
+function ensureAmbientAudio(){
+  if(audioCtx) return true;
+  try{
+    const Ctx=window.AudioContext||window.webkitAudioContext;
+    if(!Ctx) return false;
+    audioCtx=new Ctx();
+
+    ambientMaster=audioCtx.createGain();
+    ambientMaster.gain.value=0; // arranca en silencio; sube al activar
+    ambientMaster.connect(audioCtx.destination);
+
+    musicGainNode=audioCtx.createGain();
+    musicGainNode.gain.value=AMBIENT_MUSIC_BASE;
+    musicGainNode.connect(ambientMaster);
+
+    hallGainNode=audioCtx.createGain();
+    hallGainNode.gain.value=AMBIENT_HALL_BASE;
+    hallGainNode.connect(ambientMaster);
+
+    ambientNodes={ osc:[], lfo:[], noise:null };
+
+    buildAmbientPad();
+    buildHallMurmur();
+    return true;
+  }catch(e){ audioCtx=null; return false; }
+}
+
+// Pad armónico suave: 3 osciladores tipo seno/triángulo, ligeramente
+// desafinados entre sí, pasando por un filtro pasa-bajos con un LFO
+// lento que lo "respira" — evoca música instrumental ambiental de
+// salas de espera, sin melodía marcada ni ritmo perceptible.
+function buildAmbientPad(){
+  const now=audioCtx.currentTime;
+  const filter=audioCtx.createBiquadFilter();
+  filter.type='lowpass';
+  filter.frequency.value=900;
+  filter.Q.value=0.4;
+  filter.connect(musicGainNode);
+
+  // LFO que mueve suavemente la frecuencia de corte (sensación de "respiración")
+  const lfo=audioCtx.createOscillator();
+  lfo.type='sine';
+  lfo.frequency.value=0.045; // muy lento
+  const lfoGain=audioCtx.createGain();
+  lfoGain.gain.value=220;
+  lfo.connect(lfoGain);
+  lfoGain.connect(filter.frequency);
+  lfo.start(now);
+  ambientNodes.lfo.push(lfo);
+
+  // Acorde abierto y cálido (fundamental + quinta + octava + ligera disonancia suave)
+  const freqs=[110.0, 164.81, 220.0, 277.18];
+  const types=['sine','triangle','sine','triangle'];
+  const detunes=[0,-4,3,-2];
+  freqs.forEach((f,i)=>{
+    const osc=audioCtx.createOscillator();
+    osc.type=types[i];
+    osc.frequency.value=f;
+    osc.detune.value=detunes[i];
+
+    const voiceGain=audioCtx.createGain();
+    voiceGain.gain.value=0.22 - i*0.035; // las voces más agudas suenan más tenues
+
+    // leve trémolo individual para que el conjunto se sienta vivo, no estático
+    const trem=audioCtx.createOscillator();
+    trem.type='sine';
+    trem.frequency.value=0.07+i*0.015;
+    const tremGain=audioCtx.createGain();
+    tremGain.gain.value=0.05;
+    trem.connect(tremGain);
+    tremGain.connect(voiceGain.gain);
+    trem.start(now);
+
+    osc.connect(voiceGain);
+    voiceGain.connect(filter);
+    osc.start(now);
+    ambientNodes.osc.push(osc);
+    ambientNodes.lfo.push(trem);
+  });
+}
+
+// Murmullo de hall: ruido filtrado en banda media-baja, evocando la
+// sensación de espacio amplio y actividad lejana, sin voces inteligibles
+// ni anuncios — sólo una textura de fondo casi imperceptible.
+function buildHallMurmur(){
+  const now=audioCtx.currentTime;
+  const bufferSize=audioCtx.sampleRate*2;
+  const buffer=audioCtx.createBuffer(1,bufferSize,audioCtx.sampleRate);
+  const data=buffer.getChannelData(0);
+  for(let i=0;i<bufferSize;i++) data[i]=(Math.random()*2-1)*0.6;
+
+  const noise=audioCtx.createBufferSource();
+  noise.buffer=buffer;
+  noise.loop=true;
+
+  const bandpass=audioCtx.createBiquadFilter();
+  bandpass.type='bandpass';
+  bandpass.frequency.value=420;
+  bandpass.Q.value=0.6;
+
+  const lowpass=audioCtx.createBiquadFilter();
+  lowpass.type='lowpass';
+  lowpass.frequency.value=1100;
+
+  // LFO lento que varía el nivel del murmullo, como oleadas distantes de actividad
+  const lfo=audioCtx.createOscillator();
+  lfo.type='sine';
+  lfo.frequency.value=0.03;
+  const lfoGain=audioCtx.createGain();
+  lfoGain.gain.value=0.45;
+  const murmurShape=audioCtx.createGain();
+  murmurShape.gain.value=0.55;
+  lfo.connect(lfoGain);
+  lfoGain.connect(murmurShape.gain);
+  lfo.start(now);
+
+  noise.connect(bandpass);
+  bandpass.connect(lowpass);
+  lowpass.connect(murmurShape);
+  murmurShape.connect(hallGainNode);
+  noise.start(now);
+
+  ambientNodes.noise=noise;
+  ambientNodes.lfo.push(lfo);
+}
+
+// Sube/baja suavemente el volumen maestro (evita "clics" perceptibles)
+function setAmbientMasterTarget(target,rampSeconds){
+  if(!audioCtx||!ambientMaster) return;
+  const now=audioCtx.currentTime;
+  ambientMaster.gain.cancelScheduledValues(now);
+  ambientMaster.gain.setValueAtTime(ambientMaster.gain.value,now);
+  ambientMaster.gain.linearRampToValueAtTime(target,now+(rampSeconds||1.5));
+}
+
+// Aplica el factor de Modo Calma a los volúmenes base de música y murmullo
+// (en baja estimulación, el ambiente sonoro se reduce — nunca se vuelve más intenso)
+function applyCalmAudioGains(){
+  if(!audioCtx||!musicGainNode||!hallGainNode) return;
+  const now=audioCtx.currentTime;
+  const calmFactor=calmMode?0.45:1.0;
+  musicGainNode.gain.cancelScheduledValues(now);
+  musicGainNode.gain.setValueAtTime(musicGainNode.gain.value,now);
+  musicGainNode.gain.linearRampToValueAtTime(AMBIENT_MUSIC_BASE*calmFactor,now+1.2);
+  hallGainNode.gain.cancelScheduledValues(now);
+  hallGainNode.gain.setValueAtTime(hallGainNode.gain.value,now);
+  hallGainNode.gain.linearRampToValueAtTime(AMBIENT_HALL_BASE*calmFactor,now+1.2);
+}
+
+// Sincroniza ambos botones de sonido (menú principal y pausa)
+function syncSoundButtons(){
+  const mainBtn=document.getElementById('btn-toggle-sound');
+  const pauseBtn=document.getElementById('btn-sound-pause');
+  const label=document.getElementById('sound-status-label');
+  if(mainBtn) mainBtn.setAttribute('aria-pressed', audioEnabled?'true':'false');
+  if(pauseBtn) pauseBtn.setAttribute('aria-pressed', audioEnabled?'true':'false');
+  if(label) label.textContent=audioEnabled?'ON':'OFF';
+}
+
+// Activa/desactiva el ambiente sonoro — debe llamarse desde un gesto del
+// usuario (click) por la política de autoplay de los navegadores.
+function toggleAmbientSound(){
+  audioEnabled=!audioEnabled;
+  if(audioEnabled){
+    const ok=ensureAmbientAudio();
+    if(!ok){ audioEnabled=false; syncSoundButtons(); return; }
+    if(audioCtx.state==='suspended') audioCtx.resume();
+    applyCalmAudioGains();
+    const calmFactor=calmMode?0.45:1.0;
+    setAmbientMasterTarget(calmFactor,2.2);
+  }else{
+    setAmbientMasterTarget(0,1.2);
+  }
+  syncSoundButtons();
+}
+
+// Silencia el ambiente sin apagar la preferencia del usuario (p.ej. al pausar
+// o volver al menú) — se reanuda suavemente si corresponde.
+function suspendAmbientAudio(){
+  if(audioCtx&&ambientMaster) setAmbientMasterTarget(0,0.8);
+}
+function resumeAmbientAudioIfEnabled(){
+  if(!audioEnabled) return;
+  if(!audioCtx||!ambientMaster){ if(!ensureAmbientAudio()) return; }
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  applyCalmAudioGains();
+  const calmFactor=calmMode?0.45:1.0;
+  setAmbientMasterTarget(calmFactor,1.8);
+}
+// Detiene y libera todos los nodos — usar al finalizar el recorrido.
+function stopAmbientAudio(){
+  if(!audioCtx) return;
+  try{
+    setAmbientMasterTarget(0,0.6);
+    setTimeout(()=>{
+      try{
+        if(ambientNodes){
+          ambientNodes.osc.forEach(o=>{ try{o.stop();}catch(e){} });
+          ambientNodes.lfo.forEach(o=>{ try{o.stop();}catch(e){} });
+          if(ambientNodes.noise){ try{ambientNodes.noise.stop();}catch(e){} }
+        }
+        audioCtx.close();
+      }catch(e){}
+      audioCtx=null; ambientMaster=null; musicGainNode=null; hallGainNode=null; ambientNodes=null;
+    },700);
+  }catch(e){}
 }
 
 function narrateZone(i){ if(i>=0&&i<ZONE_DATA.length) speak(ZONE_DATA[i].narration); }

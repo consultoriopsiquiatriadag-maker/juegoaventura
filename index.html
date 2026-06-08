@@ -96,6 +96,12 @@
                 </button>
                 <span class="calm-hint">En modo libre explorás sin que el panel se abra solo</span>
             </div>
+            <div class="calm-mode-row">
+                <button id="btn-toggle-sound" class="btn-calm-toggle" aria-pressed="false" aria-label="Activar o desactivar la música y el ambiente sonoro suave del aeropuerto">
+                    🔊 Sonido Ambiente
+                </button>
+                <span class="calm-hint">Música suave y ambiente de fondo — apagado por defecto</span>
+            </div>
             <div id="diary-display" class="diary-display hidden" aria-live="polite"></div>
         </div>
         <footer class="menu-footer">
@@ -271,6 +277,7 @@
             <div class="breathing-reminder">🫁 Respira. Todo está bajo control.</div>
             <button id="btn-resume" class="btn-primary" aria-label="Continuar el recorrido">Continuar</button>
             <button id="btn-calm-pause" class="btn-ghost calm-pause-btn" aria-pressed="false" aria-label="Activar o desactivar Modo Calma durante el juego">🧘 Modo Calma: <span id="calm-status-label">OFF</span></button>
+            <button id="btn-sound-pause" class="btn-ghost calm-pause-btn" aria-pressed="false" aria-label="Activar o desactivar el sonido ambiente del aeropuerto">🔊 Sonido Ambiente: <span id="sound-status-label">OFF</span></button>
             <button id="btn-to-menu" class="btn-ghost" aria-label="Volver al menú principal">Menú Principal</button>
         </div>
 
