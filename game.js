@@ -2413,14 +2413,40 @@ function buildServiceCart(){
 // ══════════════════════════════════════════════════
 // SPAWN WALKING NPCs  (civilians + attendants)
 // ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// PERFILES DE PERSONAS (Fase 4 — Ambientación)
+// ──────────────────────────────────────────────────
+// 1) Pasajeros solos       — caminan rutas civiles; alternan entre
+//                            caminar, detenerse a esperar y mirar
+//                            carteles/pantallas (ver POI_POINTS).
+// 2) Parejas / grupos chicos— 2 personas que caminan juntas, en
+//                            paralelo, al mismo ritmo (ver "grupo").
+// 3) Personal aeroportuario — agentes de check-in/información y
+//                            tripulación (spawnStaffNPCs / cabina).
+// 4) Seguridad y asistencia — oficiales del control (police) y
+//                            agente del mostrador de información.
+// Densidad moderada (≈ misma cantidad que antes, redistribuida).
+// Sin movimientos bruscos. En Modo Calma: caminan más lento y
+// permanecen quietos por más tiempo (menos estímulo visual).
+// ══════════════════════════════════════════════════
+
+// Puntos de interés donde los pasajeros en pausa pueden "mirar
+// carteles": tablero de salidas y postes de información (Fase 2).
+const POI_POINTS=[
+  {x:-4,z:36},
+  {x:7,z:36},{x:-7,z:36},
+  {x:7,z:14},{x:-7,z:14},
+  {x:7,z:-16},{x:-7,z:-16}
+];
+
 function spawnNPCs(){
   const civRoutes=[
     {x:-5,z:44,dx:-5,dz:25,spd:1.2},{x:3,z:42,dx:5,dz:20,spd:1.5},
     {x:-2,z:30,dx:-3,dz:45,spd:1.0},{x:7,z:15,dx:6,dz:-5,spd:1.3},
     {x:-6,z:5,dx:-5,dz:30,spd:1.1},{x:4,z:-8,dx:3,dz:-25,spd:1.4},
     {x:-3,z:-20,dx:-4,dz:-5,spd:0.9},{x:8,z:25,dx:7,dz:5,spd:1.6},
-    {x:-8,z:-12,dx:-7,dz:10,spd:1.2},{x:3,z:32,dx:2,dz:48,spd:1.4},
-    {x:10,z:0,dx:9,dz:20,spd:1.0}
+    {x:-8,z:-12,dx:-7,dz:10,spd:1.2},{x:3,z:32,dx:2,dz:48,spd:1.4}
+    // (una ruta menos que antes: su lugar lo ocupa la pareja que camina junta, más abajo)
   ];
   civRoutes.forEach(d=>{
     const skin=SKINS[Math.floor(Math.random()*SKINS.length)];
@@ -2434,6 +2460,11 @@ function spawnNPCs(){
     npc.userData.progress=Math.random();
     npc.userData.start=new THREE.Vector3(d.x,0,d.z);
     npc.userData.dest=new THREE.Vector3(d.dx,0,d.dz);
+    // Perfil "pasajero solo": alterna caminar / pausa (esperar o mirar carteles)
+    npc.userData.behaviorState='walk';
+    npc.userData.behaviorTimer=4+Math.random()*9;
+    npc.userData.lookTarget=null;
+    npc.userData.idlePhase=Math.random()*Math.PI*2;
     // Random luggage
     if(Math.random()>0.45){
       const bc=TOPS[Math.floor(Math.random()*TOPS.length)];
@@ -2444,6 +2475,32 @@ function spawnNPCs(){
     }
     npcs.push(npc); scene.add(npc);
   });
+
+  // ── Perfil "pareja / grupo pequeño": dos personas que caminan
+  // juntas, en paralelo y al mismo paso — dan sensación de compañía
+  // sin aumentar la densidad general (reemplaza, no suma, al conteo).
+  {
+    const base={x:-6,z:5,dx:-5,dz:30,spd:1.0};
+    const sharedProgress=Math.random();
+    [-0.5,0.45].forEach((off,gi)=>{
+      const skin=SKINS[Math.floor(Math.random()*SKINS.length)];
+      const hair=HAIRS[Math.floor(Math.random()*HAIRS.length)];
+      const top=TOPS[Math.floor(Math.random()*TOPS.length)];
+      const npc=buildCharacter({skin,hair,top,pants:[0x223344,0x444422,0x333322][gi],shoes:0x111111,role:'civilian'});
+      npc.userData.isNPC=true; npc.userData.isWalking=true; npc.userData.isCompanion=true;
+      npc.userData.spd=base.spd; npc.userData.wt=Math.random()*Math.PI*2;
+      npc.userData.progress=sharedProgress;
+      npc.userData.start=new THREE.Vector3(base.x+off,0,base.z+off*0.6);
+      npc.userData.dest=new THREE.Vector3(base.dx+off,0,base.dz+off*0.6);
+      npc.position.copy(npc.userData.start);
+      // Las parejas se detienen con menos frecuencia que los pasajeros solos
+      npc.userData.behaviorState='walk';
+      npc.userData.behaviorTimer=7+Math.random()*7;
+      npc.userData.lookTarget=null;
+      npc.userData.idlePhase=Math.random()*Math.PI*2;
+      npcs.push(npc); scene.add(npc);
+    });
+  }
 
   // Cabin attendants walk in plane aisle
   [
@@ -2625,22 +2682,63 @@ function updateNPCs(delta){
   npcs.forEach(npc=>{
     const ud=npc.userData;
 
-    // ── WALKING NPCs
+    // ── WALKING NPCs (perfiles civiles — Fase 4: caminar / esperar / mirar carteles)
     if(ud.isWalking){
       const walkMult=calmMode?0.15:1.0; // muy lentos en modo calma
-      ud.progress+=delta*ud.spd*0.055*walkMult;
-      if(ud.progress>=1){ ud.progress=0; const tmp=ud.start.clone(); ud.start.copy(ud.dest); ud.dest.copy(tmp); }
-      const pos=ud.start.clone().lerp(ud.dest,ud.progress);
-      npc.position.copy(pos);
-      const dir=ud.dest.clone().sub(ud.start).normalize();
-      if(dir.length()>0.01) npc.rotation.y=Math.atan2(dir.x,dir.z);
-      // Walk cycle
-      ud.wt+=delta*ud.spd*4.5;
-      const sw=Math.sin(ud.wt)*0.45;
-      npc.children.forEach(c=>{
-        if(c.userData.isLeg) c.rotation.x=sw*c.userData.side;
-        if(c.userData.isArm) c.rotation.x=-sw*c.userData.side*0.55;
-      });
+
+      // Pasajeros con perfil de comportamiento (no aplica a tripulación de cabina)
+      if(ud.behaviorState){
+        ud.behaviorTimer-=delta;
+        if(ud.behaviorTimer<=0){
+          if(ud.behaviorState==='walk'){
+            ud.behaviorState='pause';
+            // En Modo Calma las pausas son más largas → menos movimiento en pantalla
+            ud.behaviorTimer=(calmMode?5:2.2)+Math.random()*(calmMode?5.5:3.5);
+            // ¿Hay un cartel/pantalla cerca? a veces se detiene a mirarlo
+            let nearest=null,nd=7.5;
+            POI_POINTS.forEach(p=>{ const dd=Math.hypot(p.x-npc.position.x,p.z-npc.position.z); if(dd<nd){nd=dd;nearest=p;} });
+            ud.lookTarget=(nearest&&Math.random()<0.65)?nearest:null;
+          } else {
+            ud.behaviorState='walk';
+            ud.behaviorTimer=(calmMode?10:5)+Math.random()*(calmMode?8:9);
+            ud.lookTarget=null;
+          }
+        }
+      }
+
+      if(ud.behaviorState!=='pause'){
+        ud.progress+=delta*ud.spd*0.055*walkMult;
+        if(ud.progress>=1){ ud.progress=0; const tmp=ud.start.clone(); ud.start.copy(ud.dest); ud.dest.copy(tmp); }
+        const pos=ud.start.clone().lerp(ud.dest,ud.progress);
+        npc.position.copy(pos);
+        const dir=ud.dest.clone().sub(ud.start).normalize();
+        if(dir.length()>0.01) npc.rotation.y=Math.atan2(dir.x,dir.z);
+        // Walk cycle
+        ud.wt+=delta*ud.spd*4.5;
+        const sw=Math.sin(ud.wt)*0.45;
+        npc.children.forEach(c=>{
+          if(c.userData.isLeg) c.rotation.x=sw*c.userData.side;
+          if(c.userData.isArm) c.rotation.x=-sw*c.userData.side*0.55;
+        });
+      } else {
+        // En pausa: de pie, quieto — piernas/brazos vuelven a reposo suavemente
+        npc.children.forEach(c=>{
+          if(c.userData.isLeg) c.rotation.x*=(1-Math.min(1,delta*3));
+          if(c.userData.isArm) c.rotation.x*=(1-Math.min(1,delta*3));
+        });
+        // Balanceo de peso muy sutil (persona quieta, no estatua)
+        ud.idlePhase=(ud.idlePhase||0)+delta*0.6;
+        npc.rotation.z=Math.sin(ud.idlePhase)*0.012;
+        // Si eligió un cartel/pantalla cercano, gira la cabeza para "mirarlo"
+        if(ud.lookTarget&&ud.headGroup){
+          const dx=ud.lookTarget.x-npc.position.x, dz=ud.lookTarget.z-npc.position.z;
+          const worldAngle=Math.atan2(dx,dz);
+          let rel=((worldAngle-npc.rotation.y+Math.PI)%(Math.PI*2))-Math.PI;
+          rel=Math.max(-1.3,Math.min(1.3,rel));
+          ud.headGroup.rotation.y+=(rel-ud.headGroup.rotation.y)*Math.min(1,delta*2.2);
+          ud.headGroup.rotation.x+=(0.12-ud.headGroup.rotation.x)*Math.min(1,delta*2.2);
+        }
+      }
     }
 
     // ── STAFF NPCs (idle animations + look-at)
@@ -2710,7 +2808,9 @@ function updateNPCs(delta){
     }
 
     // ── LOOK-AT-PLAYER (all NPCs with head, within 8 units)
-    if(ud.headGroup){
+    // Si el pasajero está en pausa "mirando un cartel", ese gesto manda
+    // sobre el look-at-player — así no compiten por el control de la cabeza.
+    if(ud.headGroup && !(ud.behaviorState==='pause' && ud.lookTarget)){
       const dx=playerPos.x-npc.position.x;
       const dz=playerPos.z-npc.position.z;
       const dist=Math.sqrt(dx*dx+dz*dz);
