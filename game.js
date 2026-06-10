@@ -46,6 +46,7 @@ let gameStartTime=0;            // ms al iniciar recorrido
 let menuAnimId=null;            // requestAnimationFrame del canvas del menú
 const prefersReducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 let calmMode=false;             // Modo Calma: estimulación reducida
+let _normalFogDensity=0.006;   // se lee después de setupLighting() para manejar Sky on/off
 
 // ── AMBIENTE SONORO (Fase 5) ──────────────────────
 // Apagado por defecto: el recorrido empieza siempre sin audio.
@@ -145,6 +146,8 @@ function init(){
   if(typeof THREE.GLTFLoader !== 'undefined') gltfLoader=new THREE.GLTFLoader();
 
   setupLighting();
+  // Guardar densidad base de niebla (depende de si Three.Sky está disponible)
+  if(scene.fog) _normalFogDensity=scene.fog.density;
   buildWorld();
   if(!isMobile) spawnNPCs(); // NPCs civiles solo en desktop — mejora performance móvil
   spawnStaffNPCs();
@@ -2877,9 +2880,10 @@ function spawnNPCs(){
     // Random luggage
     if(Math.random()>0.45){
       const bc=TOPS[Math.floor(Math.random()*TOPS.length)];
-      const bag=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.38,0.14),mkMat(bc));
+      // Fase 9: mkLamb para accesorios pequeños — sin especular necesario
+      const bag=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.38,0.14),mkLamb(bc));
       bag.position.set(0.32,0.18,0); npc.add(bag);
-      const bh=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.06,0.02),mkMat(0x888888));
+      const bh=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.06,0.02),mkLamb(0x888888));
       bh.position.set(0.32,0.36,0); npc.add(bh);
     }
     npcs.push(npc); scene.add(npc);
@@ -3403,6 +3407,16 @@ function getCompletionMessage(count){
   return `${count} recorridos. El aeropuerto ya no te es desconocido.`;
 }
 
+// Aplica estado visual/NPC del calmMode actual sin hacer toggle.
+// Llamar desde startGame para que el estado persista entre partidas.
+function applyCalmModeState(){
+  document.body.classList.toggle('calm-mode',calmMode);
+  renderer.domElement.style.transition='filter 0s'; // sin animación al iniciar
+  renderer.domElement.style.filter=calmMode?'saturate(0.50) brightness(0.96)':'';
+  npcs.forEach(n=>{ if(n.userData.role==='civilian') n.visible=!calmMode; });
+  if(scene.fog) scene.fog.density=calmMode?0.010:_normalFogDensity;
+}
+
 // ── MODO CALMA ────────────────────────────────────
 function toggleCalmMode(){
   calmMode=!calmMode;
@@ -3430,7 +3444,7 @@ function toggleCalmMode(){
 
   // Fase 8 — Niebla más densa en calma → perspectiva más íntima, menos distracción
   if(scene.fog){
-    scene.fog.density=calmMode?0.010:0.006;
+    scene.fog.density=calmMode?0.010:_normalFogDensity;
   }
 
   // Audio: reducir ambiente sonoro (nunca aumenta)
@@ -3665,6 +3679,7 @@ function startGame(){
     setTimeout(()=>{ const b=document.getElementById('btn-ctp-activate'); if(b) b.focus(); },80);
   }
   resetProgressUI();
+  applyCalmModeState(); // Fase 9: sincroniza visual/NPCs con calmMode al iniciar
   resumeAmbientAudioIfEnabled();
 }
 function pauseGame(){ isPaused=true; if(!isMobile)controls.unlock(); document.getElementById('pause-menu').classList.remove('hidden'); suspendAmbientAudio(); }
