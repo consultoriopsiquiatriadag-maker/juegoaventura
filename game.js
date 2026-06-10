@@ -91,6 +91,11 @@ function mkMat(c,o={}){
 function mkStd(c,rough=0.75,metal=0.0,opts={}){
   return new THREE.MeshStandardMaterial({color:c,roughness:rough,metalness:metal,...opts});
 }
+// mkLamb: MeshLambertMaterial — difuso sin cálculos especulares, para props decorativos
+// Fase 8: úsalo en props pequeños (bancos, señales, detalles de tiendas, etc.)
+function mkLamb(c,opts={}){
+  return new THREE.MeshLambertMaterial({color:c,...opts});
+}
 function mkBox(w,h,d){ return new THREE.BoxGeometry(w,h,d); }
 
 function box(x,y,z,w,h,d,col,cast=true,recv=true,matOpts={}){
@@ -124,7 +129,8 @@ function init(){
 
   renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
   renderer.setSize(innerWidth,innerHeight);
-  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  // Fase 8: móvil cap 1.5 (era 2) — mayor impacto en batería y frame rate
+  renderer.setPixelRatio(isMobile?Math.min(devicePixelRatio,1.5):Math.min(devicePixelRatio,2));
   renderer.shadowMap.enabled=true;
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputEncoding=THREE.sRGBEncoding;
@@ -186,7 +192,8 @@ function setupLighting(){
   // Luz solar principal — sombras de alta resolución
   const sun=new THREE.DirectionalLight(0xfffae8,1.1);
   sun.position.set(60,120,50); sun.castShadow=true;
-  sun.shadow.mapSize.width=sun.shadow.mapSize.height=isMobile?1024:4096;
+  // Fase 8: 2048 desktop (era 4096) — calidad visual idéntica, memoria ×4 menor
+  sun.shadow.mapSize.width=sun.shadow.mapSize.height=isMobile?512:2048;
   sun.shadow.camera.left=-120; sun.shadow.camera.right=120;
   sun.shadow.camera.top=120; sun.shadow.camera.bottom=-120;
   sun.shadow.camera.far=400; sun.shadow.bias=-0.0005;
@@ -197,16 +204,16 @@ function setupLighting(){
   scene.add(new THREE.HemisphereLight(0x9ad5f5,0x9a8060,0.30));
 
   // Luces de techo del terminal — cálidas, sin saturar
+  // Fase 8: reducidas de 24 (8z×3x) a 8 (8z×1 central) → misma percepción, mejor rendimiento
   [-55,-40,-25,-10,5,20,35,50].forEach(z=>{
-    [-6,0,6].forEach(x=>{
-      const l=new THREE.PointLight(0xfff5e0,0.35,22);
-      l.position.set(x,11.5,z); scene.add(l);
-    });
+    const l=new THREE.PointLight(0xfff5e0,0.70,30);
+    l.position.set(0,11.5,z); scene.add(l);
   });
 
   // Luces de acento por zona (colored)
+  // Fase 8: intensidad 0.45 (era 0.7) — más sutil, coherente con baja estimulación
   ZONE_DATA.forEach(z=>{
-    const l=new THREE.PointLight(z.color,0.7,12);
+    const l=new THREE.PointLight(z.color,0.45,10);
     l.position.set(z.position.x,2,z.position.z); scene.add(l);
   });
 
@@ -491,7 +498,8 @@ function zoneHeader(x,z,txt,col){
     ctx.fillText(txt,512,80);
   });
   sign(x,9.5,z,15,1.5,0.15,ht,0,0x080e1a);
-  const al=new THREE.PointLight(col,0.7,10); al.position.set(x,10,z); scene.add(al);
+  // Fase 8: reducida a 0.40/8 — suficiente para identificar la zona, no satura
+  const al=new THREE.PointLight(col,0.40,8); al.position.set(x,10,z); scene.add(al);
 }
 
 // ─── ENTRANCE ────────────────────────────────────
@@ -1564,8 +1572,9 @@ function buildTransitionBenches(){
 
 function buildAirportBench(x,z,ry){
   const g=new THREE.Group();
-  const seatM=mkStd(0x374558,0.75,0.02);   // azul pizarra
-  const frameM=mkStd(0x8899aa,0.28,0.28);  // metal cepillado
+  // Fase 8: asientos → Lambert (sin especular, ahorra shader calls)
+  const seatM=mkLamb(0x374558);             // azul pizarra
+  const frameM=mkStd(0x8899aa,0.28,0.28);  // metal cepillado — mantiene specular
 
   // 4 asientos conectados
   for(let i=0;i<4;i++){
@@ -1932,20 +1941,21 @@ function buildCorridorEdgeMarkers(){
   positions.forEach((mz,idx)=>{
     [-10,10].forEach(mx=>{
       const g=new THREE.Group();
-      const stoneMat=mkStd(0xd2cac0,0.68,0.02);
+      // Fase 8: macetas/postes decorativos → Lambert (no necesitan PBR)
+      const stoneMat=mkLamb(0xd2cac0);
 
       // Base cuadrada
       const base=new THREE.Mesh(mkBox(0.60,0.50,0.60),stoneMat);
       base.position.set(0,0.25,0); g.add(base);
       // Moldura superior
-      const top=new THREE.Mesh(mkBox(0.72,0.07,0.72),mkStd(0xc8c0b4,0.55,0.03));
+      const top=new THREE.Mesh(mkBox(0.72,0.07,0.72),mkLamb(0xc8c0b4));
       top.position.set(0,0.54,0); g.add(top);
 
       // Alterna: jardinera con plantita vs. columna lisa
       if(idx%2===0){
-        const soil=new THREE.Mesh(mkBox(0.56,0.16,0.56),mkStd(0x2a3a2a,0.8,0.0));
+        const soil=new THREE.Mesh(mkBox(0.56,0.16,0.56),mkLamb(0x2a3a2a));
         soil.position.set(0,0.66,0); g.add(soil);
-        const lm=mkStd(0x3d7a38,0.75,0.0);
+        const lm=mkLamb(0x3d7a38);
         [[-0.11,0.08],[0.11,0.08],[0,-0.11],[0,0.11]].forEach(([dx,dz])=>{
           const leaf=new THREE.Mesh(new THREE.SphereGeometry(0.13,5,5),lm);
           leaf.position.set(dx,0.88,dz); leaf.scale.y=0.52; g.add(leaf);
@@ -2921,8 +2931,10 @@ function spawnNPCs(){
 // SPAWN STAFF NPCs  (agents, police, pilot)
 // ══════════════════════════════════════════════════
 function spawnStaffNPCs(){
+  // Fase 8: En móvil se reducen agentes de check-in (3 en vez de 5)
+  // y se omite 1 policía — mantiene presencia sin sobrecargar el render
   // ── CHECK-IN AGENTS (behind counters at z=24, facing player z+)
-  const agentX=[-11,-5.5,0,5.5,11];
+  const agentX=isMobile?[-11,0,11]:[-11,-5.5,0,5.5,11];
   const agentTops=[0x1a3060,0x1a3060,0x25408a,0x1a3060,0x25408a];
   agentX.forEach((ax,i)=>{
     const skin=SKINS[i%SKINS.length];
@@ -2937,11 +2949,12 @@ function spawnStaffNPCs(){
   });
 
   // ── POLICE at security (flanking the security zone, z=8)
-  [
+  const policeSlots=isMobile?[{x:-12,z:10,ry:Math.PI*0.15},{x:12,z:10,ry:-Math.PI*0.15}]:[
     {x:-12,z:10,ry: Math.PI*0.15},
     {x: 12,z:10,ry:-Math.PI*0.15},
     {x: 0, z:14, ry:Math.PI}
-  ].forEach((d,i)=>{
+  ];
+  policeSlots.forEach((d,i)=>{
     const npc=buildCharacter({skin:SKINS[i%3],hair:HAIRS[0],top:0x0d1f3c,pants:0x0d1f3c,shoes:0x0a0a0a,role:'police',hatCol:0x0d1f3c});
     npc.position.set(d.x,0,d.z); npc.rotation.y=d.ry;
     npc.userData.isNPC=true; npc.userData.isStaff=true;
@@ -3074,12 +3087,22 @@ function spawnCabinCrewFallback(){
 // ══════════════════════════════════════════════════
 // UPDATE NPCs  (walk + look-at-player + idle)
 // ══════════════════════════════════════════════════
+// Fase 8: LOD frame counter para throttling de NPCs lejanos
+let _npcFrame=0;
 function updateNPCs(delta){
   const playerPos=camera.position;
   const t=clock.getElapsedTime();
+  _npcFrame++;
 
   npcs.forEach(npc=>{
     const ud=npc.userData;
+    // ── Fase 8 LOD: NPCs no visibles o muy lejanos actualizan a menor cadencia
+    if(!npc.visible) return;
+    const _dx=playerPos.x-npc.position.x, _dz=playerPos.z-npc.position.z;
+    const _dist2=_dx*_dx+_dz*_dz;
+    // >22u → skip animación cada 2 frames; >35u → skip animación 3 de cada 4
+    if(_dist2>35*35 && (_npcFrame%4)!==0) return;
+    if(_dist2>22*22 && (_npcFrame%2)!==0) return;
 
     // ── WALKING NPCs (perfiles civiles — Fase 4: caminar / esperar / mirar carteles)
     if(ud.isWalking){
@@ -3393,7 +3416,24 @@ function toggleCalmMode(){
   const label=document.getElementById('calm-status-label');
   if(label) label.textContent=calmMode?'ON':'OFF';
   if(isGameActive) showToast(calmMode?'🧘 Modo Calma activado':'⚡ Modo normal activado');
-  // El Modo Calma reduce el volumen del ambiente sonoro (nunca lo aumenta)
+
+  // Fase 8 — Visual: desaturación del canvas 3D + fogColor más apagado
+  // Transición CSS suave para no ser abrupta
+  renderer.domElement.style.transition='filter 1.4s ease';
+  renderer.domElement.style.filter=calmMode?'saturate(0.50) brightness(0.96)':'';
+
+  // Fase 8 — NPCs: ocultar peatones civiles caminantes en Modo Calma
+  // (el personal fijo permanece — da sensación de lugar habitado sin movimiento)
+  npcs.forEach(n=>{
+    if(n.userData.role==='civilian') n.visible=!calmMode;
+  });
+
+  // Fase 8 — Niebla más densa en calma → perspectiva más íntima, menos distracción
+  if(scene.fog){
+    scene.fog.density=calmMode?0.010:0.006;
+  }
+
+  // Audio: reducir ambiente sonoro (nunca aumenta)
   if(audioEnabled&&audioCtx){
     applyCalmAudioGains();
     setAmbientMasterTarget(calmMode?0.45:1.0,1.6);
