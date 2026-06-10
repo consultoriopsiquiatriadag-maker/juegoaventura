@@ -249,6 +249,7 @@ function buildWorld(){
   // ── FASE 3: Puestos funcionales del hall ───────
   buildServicePosts();
   // ───────────────────────────────────────────────
+  buildEntranceTarmacView(); // Fase 7: vista de plataforma desde la entrada
   buildExterior(); buildZoneRings();
 }
 
@@ -1655,69 +1656,271 @@ function buildInfoPost(x,z,label,col){
   scene.add(g);
 }
 
-// ─── VENTANALES LATERALES ─────────────────────────
-// 3 ventanas por lado en los huecos entre tiendas.
-// Vista procedural: cielo + plataforma + avión lejano.
+// ══════════════════════════════════════════════════
+// VENTANALES LATERALES — Fase 7
+// 5 ventanas por lado (vs. 3 anteriores), tamaño ampliado (7.5 × 5.5 u).
+// 3 variantes de escena exterior: apron/plataforma, doble avión, jetway íntima.
+// Las texturas se precomputan (3 canvas total) y se reusan para
+// no generar 10 texturas distintas → rendimiento estable.
+// ══════════════════════════════════════════════════
 function buildSidewallWindows(){
-  // z=+42 → zona entrada (sin tiendas)
-  // z=+10 → entre café y pharmacie (pequeño hueco)
-  // z=-16 → entre duty-free y sala espera
-  [+42, +10, -16].forEach(wz=>{
-    buildSideWindow(-17, wz); // pared izquierda
-    buildSideWindow(+17, wz); // pared derecha
+  // Pre-renderizar las 3 variantes (reutilizadas entre ventanas)
+  const extT=[0,1,2].map(v=>tex(768,384,(ctx)=>_drawExtScene(ctx,v)));
+
+  // Posiciones en gaps libres de tiendas (verificado contra Fase 6)
+  const pos=[
+    {z:+44,vL:0,vR:1},
+    {z:+28,vL:2,vR:0},
+    {z: +6,vL:1,vR:2},
+    {z:-14,vL:0,vR:1},
+    {z:-38,vL:2,vR:0},
+  ];
+  pos.forEach(({z,vL,vR})=>{
+    _buildSideWindow(-17,z,extT[vL]);
+    _buildSideWindow(+17,z,extT[vR]);
   });
 }
 
-function buildSideWindow(wx, wz){
-  const inward=wx<0?1:-1; // hacia interior (+x izq, -x der)
+function _buildSideWindow(wx,wz,extTexture){
+  const iw=wx<0?1:-1;
+  const W=7.5, H=5.5, yc=5.5;
+  const frameMat=mkStd(0xc8c8cc,0.28,0.35);
 
-  // Marco exterior empotrado en la pared
-  const frame=new THREE.Mesh(mkBox(0.26,4.4,3.7),mkStd(0xd0c8bc,0.65,0.02));
-  frame.position.set(wx,6.2,wz); scene.add(frame);
-
-  // Textura de exterior: cielo + plataforma + avión
-  const extT=tex(384,256,(ctx)=>{
-    const sky=ctx.createLinearGradient(0,0,0,256);
-    sky.addColorStop(0,'#6aaecb'); sky.addColorStop(0.55,'#9dcfef'); sky.addColorStop(1,'#bde0f8');
-    ctx.fillStyle=sky; ctx.fillRect(0,0,384,256);
-    // Suelo exterior
-    ctx.fillStyle='#5a6a50'; ctx.fillRect(0,192,384,64);
-    ctx.fillStyle='#434452'; ctx.fillRect(0,210,384,46);
-    // Líneas de pista
-    ctx.strokeStyle='rgba(255,255,255,0.28)'; ctx.lineWidth=2;
-    ctx.setLineDash([22,16]);
-    ctx.beginPath(); ctx.moveTo(0,232); ctx.lineTo(384,232); ctx.stroke();
-    ctx.setLineDash([]);
-    // Avión lejano
-    ctx.fillStyle='#dde0e8';
-    ctx.beginPath(); ctx.ellipse(290,178,56,11,0,0,Math.PI*2); ctx.fill();
-    ctx.fillRect(238,176,56,3);    // ala
-    ctx.fillRect(230,167,5,13);    // cola
-    ctx.fillStyle='rgba(160,200,228,0.9)';
-    for(let pw=0;pw<5;pw++) ctx.fillRect(253+pw*10,175,7,4); // ventanas
-    // Vehículo de pista
-    ctx.fillStyle='#e08a1a';
-    ctx.fillRect(55,212,20,9); ctx.fillRect(51,211,4,11);
+  // Marco de aluminio (4 barras perimetrales)
+  [yc+H/2+0.08, yc-H/2-0.08].forEach(fy=>{
+    const f=new THREE.Mesh(mkBox(0.22,0.14,W+0.3),frameMat);
+    f.position.set(wx,fy,wz); scene.add(f);
   });
+  [wz-W/2-0.08, wz+W/2+0.08].forEach(fz=>{
+    const f=new THREE.Mesh(mkBox(0.22,H+0.3,0.14),frameMat);
+    f.position.set(wx,yc,fz); scene.add(f);
+  });
+  // Barras divisorias interiores (patrón 2×2)
+  const bH=new THREE.Mesh(mkBox(0.20,0.10,W-0.08),frameMat);
+  bH.position.set(wx,yc,wz); scene.add(bH);
+  const bV=new THREE.Mesh(mkBox(0.20,H-0.08,0.10),frameMat);
+  bV.position.set(wx,yc,wz); scene.add(bV);
+  // Antepecho destacado
+  const sill=new THREE.Mesh(mkBox(0.34,0.12,W+0.5),mkStd(0xdad2c8,0.55,0.0));
+  sill.position.set(wx+iw*0.10,yc-H/2+0.04,wz); scene.add(sill);
 
+  // Panel de vista exterior (textura del apron)
   const glassMat=new THREE.MeshLambertMaterial({
-    map:extT, transparent:true, opacity:0.91,
-    side:THREE.DoubleSide
+    map:extTexture, transparent:true, opacity:0.93, side:THREE.DoubleSide
   });
-  const glass=new THREE.Mesh(mkBox(0.10,4.0,3.35),glassMat);
-  glass.position.set(wx+inward*0.09,6.2,wz); scene.add(glass);
+  const glass=new THREE.Mesh(mkBox(0.09,H-0.14,W-0.14),glassMat);
+  glass.position.set(wx+iw*0.10,yc,wz); scene.add(glass);
 
-  // Cruz divisoria del ventanal (2×2 panes)
-  const barH=new THREE.Mesh(mkBox(0.24,0.09,3.72),mkStd(0xc8c0b8,0.60,0.02));
-  barH.position.set(wx,6.2,wz); scene.add(barH);
-  const barV=new THREE.Mesh(mkBox(0.24,4.2,0.09),mkStd(0xc8c0b8,0.60,0.02));
-  barV.position.set(wx,6.2,wz); scene.add(barV);
-  // Antepecho
-  const sill=new THREE.Mesh(mkBox(0.42,0.09,3.75),mkStd(0xdad2c8,0.55,0.0));
-  sill.position.set(wx+inward*0.10,4.25,wz); scene.add(sill);
-  // Luz natural simulada
-  const wl=new THREE.PointLight(0xfff8f0,0.20,6);
-  wl.position.set(wx+inward*2,5.5,wz); scene.add(wl);
+  // Tinte de vidrio (muy sutil, encima del panel)
+  const tintM=new THREE.MeshStandardMaterial({
+    color:0xd8f0ff,transparent:true,opacity:0.09,roughness:0.05,metalness:0.2
+  });
+  const tint=new THREE.Mesh(mkBox(0.05,H-0.14,W-0.14),tintM);
+  tint.position.set(wx+iw*0.16,yc,wz); scene.add(tint);
+
+  // Luz natural suave
+  const wl=new THREE.PointLight(0xfff5e8,0.20,8);
+  wl.position.set(wx+iw*2.8,5.8,wz); scene.add(wl);
+}
+
+// ── ESCENA EXTERIOR PROCEDURAL ──────────────────
+// Dibuja cielo, nubes, plataforma de asfalto, marcas de rodaje,
+// aeronaves y vehículos de apoyo tierra — todo en canvas 2D.
+function _drawExtScene(ctx,variant){
+  const w=ctx.canvas.width, h=ctx.canvas.height;
+
+  // Cielo degradado
+  const sky=ctx.createLinearGradient(0,0,0,h*0.58);
+  sky.addColorStop(0,'#3a7eb8'); sky.addColorStop(0.45,'#68aed6'); sky.addColorStop(1,'#bcd8f0');
+  ctx.fillStyle=sky; ctx.fillRect(0,0,w,h*0.58);
+
+  // Nubes sutiles
+  ctx.globalAlpha=0.52; ctx.fillStyle='#f0f8ff';
+  [[w*.12,h*.08,88,22],[w*.48,h*.04,130,18],[w*.78,h*.13,72,20]].forEach(([cx,cy,rx,ry])=>{
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha=0.30;
+  [[w*.30,h*.10,55,13],[w*.65,h*.08,82,14]].forEach(([cx,cy,rx,ry])=>{
+    ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha=1;
+
+  // Neblina horizonte
+  const haze=ctx.createLinearGradient(0,h*.52,0,h*.63);
+  haze.addColorStop(0,'rgba(195,220,242,0)'); haze.addColorStop(1,'rgba(195,220,240,0.52)');
+  ctx.fillStyle=haze; ctx.fillRect(0,h*.52,w,h*.12);
+
+  // Hangares/edificios lejanos
+  ctx.fillStyle='#8898aa';
+  [[w*.06,30,44],[w*.28,18,34],[w*.62,24,50],[w*.85,34,58]].forEach(([bx,bh,bw])=>{
+    ctx.fillRect(bx-bw/2,h*.58-bh,bw,bh);
+    ctx.fillStyle='#707a86'; ctx.fillRect(bx-7,h*.58-bh+5,14,bh-5); ctx.fillStyle='#8898aa';
+  });
+
+  // Plataforma / tarmac
+  const tarmac=ctx.createLinearGradient(0,h*.58,0,h);
+  tarmac.addColorStop(0,'#586870'); tarmac.addColorStop(0.3,'#4a5a62'); tarmac.addColorStop(1,'#3a4a52');
+  ctx.fillStyle=tarmac; ctx.fillRect(0,h*.58,w,h*.42);
+
+  // Marcas de plataforma
+  ctx.strokeStyle='rgba(255,255,255,0.28)'; ctx.lineWidth=2.5;
+  ctx.setLineDash([22,16]);
+  [h*.76,h*.89].forEach(my=>{ctx.beginPath();ctx.moveTo(0,my);ctx.lineTo(w,my);ctx.stroke();});
+  ctx.setLineDash([]);
+  ctx.strokeStyle='rgba(210,178,38,0.38)'; ctx.lineWidth=2; ctx.setLineDash([18,12]);
+  ctx.beginPath(); ctx.moveTo(0,h*.70); ctx.lineTo(w,h*.70); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Escenas por variante
+  if(variant===0){
+    _drawPlane(ctx,w*.65,h*.44,1.05,'#d4d8e6');
+    _drawPlane(ctx,w*.18,h*.52,0.52,'#dde0ea',true);
+    _drawVehicle(ctx,w*.32,h*.73,'#e08030','fuel');
+    // Pasarela de embarque
+    ctx.fillStyle='#7888a0'; ctx.fillRect(w*.46,h*.60,100,11); ctx.fillRect(w*.46-12,h*.58,14,16);
+  } else if(variant===1){
+    _drawPlane(ctx,w*.35,h*.46,0.88,'#d6dae6');
+    _drawPlane(ctx,w*.72,h*.50,0.64,'#e0e4ee',true);
+    _drawVehicle(ctx,w*.55,h*.78,'#4488cc','luggage');
+    ctx.fillStyle='#d04020'; ctx.fillRect(w*.18,h*.80,18,8); ctx.fillRect(w*.18-3,h*.81,5,7);
+  } else {
+    _drawPlane(ctx,w*.58,h*.41,1.18,'#d2d8e4');
+    // Jetway detallada
+    ctx.fillStyle='#78889a';
+    ctx.fillRect(w*.22,h*.58,148,13); ctx.fillRect(w*.22-10,h*.56,14,18); ctx.fillRect(w*.22+146,h*.55,12,18);
+    // Personal de tierra
+    ctx.fillStyle='#f5a023'; [w*.38,w*.46].forEach(px=>{ctx.fillRect(px,h*.73,8,13);});
+  }
+}
+
+// Perfil simplificado de aeronave comercial (fuselaje + alas + cola + motores + ventanas)
+function _drawPlane(ctx,cx,cy,sc,color,flip=false){
+  ctx.save(); ctx.translate(cx,cy); if(flip) ctx.scale(-1,1);
+  ctx.fillStyle=color;
+  // Fuselaje
+  ctx.beginPath(); ctx.ellipse(0,0,68*sc,11*sc,0,0,Math.PI*2); ctx.fill();
+  // Morro
+  ctx.beginPath(); ctx.moveTo(60*sc,-3*sc); ctx.quadraticCurveTo(82*sc,0,60*sc,3*sc); ctx.fill();
+  // Cola vertical
+  ctx.beginPath();
+  ctx.moveTo(-65*sc,-2*sc); ctx.lineTo(-55*sc,-22*sc); ctx.lineTo(-48*sc,-22*sc); ctx.lineTo(-44*sc,-2*sc);
+  ctx.closePath(); ctx.fill();
+  // Cola horizontal
+  ctx.beginPath(); ctx.ellipse(-57*sc,2*sc,22*sc,5*sc,-0.12,0,Math.PI*2); ctx.fill();
+  // Ala
+  ctx.beginPath();
+  ctx.moveTo(20*sc,-3*sc); ctx.lineTo(-32*sc,-3*sc); ctx.lineTo(-56*sc,-1*sc); ctx.lineTo(24*sc,3*sc);
+  ctx.closePath(); ctx.fill();
+  // Franja de aerolínea
+  ctx.fillStyle='rgba(44,90,155,0.48)';
+  ctx.fillRect(-62*sc,-4*sc,112*sc,5*sc);
+  // Ventanas
+  ctx.fillStyle='rgba(155,210,238,0.88)';
+  for(let i=0;i<9;i++){ctx.beginPath();ctx.arc((-32+i*11)*sc,-4*sc,2.8*sc,0,Math.PI*2);ctx.fill();}
+  // Motores
+  ctx.fillStyle='#9aa0aa';
+  ctx.beginPath(); ctx.ellipse(8*sc,9*sc,10*sc,5*sc,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-20*sc,10*sc,8*sc,4*sc,0,0,Math.PI*2); ctx.fill();
+  // Aro motor
+  ctx.fillStyle='#c0c5cc';
+  ctx.beginPath(); ctx.arc(18*sc,9*sc,4*sc,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+// Vehículo de plataforma: cabina + carrocería + ruedas + elemento del tipo
+function _drawVehicle(ctx,x,y,color,type){
+  ctx.fillStyle=color;
+  ctx.fillRect(x-3,y-8,10,8);     // cabina
+  ctx.fillRect(x-3,y,28,9);       // carrocería
+  ctx.fillStyle='#222';
+  [x+2,x+20].forEach(cx=>{ctx.beginPath();ctx.arc(cx,y+11,3.5,0,Math.PI*2);ctx.fill();});
+  if(type==='fuel'){
+    ctx.fillStyle='#e0e0e0';
+    ctx.beginPath(); ctx.ellipse(x+22,y+4,15,6,0,0,Math.PI*2); ctx.fill();
+  } else {
+    ctx.fillStyle='rgba(0,0,0,0.3)';
+    ctx.fillRect(x+10,y-1,14,7);  // carro de equipajes
+  }
+}
+
+// ── VISTA DE PLATAFORMA DESDE LA ENTRADA — Fase 7 ─
+// Telón exterior visible desde el interior al mirar hacia la entrada
+// (player empieza en z=52 mirando en +z; this plane is at z=62).
+function buildEntranceTarmacView(){
+  const extT=tex(1024,512,(ctx)=>{
+    const w=1024,h=512;
+    // Cielo
+    const sky=ctx.createLinearGradient(0,0,0,h*.55);
+    sky.addColorStop(0,'#3a7eb8'); sky.addColorStop(0.45,'#68b0d8'); sky.addColorStop(1,'#b8d8f0');
+    ctx.fillStyle=sky; ctx.fillRect(0,0,w,h*.55);
+    // Nubes
+    ctx.globalAlpha=0.55; ctx.fillStyle='#f0f8ff';
+    [[140,38,110,26],[480,22,170,22],[820,52,90,24]].forEach(([cx,cy,rx,ry])=>{
+      ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.fill();
+    });
+    ctx.globalAlpha=1;
+    // Horizonte
+    const haze=ctx.createLinearGradient(0,h*.48,0,h*.60);
+    haze.addColorStop(0,'rgba(195,222,240,0)'); haze.addColorStop(1,'rgba(195,222,240,0.58)');
+    ctx.fillStyle=haze; ctx.fillRect(0,h*.48,w,h*.13);
+    // Edificios terminal
+    ctx.fillStyle='#8898a8';
+    [[130,55,280],[620,42,120],[820,70,160]].forEach(([bx,bh,bw])=>{
+      ctx.fillRect(bx-bw/2,h*.55-bh,bw,bh);
+    });
+    // Tarmac
+    const tarmac=ctx.createLinearGradient(0,h*.55,0,h);
+    tarmac.addColorStop(0,'#566870'); tarmac.addColorStop(0.35,'#486058'); tarmac.addColorStop(1,'#3a4850');
+    ctx.fillStyle=tarmac; ctx.fillRect(0,h*.55,w,h*.45);
+    // Marcas
+    ctx.strokeStyle='rgba(210,178,38,0.40)'; ctx.lineWidth=3; ctx.setLineDash([30,20]);
+    [h*.72,h*.85].forEach(my=>{ctx.beginPath();ctx.moveTo(0,my);ctx.lineTo(w,my);ctx.stroke();});
+    ctx.setLineDash([]);
+    ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=2.5; ctx.setLineDash([18,14]);
+    ctx.beginPath(); ctx.moveTo(w/2,h*.55); ctx.lineTo(w/2,h); ctx.stroke();
+    ctx.setLineDash([]);
+    // 3 aeronaves en plataforma
+    _drawPlane(ctx,w*.58,h*.40,1.40,'#d0d8e6');
+    _drawPlane(ctx,w*.16,h*.48,0.72,'#dde0ea',true);
+    _drawPlane(ctx,w*.84,h*.50,0.60,'#d8dce8');
+    // Pasarela central
+    ctx.fillStyle='#778898';
+    ctx.fillRect(w*.38,h*.56,165,14); ctx.fillRect(w*.38-12,h*.54,16,18);
+    // Vehículos
+    _drawVehicle(ctx,w*.43,h*.74,'#e08030','fuel');
+    _drawVehicle(ctx,w*.22,h*.81,'#4488cc','luggage');
+    // Personal (siluetas pequeñas)
+    ctx.fillStyle='#f5a023';
+    [w*.60,w*.67].forEach(px=>{ctx.fillRect(px,h*.74,8,13);});
+    // Reflejo sutil
+    const shine=ctx.createLinearGradient(0,0,w*.25,0);
+    shine.addColorStop(0,'rgba(255,255,255,0.10)'); shine.addColorStop(1,'rgba(255,255,255,0)');
+    ctx.fillStyle=shine; ctx.fillRect(0,0,w,h);
+  });
+
+  // Panel backdrop (visible al mirar hacia el exterior desde dentro del hall)
+  const mat=new THREE.MeshLambertMaterial({map:extT,side:THREE.FrontSide});
+  const backdrop=new THREE.Mesh(mkBox(38,12,0.12),mat);
+  backdrop.position.set(0,7,62); scene.add(backdrop);
+
+  // Piso de tarmac (continuación del suelo entre las puertas y el backdrop)
+  const tarmacT=tex(512,512,(ctx)=>{
+    const g=ctx.createLinearGradient(0,0,512,512);
+    g.addColorStop(0,'#4a5860'); g.addColorStop(1,'#3a4850');
+    ctx.fillStyle=g; ctx.fillRect(0,0,512,512);
+    ctx.strokeStyle='rgba(200,170,35,0.38)'; ctx.lineWidth=4; ctx.setLineDash([32,22]);
+    [128,256,384].forEach(l=>{
+      ctx.beginPath(); ctx.moveTo(l,0); ctx.lineTo(l,512); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,l); ctx.lineTo(512,l); ctx.stroke();
+    });
+    ctx.setLineDash([]);
+  });
+  tarmacT.wrapS=tarmacT.wrapT=THREE.RepeatWrapping; tarmacT.repeat.set(3,4);
+  const tarmacFloor=new THREE.Mesh(
+    new THREE.PlaneGeometry(38,14),
+    new THREE.MeshLambertMaterial({map:tarmacT})
+  );
+  tarmacFloor.rotation.x=-Math.PI/2; tarmacFloor.position.set(0,0.01,56); scene.add(tarmacFloor);
 }
 
 // ─── MARCADORES DE BORDE DEL CORREDOR ────────────
