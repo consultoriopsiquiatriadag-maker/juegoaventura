@@ -240,7 +240,7 @@ function buildWorld(){
   buildWalls(); buildPillars();
   buildEntrance(); buildCheckIn(); buildSecurity();
   buildLounge(); buildBoarding(); buildPlane(); buildArrival();
-  buildShops(); buildDirectionSigns(); buildFlightBoard();
+  buildShops(); buildDirectionSigns(); buildFlightBoard(); // Fase 6: tiendas laterales enriquecidas
   // ── FASE 2: Estructuras base del hall ──────────
   buildTransitionBenches();
   buildInfoPosts();
@@ -1226,80 +1226,267 @@ function buildArrival(){
 // ══════════════════════════════════════════════════
 // SHOPS
 // ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// TIENDAS LATERALES DEL HALL — Fase 6
+// Seis locales con identidad visual diferenciada:
+//   Cafetería · Kiosco Express · Librería & Prensa
+//   Farmacia · Restaurante · Regalos & Souvenirs
+// Estructura común via buildShopBase; cada local
+// agrega cartelería y props propios.
+// ══════════════════════════════════════════════════
 function buildShops(){
-  buildCafe(-15.5,20); buildDutyFree(-15.5,-2); buildNewsstand(-15.5,-22);
-  buildPharmacy(15.5,15); buildRestaurant(15.5,-5); buildGiftShop(15.5,-23);
+  buildCafe(-15.5,20);
+  buildConvenienceStore(-15.5,-2);
+  buildNewsstand(-15.5,-22);
+  buildPharmacy(15.5,15);
+  buildRestaurant(15.5,-5);
+  buildGiftShop(15.5,-23);
 }
 
+// ── FACHADA BASE ── pared trasera, laterales, fascia, vidrios, zócalo
+// Retorna {inX, h, ry, s} para colocar props de cada local.
+function buildShopBase(x,z,width,depth,wallCol,fasciaCol){
+  const s=x<0?1:-1;
+  const ry=x<0?-Math.PI/2:Math.PI/2;
+  const bx=x+s*0.15;
+  const inX=x+s*depth*0.52;
+  const h=4.2;
+  const wm=mkStd(wallCol,0.72,0.02);
+  // Pared trasera
+  const bw=new THREE.Mesh(mkBox(0.28,h,width),wm);
+  bw.position.set(bx,h/2,z); bw.castShadow=true; scene.add(bw);
+  // Paredes laterales
+  [z-width/2,z+width/2].forEach(sz=>{
+    const sw=new THREE.Mesh(mkBox(depth,h,0.22),wm);
+    sw.position.set(x+s*depth/2,h/2,sz); sw.castShadow=true; scene.add(sw);
+  });
+  // Fascia de color del local (proyecta al pasillo)
+  const fascia=new THREE.Mesh(mkBox(depth+0.35,0.6,width+0.28),mkStd(fasciaCol,0.5,0.08));
+  fascia.position.set(bx+s*(depth/2-0.02),h-0.3,z); scene.add(fascia);
+  // Zócalo
+  const sk=new THREE.Mesh(mkBox(depth,0.15,width-0.3),mkStd(0xb0a898,0.7,0.03));
+  sk.position.set(x+s*depth/2,0.075,z); scene.add(sk);
+  // Vitrinas de vidrio (dos paneles con hueco central de entrada)
+  const gm=new THREE.MeshStandardMaterial({color:0xd0ecff,transparent:true,opacity:0.17,roughness:0.08,metalness:0.3});
+  const pw=(width-2.2)/2;
+  [z-width/2+0.15+pw/2,z+width/2-0.15-pw/2].forEach(gz=>{
+    const gp=new THREE.Mesh(mkBox(0.08,h-0.82,pw-0.1),gm);
+    gp.position.set(x+s*depth,h/2-0.41,gz); scene.add(gp);
+  });
+  return {inX,h,ry,s};
+}
+
+// ── 1. CAFETERÍA ─────────────────────────────────
 function buildCafe(x,z){
-  const d=9;
-  box(x<0?x+0.15:x-0.15,0,z,0.3,4.5,d,0x3d2b1f);
-  box(x<0?x+1.5:x-1.5,0,z-d/2,3,4.5,0.3,0x3d2b1f);
-  box(x<0?x+1.5:x-1.5,0,z+d/2,3,4.5,0.3,0x3d2b1f);
-  box(x<0?x+0.8:x-0.8,0,z,2.5,0.08,d,0x5d3a1a,false);
-  const cx=x<0?x+0.8:x-0.8;
-  // Counter
-  box(cx,0,z,2.2,1.1,3.2,0x3d2b1f); box(cx,1.1,z,2.2,0.1,3.2,0x6b3f1f);
-  addMonitor(cx,1.2,z-0.8);
-  cyl(cx-0.4,1.2,z+0.4,0.12,0.15,0.6,8,0x555566);
-  const ry=x<0?Math.PI/2:-Math.PI/2;
-  const ct=tex(512,256,(ctx)=>{ ctx.fillStyle='#2c1810'; ctx.fillRect(0,0,512,256); const g=ctx.createLinearGradient(0,0,512,0); g.addColorStop(0,'#6b3f1f'); g.addColorStop(1,'#3d2b1f'); ctx.fillStyle=g; ctx.fillRect(0,200,512,56); ctx.fillStyle='#f5c57a'; ctx.font='bold 62px Georgia'; ctx.textAlign='center'; ctx.fillText('☕ AeroCafé',256,118); ctx.fillStyle='#cc9944'; ctx.font='26px Arial'; ctx.fillText('Espresso · Cappuccino · Pastries',256,172); ctx.fillStyle='#888'; ctx.font='20px Arial'; ctx.fillText('Abierto 24h · Open 24h',256,215); });
-  sign(cx,4.5,z,4,2,0.08,ct,ry,0x110800);
-  const nm=mkMat(0xf5c57a,{emissive:0xdd9900,emissiveIntensity:1.0});
-  const neon=new THREE.Mesh(mkBox(3.8,0.06,0.06),nm); neon.position.set(cx,3.5,z); neon.rotation.y=ry; scene.add(neon);
-  [[cx+(x<0?0.5:-0.5)*2.5,z-2.5],[cx+(x<0?0.5:-0.5)*2.5,z+2.5]].forEach(([tx,tz])=>{
-    box(tx,0,tz,1.2,0.78,1.2,0x5d3a1a); box(tx,0.78,tz,1.1,0.07,1.1,0xfff8e8);
-    [[-0.6,0],[0.6,0],[0,-0.6],[0,0.6]].forEach(([ddx,ddz])=>box(tx+ddx,0,tz+ddz,0.42,0.48,0.42,0x4a3020));
+  const {inX,h,ry,s}=buildShopBase(x,z,8.5,2.2,0x2c1a10,0xb06a28);
+  // Mostrador con superficie
+  const counter=new THREE.Mesh(mkBox(1.05,1.1,2.5),mkStd(0x3d2b1f,0.6,0.05));
+  counter.position.set(inX,0.55,z); scene.add(counter);
+  const ctop=new THREE.Mesh(mkBox(1.1,0.07,2.6),mkStd(0x5a3820,0.3,0.2));
+  ctop.position.set(inX,1.135,z); scene.add(ctop);
+  // Máquina de espresso + tubo de vapor
+  cyl(inX,1.13,z-0.62,0.22,0.24,0.8,8,0x888888);
+  cyl(inX,1.13,z-0.62,0.14,0.14,0.12,8,0x555555);
+  const steam=new THREE.Mesh(mkBox(0.05,0.68,0.05),mkStd(0xdddddd,0.2,0.5));
+  steam.position.set(inX+s*0.2,1.57,z-0.62); scene.add(steam);
+  // Neón de tienda
+  const nm=mkMat(0xf5c57a,{emissive:0xdd9900,emissiveIntensity:0.95});
+  const neon=new THREE.Mesh(mkBox(3.6,0.055,0.055),nm);
+  neon.position.set(inX,3.52,z); neon.rotation.y=ry; scene.add(neon);
+  // Dos mesitas con sillas
+  [[z-2.8],[z+2.8]].forEach(([tz])=>{
+    box(x+s*1.8,0,tz,0.85,0.72,0.85,0x5d3a1a);
+    const mt=new THREE.Mesh(mkBox(0.88,0.05,0.88),mkStd(0xfff8e0,0.35,0.05));
+    mt.position.set(x+s*1.8,0.745,tz); scene.add(mt);
+    [[-0.55,0],[0.55,0],[0,-0.55],[0,0.55]].forEach(([ddx,ddz])=>box(x+s*1.8+ddx,0,tz+ddz,0.36,0.44,0.36,0x3d2510));
   });
+  // Cartel
+  const ct=tex(480,220,(ctx)=>{
+    ctx.fillStyle='#1e0e04'; ctx.fillRect(0,0,480,220);
+    const g=ctx.createLinearGradient(0,170,0,220); g.addColorStop(0,'#9b4f12'); g.addColorStop(1,'#1e0e04');
+    ctx.fillStyle=g; ctx.fillRect(0,168,480,52);
+    ctx.fillStyle='#f5c57a'; ctx.font='bold 62px Georgia'; ctx.textAlign='center'; ctx.fillText('☕  AeroCafé',240,88);
+    ctx.fillStyle='#d4944a'; ctx.font='25px Arial'; ctx.fillText('Espresso · Cappuccino · Pastries',240,140);
+    ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.font='19px Arial'; ctx.fillText('Abierto 24h  ·  Open 24h',240,192);
+  });
+  sign(inX,h-0.15,z,4.0,1.85,0.06,ct,ry,0x110800);
 }
 
-function buildDutyFree(x,z){
-  const d=11; const cx=x<0?x+0.8:x-0.8; const ry=x<0?Math.PI/2:-Math.PI/2;
-  box(x<0?x+0.15:x-0.15,0,z,0.3,4.8,d,0x1a1a2e);
-  box(cx,0,z-d/2,3,4.8,0.3,0x1a1a2e); box(cx,0,z+d/2,3,4.8,0.3,0x1a1a2e);
-  [-1.5,0,1.5].forEach(dz=>{
-    box(x<0?x+0.4:x-0.4,0,z+dz,0.8,2.8,0.3,0x222233);
-    [0.5,1.0,1.5,2.0].forEach(dy=>{ [0xcc3333,0x225588,0x338844,0xcc8833].forEach((c,i)=>cyl(x<0?x+0.4:x-0.4+(i-1.5)*0.22,dy,z+dz,0.07,0.09,0.35,8,c)); });
+// ── 2. KIOSCO / TIENDA EXPRESS ───────────────────
+function buildConvenienceStore(x,z){
+  const {inX,h,ry,s}=buildShopBase(x,z,9.0,2.2,0x152535,0x1a7a3e);
+  // Estantes de snacks y revistas contra la pared trasera
+  box(x+s*0.4,0,z,0.55,2.8,8.4,0x1a3050);
+  [0.55,1.1,1.75,2.35].forEach(dy=>{
+    for(let i=-3;i<=3;i++){
+      const cols=[0xee4444,0x44aa66,0xf5a623,0x4488cc,0xcc44aa,0x55ccaa,0xffcc22];
+      const cm=new THREE.Mesh(mkBox(0.05,0.48,0.7),mkMat(cols[Math.abs(i+dy*3|0)%7]));
+      cm.position.set(x+s*0.68,dy+0.24,z+i*1.1); scene.add(cm);
+    }
   });
-  const dt=tex(512,256,(ctx)=>{ ctx.fillStyle='#0a0a1e'; ctx.fillRect(0,0,512,256); const g=ctx.createLinearGradient(0,0,512,0); g.addColorStop(0,'#ffd700'); g.addColorStop(0.5,'#ffee88'); g.addColorStop(1,'#ffd700'); ctx.fillStyle=g; ctx.font='bold 68px Georgia'; ctx.textAlign='center'; ctx.fillText('✨ DUTY FREE',256,108); ctx.fillStyle='#aaaacc'; ctx.font='28px Arial'; ctx.fillText('Perfumes · Licores · Cosmética',256,165); ctx.fillStyle='#ffd700'; ctx.font='bold 22px Arial'; ctx.fillText('⭐ TAX FREE SHOPPING ⭐',256,215); });
-  sign(cx,5.5,z,5.5,2.5,0.08,dt,ry,0x110800);
+  // Frigorífico con vidrio emissivo (bebidas)
+  const fridge=new THREE.Mesh(mkBox(0.72,2.1,1.2),mkStd(0x0a2840,0.3,0.1));
+  fridge.position.set(x+s*0.4,1.05,z+3.8); scene.add(fridge);
+  const fgm=new THREE.MeshStandardMaterial({color:0x88ccff,transparent:true,opacity:0.22,roughness:0.1,emissive:0x1a4466,emissiveIntensity:0.45});
+  const fg=new THREE.Mesh(mkBox(0.06,1.82,1.0),fgm);
+  fg.position.set(x+s*0.8,1.05,z+3.8); scene.add(fg);
+  // Mostrador con registradora
+  const counter=new THREE.Mesh(mkBox(1.0,1.05,1.8),mkStd(0x1a3050,0.6,0.05));
+  counter.position.set(inX,0.525,z+3.2); scene.add(counter);
+  const ctop=new THREE.Mesh(mkBox(1.05,0.06,1.85),mkStd(0x2a4870,0.3,0.12));
+  ctop.position.set(inX,1.08,z+3.2); scene.add(ctop);
+  addMonitor(inX,1.09,z+3.2);
+  // Cartel
+  const kt=tex(480,220,(ctx)=>{
+    ctx.fillStyle='#0a1e30'; ctx.fillRect(0,0,480,220);
+    ctx.fillStyle='#1a7a3e'; ctx.fillRect(0,166,480,54);
+    ctx.fillStyle='#4ade80'; ctx.font='bold 60px Arial'; ctx.textAlign='center'; ctx.fillText('🛒  Tienda Express',240,85);
+    ctx.fillStyle='#a3e8b8'; ctx.font='24px Arial'; ctx.fillText('Snacks · Bebidas · Revistas · Viaje',240,138);
+    ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='19px Arial'; ctx.fillText('Convenience Store  ·  24h',240,190);
+  });
+  sign(inX,h-0.15,z-0.8,4.2,1.85,0.06,kt,ry,0x001a08);
 }
 
+// ── 3. LIBRERÍA & PRENSA ─────────────────────────
 function buildNewsstand(x,z){
-  const cx=x<0?x+0.7:x-0.7; const ry=x<0?Math.PI/2:-Math.PI/2;
-  box(x<0?x+0.15:x-0.15,0,z,0.3,3.8,8,0x2d2d2d);
-  box(cx,0,z-4,2,3.8,0.3,0x2d2d2d); box(cx,0,z+4,2,3.8,0.3,0x2d2d2d);
-  box(x<0?x+0.5:x-0.5,0,z,0.9,1.9,7,0x3d3d3d);
-  [0xff4444,0x4444ff,0x44aa44,0xff9900,0xcc44cc,0x00cccc,0xff6699,0x99ff44].forEach((c,i)=>{
-    const m=new THREE.Mesh(mkBox(0.05,0.55,0.75),mkMat(c)); m.position.set(x<0?x+0.6:x-0.6,0.8+(i%2)*0.6,z-2.8+i*0.7); scene.add(m);
+  const {inX,h,ry,s}=buildShopBase(x,z,8.5,2.2,0x1c1c24,0x3a5a90);
+  // Pared de libros (estante full-height)
+  box(x+s*0.4,0,z,0.55,3.2,7.8,0x1a1a22);
+  [0.38,0.98,1.58,2.18,2.78].forEach(dy=>{
+    for(let i=-3;i<=3;i++){
+      const cols=[0x3344aa,0xaa3344,0x44aa55,0xaa7722,0x664488,0x228899,0xcc5522];
+      const bk=new THREE.Mesh(mkBox(0.06,0.52,0.66),mkMat(cols[((i+3)+Math.round(dy))%7]));
+      bk.position.set(x+s*0.71,dy+0.26,z+i*1.02); scene.add(bk);
+    }
   });
-  const nt=tex(512,256,(ctx)=>{ ctx.fillStyle='#1a1a1a'; ctx.fillRect(0,0,512,256); ctx.fillStyle='#ff4444'; ctx.font='bold 54px Arial'; ctx.textAlign='center'; ctx.fillText('📰 Librería & Prensa',256,100); ctx.fillStyle='#fff'; ctx.font='28px Arial'; ctx.fillText('Libros · Revistas · Snacks',256,160); ctx.fillStyle='#888'; ctx.font='22px Arial'; ctx.fillText('Books · Magazines · Snacks',256,210); });
-  sign(cx,4,z,4.5,2.2,0.08,nt,ry,0,0x440000);
+  // Expositor inclinado de revistas (frente)
+  const rack=new THREE.Mesh(mkBox(0.52,2.0,2.2),mkStd(0x2a2a32,0.7,0.05));
+  rack.position.set(x+s*1.5,1.0,z-2.8); scene.add(rack);
+  [0xff4444,0x4466ff,0x44aa44,0xff9900,0xcc44cc,0x00cccc].forEach((c,i)=>{
+    const mg=new THREE.Mesh(mkBox(0.05,0.52,0.75),mkMat(c));
+    mg.position.set(x+s*1.8,0.68+(i%2)*0.6,z-3.5+(i%3)*0.72); scene.add(mg);
+  });
+  // Mesita de hojeado
+  box(x+s*1.8,0,z+3.1,0.78,0.7,0.78,0x2a2832);
+  const mt=new THREE.Mesh(mkBox(0.8,0.05,0.8),mkStd(0xddd8f0,0.4,0.05));
+  mt.position.set(x+s*1.8,0.725,z+3.1); scene.add(mt);
+  // Cartel
+  const nt=tex(480,220,(ctx)=>{
+    ctx.fillStyle='#10101a'; ctx.fillRect(0,0,480,220);
+    ctx.fillStyle='#3a5a90'; ctx.fillRect(0,166,480,54);
+    ctx.fillStyle='#7eb8ff'; ctx.font='bold 56px Georgia'; ctx.textAlign='center'; ctx.fillText('📚  Libros & Prensa',240,85);
+    ctx.fillStyle='#aaccee'; ctx.font='24px Arial'; ctx.fillText('Libros · Revistas · Snacks',240,138);
+    ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='19px Arial'; ctx.fillText('Books · Magazines · Snacks',240,190);
+  });
+  sign(inX,h-0.15,z,4.0,1.85,0.06,nt,ry,0x040416);
 }
 
+// ── 4. FARMACIA ──────────────────────────────────
 function buildPharmacy(x,z){
-  const cx=x<0?x-0.8:x-0.8; const ry=x<0?Math.PI/2:-Math.PI/2;
-  box(x<0?x-0.15:x+0.15,0,z,0.3,4.2,8,0x1a3a2e);
-  box(cx+0.8,0,z-4,3,4.2,0.3,0x1a3a2e); box(cx+0.8,0,z+4,3,4.2,0.3,0x1a3a2e);
-  const pt=tex(256,256,(ctx)=>{ ctx.fillStyle='#0d2d1e'; ctx.fillRect(0,0,256,256); ctx.fillStyle='#22cc66'; ctx.fillRect(90,30,76,196); ctx.fillRect(30,90,196,76); ctx.fillStyle='#fff'; ctx.font='bold 26px Arial'; ctx.textAlign='center'; ctx.fillText('FARMACIA',128,240); });
-  sign(x,5.5,z,3.5,3.5,0.1,pt,-Math.PI/2,0x002211);
+  const {inX,h,ry,s}=buildShopBase(x,z,8.5,2.2,0x0e2018,0x1a9050);
+  // Estante de medicamentos (cajas ordenadas)
+  box(x+s*0.4,0,z,0.55,3.0,7.8,0x0e2018);
+  [0.48,1.08,1.68,2.28].forEach(dy=>{
+    for(let i=-3;i<=3;i++){
+      const c=(i+dy)%2===0?0xeeeef8:0xd0eedd;
+      const bx2=new THREE.Mesh(mkBox(0.06,0.45,0.7),mkMat(c));
+      bx2.position.set(x+s*0.7,dy+0.22,z+i*1.0); scene.add(bx2);
+    }
+  });
+  // Cruz médica en pared trasera
+  const crossT=tex(256,256,(ctx)=>{
+    ctx.fillStyle='#0e2018'; ctx.fillRect(0,0,256,256);
+    ctx.fillStyle='#22cc66';
+    ctx.fillRect(98,30,60,196); ctx.fillRect(30,98,196,60);
+  });
+  sign(x+s*0.14,2.5,z,1.8,1.8,0.05,crossT,ry,0x002211);
+  // Mostrador con superficie blanca
+  const counter=new THREE.Mesh(mkBox(1.0,1.05,2.2),mkStd(0x1a4030,0.55,0.05));
+  counter.position.set(inX,0.525,z+2.5); scene.add(counter);
+  const ctop=new THREE.Mesh(mkBox(1.05,0.06,2.25),mkStd(0xf0f4f0,0.3,0.1));
+  ctop.position.set(inX,1.08,z+2.5); scene.add(ctop);
+  addMonitor(inX,1.09,z+2.5);
+  // Cartel
+  const pt=tex(480,220,(ctx)=>{
+    ctx.fillStyle='#081410'; ctx.fillRect(0,0,480,220);
+    ctx.fillStyle='#1a9050'; ctx.fillRect(0,166,480,54);
+    ctx.fillStyle='#22cc66'; ctx.font='bold 60px Arial'; ctx.textAlign='center'; ctx.fillText('🏥  Farmacia',240,86);
+    ctx.fillStyle='#88ddaa'; ctx.font='24px Arial'; ctx.fillText('Medicamentos · Primeros Auxilios',240,138);
+    ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='19px Arial'; ctx.fillText('Travel Essentials  ·  Pharmacy',240,190);
+  });
+  sign(inX,h-0.15,z-0.8,4.0,1.85,0.06,pt,ry,0x001108);
 }
 
+// ── 5. RESTAURANTE / BAR ─────────────────────────
 function buildRestaurant(x,z){
-  const d=10; const cx=x<0?x+0.8:x-0.8; const ry=x<0?Math.PI/2:-Math.PI/2;
-  box(x<0?x+0.15:x+0.15,0,z,0.3,4.8,d,0x2a1a0e);
-  box(cx,0,z-d/2,3,4.8,0.3,0x2a1a0e); box(cx,0,z+d/2,3,4.8,0.3,0x2a1a0e);
-  const rt=tex(512,256,(ctx)=>{ ctx.fillStyle='#1a0e06'; ctx.fillRect(0,0,512,256); ctx.fillStyle='#e8a04a'; ctx.font='bold 58px Georgia'; ctx.textAlign='center'; ctx.fillText('🍽 El Rincón',256,100); ctx.fillStyle='#b87030'; ctx.font='26px Arial'; ctx.fillText('Cocina Mediterránea · A toda hora',256,158); ctx.fillStyle='#666'; ctx.font='20px Arial'; ctx.fillText('Mediterranean Cuisine',256,205); });
-  sign(cx,5.5,z,5.5,2.5,0.08,rt,-Math.PI/2,0x110500);
-  [[cx-2,z-2.5],[cx-2,z+2.5]].forEach(([tx,tz])=>{ box(tx,0,tz,1.4,0.78,1.4,0x3d2a12); box(tx,0.78,tz,1.3,0.07,1.3,0xfff8e8); [[-0.6,0],[0.6,0],[0,-0.6],[0,0.6]].forEach(([ddx,ddz])=>box(tx+ddx,0,tz+ddz,0.45,0.48,0.45,0x2a1a0a)); });
+  const {inX,h,ry,s}=buildShopBase(x,z,9.0,2.2,0x1e0e06,0xc86430);
+  // Barra principal
+  const bar=new THREE.Mesh(mkBox(1.0,1.2,4.6),mkStd(0x2a1a0a,0.6,0.05));
+  bar.position.set(inX,0.6,z-1.0); scene.add(bar);
+  const btop=new THREE.Mesh(mkBox(1.05,0.07,4.7),mkStd(0x4a2808,0.3,0.15));
+  btop.position.set(inX,1.245,z-1.0); scene.add(btop);
+  // Taburetes
+  [z-2.8,z-1.2,z+0.3].forEach(tz=>{
+    cyl(x+s*1.9,0,tz,0.16,0.18,0.95,8,0x3a2010);
+    cyl(x+s*1.9,0.95,tz,0.22,0.22,0.07,8,0x5a3018);
+  });
+  // Botellero detrás de la barra
+  box(x+s*0.38,0,z-1.0,0.42,2.8,4.0,0x1a0e04);
+  [0.55,1.15,1.75,2.35].forEach(dy=>{
+    for(let i=-1;i<=1;i++){
+      const bcol=[0x8a4a10,0x225040,0xaa3333,0x334488][((dy*2+i+4)|0)%4];
+      cyl(x+s*0.6,dy,z-1.0+i*1.2,0.07,0.09,0.42,8,bcol);
+    }
+  });
+  // Mesa con sillas
+  box(x+s*1.7,0,z+3.4,1.1,0.72,1.1,0x3d2a12);
+  const mt=new THREE.Mesh(mkBox(1.12,0.05,1.12),mkStd(0xfff0d8,0.4,0.05));
+  mt.position.set(x+s*1.7,0.745,z+3.4); scene.add(mt);
+  [[-0.6,0],[0.6,0],[0,-0.6],[0,0.6]].forEach(([ddx,ddz])=>box(x+s*1.7+ddx,0,z+3.4+ddz,0.42,0.45,0.42,0x2a1a0a));
+  // Cartel
+  const rt=tex(480,220,(ctx)=>{
+    ctx.fillStyle='#120804'; ctx.fillRect(0,0,480,220);
+    ctx.fillStyle='#c86430'; ctx.fillRect(0,165,480,55);
+    ctx.fillStyle='#f0a060'; ctx.font='bold 58px Georgia'; ctx.textAlign='center'; ctx.fillText('🍽  El Rincón',240,84);
+    ctx.fillStyle='#cc7840'; ctx.font='24px Arial'; ctx.fillText('Cocina del Viajero · Todo el día',240,138);
+    ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='19px Arial'; ctx.fillText('Full Menu  ·  Coffee & Drinks',240,190);
+  });
+  sign(inX,h-0.15,z-1.5,4.5,1.85,0.06,rt,ry,0x110400);
 }
 
+// ── 6. REGALOS & SOUVENIRS ───────────────────────
 function buildGiftShop(x,z){
-  const cx=x<0?x+0.8:x-0.8;
-  box(x<0?x+0.15:x+0.15,0,z,0.3,4.2,8,0x2a2240);
-  box(cx,0,z-4,3,4.2,0.3,0x2a2240); box(cx,0,z+4,3,4.2,0.3,0x2a2240);
-  const gt=tex(512,256,(ctx)=>{ ctx.fillStyle='#12082a'; ctx.fillRect(0,0,512,256); const g=ctx.createLinearGradient(0,0,512,0); g.addColorStop(0,'#9b59b6'); g.addColorStop(1,'#6c3483'); ctx.fillStyle=g; ctx.font='bold 56px Arial'; ctx.textAlign='center'; ctx.fillText('🎁 Regalos & Souvenirs',256,102); ctx.fillStyle='#cc88ff'; ctx.font='26px Arial'; ctx.fillText('Gifts · Souvenirs · Duty Free',256,162); });
-  sign(cx,5.2,z,5,2.2,0.08,gt,-Math.PI/2,0x100522);
+  const {inX,h,ry,s}=buildShopBase(x,z,8.5,2.2,0x16102a,0x7040a0);
+  // Estante de regalos con cajas de colores
+  box(x+s*0.4,0,z,0.55,3.2,7.8,0x1a1030);
+  [[0.4,0xe74c3c],[0.95,0x3498db],[1.5,0x2ecc71],[2.1,0xf39c12],[2.65,0x9b59b6]].forEach(([dy,c])=>{
+    for(let i=-3;i<=2;i++){
+      const bx2=new THREE.Mesh(mkBox(0.06,0.5,0.75),mkMat(c));
+      bx2.position.set(x+s*0.7,dy+0.25,z+i*1.1); scene.add(bx2);
+    }
+  });
+  // Peluches decorativos (cilindros con cabeza esférica)
+  [[z-2.5,0xcc4488],[z,0x44aacc],[z+2.5,0xee8844]].forEach(([tz,c])=>{
+    cyl(x+s*1.6,0,tz,0.22,0.28,0.65,8,c);
+    const head=new THREE.Mesh(new THREE.SphereGeometry(0.3,8,8),mkMat(c));
+    head.position.set(x+s*1.6,0.95,tz); scene.add(head);
+  });
+  // Mostrador con caja registradora
+  const counter=new THREE.Mesh(mkBox(1.0,1.05,2.0),mkStd(0x2a2040,0.55,0.05));
+  counter.position.set(inX,0.525,z+2.8); scene.add(counter);
+  const ctop=new THREE.Mesh(mkBox(1.05,0.06,2.05),mkStd(0xc0a8e0,0.35,0.1));
+  ctop.position.set(inX,1.08,z+2.8); scene.add(ctop);
+  addMonitor(inX,1.09,z+2.8);
+  // Cartel
+  const gt=tex(480,220,(ctx)=>{
+    ctx.fillStyle='#0e0818'; ctx.fillRect(0,0,480,220);
+    const g=ctx.createLinearGradient(0,0,480,0); g.addColorStop(0,'#7040a0'); g.addColorStop(1,'#4a2870');
+    ctx.fillStyle=g; ctx.fillRect(0,164,480,56);
+    ctx.fillStyle='#c080f0'; ctx.font='bold 56px Arial'; ctx.textAlign='center'; ctx.fillText('🎁  Regalos & Souvenirs',240,84);
+    ctx.fillStyle='#d0a0f8'; ctx.font='24px Arial'; ctx.fillText('Recuerdos · Regalos · Artesanías',240,138);
+    ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='19px Arial'; ctx.fillText('Gifts · Souvenirs · Handcraft',240,190);
+  });
+  sign(inX,h-0.15,z-0.5,4.2,1.85,0.06,gt,ry,0x080418);
 }
 
 // ══════════════════════════════════════════════════
