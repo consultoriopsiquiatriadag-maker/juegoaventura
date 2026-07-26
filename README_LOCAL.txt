@@ -29,3 +29,10 @@ Notas:
 - No se envian datos a ningun servidor
 - La ansiedad pre/post queda solo en tu dispositivo (localStorage)
 - Material orientativo. No reemplaza atencion medica.
+
+Evaluacion ejecutable local (Fase 16):
+- Opcion A (.bat + servidor web): ACTIVA — iniciar-aerocalma.bat funciona con Python 3
+- Opcion B (Tauri): EVALUACION PENDIENTE — requiere Rust + toolchain, no instalado en esta PC
+- Opcion C (Electron): EVALUACION PENDIENTE — requiere Node.js/npm, no instalado en esta PC
+- Recomendacion actual: Opcion A (.bat) es suficiente para uso en consultorio local
+- Futuro: instalar Node.js para evaluar Electron como ruta de emaparquetado (mas simple que Tauri)

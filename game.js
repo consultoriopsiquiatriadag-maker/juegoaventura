@@ -25,6 +25,33 @@ let ambientLight=null;          // referencia para ciclo de luz ambiental
 let gameStartTime=0;            // ms al iniciar recorrido
 let menuAnimId=null;            // requestAnimationFrame del canvas del menú
 const prefersReducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ══════════════════════════════════════════════════
+// FASE 15 — CALIDAD DE RENDERIZADO
+// ══════════════════════════════════════════════════
+const QUALITY_LEVELS={
+  high:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:2048,bloomStrength:0.12},
+  normal:{pixelRatio:isMobile?Math.min(devicePixelRatio,1.5):Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:1024,bloomStrength:0.08},
+  low:{pixelRatio:1,shadowEnabled:false,bloomStrength:0,reduceNPCs:false}
+};
+let currentQuality='normal';
+function setQuality(level){
+  if(!QUALITY_LEVELS[level]) return;
+  currentQuality=level;
+  var q=QUALITY_LEVELS[level];
+  renderer.setPixelRatio(q.pixelRatio);
+  renderer.shadowMap.enabled=q.shadowEnabled;
+  if(q.shadowSize>0 && renderer.shadowMap.enabled){
+    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  }
+  if(composer){
+    var bloomPass=composer.passes.find(function(p){return p instanceof THREE.UnrealBloomPass;});
+    if(bloomPass) bloomPass.strength=q.bloomStrength;
+  }
+  showToast('Calidad: '+level+(isMobile?' (movil)':''));
+}
+// Auto-detect quality on mobile
+if(isMobile) setQuality('low');
 let calmMode=false;             // Modo Calma: estimulación reducida
 let _normalFogDensity=0.006;   // se lee después de setupLighting() para manejar Sky on/off
 
@@ -87,6 +114,31 @@ function sign(x,y,z,sw,sh,depth,canvasTex,ry=0,emissive=0x111111){
   const m=new THREE.Mesh(mkBox(sw,sh,depth),mat);
   m.position.set(x,y,z); m.rotation.y=ry; scene.add(m); return m;
 }
+
+// ══════════════════════════════════════════════════
+// FASE 13 — TIPS TERAPEUATICOS POR ZONA
+// ══════════════════════════════════════════════════
+function getZoneTherapyTip(zoneId){
+  const tips={
+    entrance:'Podes usar la tecnica de respiracion 4-7-8 antes de entrar.',
+    checkin:'Tenelos documentos listos reduces la ansiedad al maximo.',
+    security:'Recorda: si el arco suena, no es peligro — es un boton o llaves.',
+    lounge:'Usa esta zona para descansar. Camina un poco antes de seguir.',
+    boarding:'Cuando subas, buscá el asiento de pasillo para sensacion de control.',
+    plane:'La turbulencia es como baches de auto — incomoda pero segura.',
+    arrival:'Felicitaciones! Cada vuelo completado reduce el miedo al siguiente.'
+  };
+  return tips[zoneId]||'Tomate un momento para respirar y observar tu entorno.';
+}
+function openCurrentZonePanel(){ if(currentZoneIndex>=0){ openZonePanel(currentZoneIndex); narrateCurrentZone(); } }
+function openCurrentZonePanelAndTip(){
+  if(currentZoneIndex>=0){
+    openZonePanel(currentZoneIndex);
+    narrateCurrentZone();
+    showToast(getZoneTherapyTip(ZONE_DATA[currentZoneIndex].id));
+  }
+}
+
 
 // ── INIT ──────────────────────────────────────────
 function init(){
@@ -3534,6 +3586,15 @@ function setupEvents(){
   document.querySelectorAll('.tab-btn').forEach(btn=>{ btn.addEventListener('click',()=>{ document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active')); btn.classList.add('active'); document.getElementById('tab-'+btn.dataset.tab).classList.add('active'); }); });
   renderer.domElement.addEventListener('click',()=>{ if(!isMobile&&isGameActive&&!isPaused) controls.lock(); });
   document.addEventListener('keydown',onKeyDown);
+  // Mapa y orientacion — tecla M
+  document.addEventListener('keydown',(e)=>{
+    if(e.key==='m' || e.key==='M'){
+      if(!isGameActive) return;
+      toggleMap();
+    }
+  });
+  // Boton de mapa en pausa
+  document.getElementById('btn-to-menu').addEventListener('click',returnToMenu);
   document.addEventListener('keyup',onKeyUp);
   window.addEventListener('resize',()=>{
     camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
@@ -3667,6 +3728,41 @@ function setupMobileControls(){
   };
   document.addEventListener('touchend',  endT,{passive:false});
   document.addEventListener('touchcancel',endT,{passive:false});
+}
+
+
+// ══════════════════════════════════════════════════
+// FASE 14 — MAPA MINIMAP Y ORIENTACION
+// ══════════════════════════════════════════════════
+function toggleMap(){
+  const existing=document.getElementById('minimap-overlay');
+  if(existing){ existing.classList.toggle('hidden'); return; }
+  // Crear overlay de mapa simple
+  const overlay=document.createElement('div');
+  overlay.id='minimap-overlay';
+  overlay.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:50;background:rgba(26,46,66,0.92);border-radius:16px;padding:20px;pointer-events:all;max-width:400px;text-align:center;color:#c8e6f5;font-family:system-ui,sans-serif;';
+  overlay.innerHTML='<h2 style="color:#5ba4d4;margin:0 0 12px">Mapa de Terminal</h2><div id="minimap-content" style="font-size:0.9rem;line-height:1.6"></div><p style="font-size:0.75rem;opacity:0.6;margin-top:12px">Presioná M para cerrar</p><button id="btn-close-minimap" style="margin-top:8px;padding:8px 20px;border-radius:50px;background:#5ba4d4;color:#fff;border:none;cursor:pointer">Cerrar</button>';
+  document.body.appendChild(overlay);
+  // Populate map content
+  const content=document.getElementById('minimap-content');
+  if(content){
+    ZONE_DATA.forEach(function(z,i){
+      var done=i<currentZoneIndex;
+      var active=i===currentZoneIndex;
+      var line=document.createElement('div');
+      line.style.cssText='padding:4px 0;'+(active?'font-weight:bold;color:#fff;':'')+(done?'opacity:0.5;':'');
+      line.textContent=(done?'✅ ':active?'👉 ':'  ')+z.emoji+' '+z.name;
+      content.appendChild(line);
+    });
+  }
+  document.getElementById('btn-close-minimap').addEventListener('click',function(){
+    var el=document.getElementById('minimap-overlay');
+    if(el) el.remove();
+  });
+  // Close on click outside
+  overlay.addEventListener('click',function(e){
+    if(e.target===overlay) overlay.remove();
+  });
 }
 
 function showScreen(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden')); if(id) document.getElementById(id).classList.remove('hidden'); }
