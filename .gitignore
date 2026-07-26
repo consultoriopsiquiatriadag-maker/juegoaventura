@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyw
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+venv/
+env/
+node_modules/
+dist/
+build/
+*.exe
+*.cache
