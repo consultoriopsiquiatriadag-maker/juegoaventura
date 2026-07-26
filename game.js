@@ -1324,9 +1324,7 @@ function buildShopBase(x,z,width,depth,wallCol,fasciaCol){
   const bw=new THREE.Mesh(mkBox(0.28,h,width),wm);
   bw.position.set(bx,h/2,z); bw.castShadow=true; scene.add(bw);
   // Paredes laterales
-  [z-width/2,z+widt
-  // Iluminacion calida interior para tiendas (Fase 10)
-  var shopGlow=new THREE.PointLight(0xffe8c0,0.2,6);shopGlow.position.set(0,2.5,0);scene.add(shopGlow);h/2].forEach(sz=>{
+  [z-width/2,z+width].forEach(sz=>{
     const sw=new THREE.Mesh(mkBox(depth,h,0.22),wm);
     sw.position.set(x+s*depth/2,h/2,sz); sw.castShadow=true; scene.add(sw);
   });
