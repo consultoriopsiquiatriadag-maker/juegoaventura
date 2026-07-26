@@ -7,6 +7,9 @@
 // ── STATE ──────────────────────────────────────────
 let scene, camera, renderer, controls;
 let composer; // postprocessing
+// Privacidad: todos los datos (ansiedad pre/post, diary, progreso) quedan en localStorage del navegador.
+// No se envia informacion a ningun servidor. Sin tracking, analytics ni telemetria.
+
 let isGameActive=false, isPaused=false, currentZoneIndex=-1;
 let visitedZones=new Set(), breathCount=0;
 let speechSynth=window.speechSynthesis, isSpeaking=false;
@@ -4348,6 +4351,28 @@ function animate(){
 }
 
 // ══════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════
+// FASE 19 — CHECKS INTEGRALES DE TESTING
+// ══════════════════════════════════════════════════
+function runChecks(){
+  var results=[];
+  results.push({name:'Three.js', ok:typeof THREE!=='undefined', detail:THREE?THREE.REVISION:'NOT LOADED'});
+  var canvas=document.createElement('canvas');
+  results.push({name:'WebGL', ok:!!(canvas.getContext('webgl')||canvas.getContext('experimental-webgl')), detail:'browser support'});
+  results.push({name:'TTS', ok:typeof speechSynthesis!=='undefined', detail:speechSynthesis?'available':'NOT AVAILABLE'});
+  try{localStorage.setItem('_test','1');localStorage.removeItem('_test');results.push({name:'localStorage',ok:true,detail:'writable'});}catch(e){results.push({name:'localStorage',ok:false,detail:e.message});}
+  results.push({name:'Zones (7)', ok:ZONE_DATA&&ZONE_DATA.length===7, detail:ZONE_DATA?ZONE_DATA.length+' zones loaded':'NONE'});
+  var fns=['init','setupEvents','startGame','endGame','toggleCalmMode','openBreathing','openGrounding','narrateCurrentZone','checkZones','enterZone','returnToMenu'];
+  fns.forEach(function(fn){results.push({name:'fn:'+fn, ok:typeof window[fn]==='function', detail:typeof window[fn]});});
+  var allOk=results.every(function(r){return r.ok;});
+  var okCount=results.filter(function(r){return r.ok;}).length;
+  showToast('Tests: '+okCount+'/'+results.length+(allOk?' — OK':' — FALLS'));
+  console.table(results);
+  return {ok:allOk, total:results.length, passed:okCount, results:results};
+}
+setTimeout(function(){if(typeof runChecks==='function')runChecks();},3000);
+
 // BOOT
 // ══════════════════════════════════════════════════
 window.addEventListener('load',()=>{
