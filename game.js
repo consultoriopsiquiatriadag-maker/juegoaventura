@@ -3094,7 +3094,7 @@ function spawnCabinCrewFallback(){
 // ══════════════════════════════════════════════════
 // Fase 8: LOD frame counter para throttling de NPCs lejanos
 let _npcFrame=0;
-function updateNPCs(delta){
+function updateNPCs(delta, speedFactor){
   const playerPos=camera.position;
   const t=clock.getElapsedTime();
   _npcFrame++;
@@ -3134,7 +3134,7 @@ function updateNPCs(delta){
       }
 
       if(ud.behaviorState!=='pause'){
-        ud.progress+=delta*ud.spd*0.055*walkMult;
+        ud.progress+=delta*ud.spd*0.055*walkMult*(speedFactor||1.0);
         if(ud.progress>=1){ ud.progress=0; const tmp=ud.start.clone(); ud.start.copy(ud.dest); ud.dest.copy(tmp); }
         const pos=ud.start.clone().lerp(ud.dest,ud.progress);
         npc.position.copy(pos);
@@ -3414,7 +3414,12 @@ function applyCalmModeState(){
   document.body.classList.toggle('calm-mode',calmMode);
   renderer.domElement.style.transition='filter 0s'; // sin animación al iniciar
   renderer.domElement.style.filter=calmMode?'saturate(0.50) brightness(0.96)':'';
-  npcs.forEach(n=>{ if(n.userData.role==='civilian') n.visible=!calmMode; });
+  // Calmar NPCs: reducir estimulacion visual en modo calm
+  npcs.forEach(n=>{
+    if(n.userData.role==='civilian'){ n.visible=!calmMode; n.userData._calmSpeed=calmMode?0.15:1.0; }
+    else if(n.userData.role==='staff'){ n.userData._calmSpeed=calmMode?0.25:1.0; }
+    else if(n.userData.role==='crew'){ n.visible=calmMode?false:true; n.userData._calmSpeed=calmMode?0:1.0; }
+  });
   if(scene.fog) scene.fog.density=calmMode?0.010:_normalFogDensity;
 }
 
@@ -4198,7 +4203,8 @@ function animate(){
     checkZones();
   }
 
-  updateNPCs(delta * (calmMode ? 0.3 : 1.0)); // Modo calma: NPCs mas lentos
+    // Fase 9: parametrizar NPCs para calmMode - reduccion de velocidad y actividad
+  updateNPCs(delta * (calmMode ? 0.2 : 1.0)); // calm=0.2x, normal=1x (mas lento que antes)
 
   // Ciclo sutil de luz ambiental — simula variación de iluminación del aeropuerto
   // Período ~52 s, amplitud ±0.03 → imperceptible pero da vida al espacio
