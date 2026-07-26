@@ -16,6 +16,7 @@ const movement={forward:false,backward:false,left:false,right:false};
 const velocity=new THREE.Vector3();
 const clock=new THREE.Clock();
 const PLAYER_SPEED=9, PLAYER_HEIGHT=1.68;
+const PLAYER_SPEED_CALM=4.5; // Modo calma: velocidad reducida para menor estimulacion
 let npcs=[], ringMeshes=[], luggageBelt=null;
 let flightBoardCanvas, flightBoardCtx, flightBoardTexture;
 let boardTimer=0;
@@ -4164,6 +4165,8 @@ function animate(){
   const delta=Math.min(clock.getDelta(),0.05);
   const t=clock.getElapsedTime();
 
+  // Suavizado de movimiento: sin sacudidas, transiciones graduales
+  // Modo calma activa menor velocidad y FOV reducido
   if(isGameActive && !isPaused && (isMobile || controls.isLocked)){
     if(isMobile){
       // Botones de rotación: velocidad 1.8 rad/s
@@ -4183,7 +4186,7 @@ function animate(){
       }
     } else {
       velocity.x-=velocity.x*10*delta; velocity.z-=velocity.z*10*delta;
-      const spd=PLAYER_SPEED*delta*55;
+      const spd=(calmMode?PLAYER_SPEED_CALM:PLAYER_SPEED)*delta*55;
       if(movement.forward)  velocity.z-=spd;
       if(movement.backward) velocity.z+=spd;
       if(movement.left)     velocity.x-=spd;
@@ -4195,7 +4198,7 @@ function animate(){
     checkZones();
   }
 
-  updateNPCs(delta);
+  updateNPCs(delta * (calmMode ? 0.3 : 1.0)); // Modo calma: NPCs mas lentos
 
   // Ciclo sutil de luz ambiental — simula variación de iluminación del aeropuerto
   // Período ~52 s, amplitud ±0.03 → imperceptible pero da vida al espacio
@@ -4220,6 +4223,11 @@ function animate(){
 
   // Actualizar animaciones de modelos GLTF (Mixamo)
   if(cabinMixers.length>0) cabinMixers.forEach(m=>m.update(delta));
+
+  // Transicion suave de FOV para reducir estimulacion visual en modo calma
+  const targetFov = calmMode ? 58 : 72;
+  camera.fov += (targetFov - camera.fov) * 0.03;
+  camera.updateProjectionMatrix();
 
   // Render: sin bloom en móvil o en modo calma
   if(composer && !calmMode) composer.render(delta);
