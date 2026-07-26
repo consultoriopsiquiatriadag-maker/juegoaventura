@@ -30,7 +30,7 @@ let menuAnimId=null;            // requestAnimationFrame del canvas del menú
 const prefersReducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ══════════════════════════════════════════════════
-// FASE 15 — CALIDAD DE RENDERIZADO
+// FASE 15 -- CALIDAD DE RENDERIZADO
 // ══════════════════════════════════════════════════
 const QUALITY_LEVELS={
   high:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:2048,bloomStrength:0.12},
@@ -64,8 +64,8 @@ let _normalFogDensity=0.006;   // se lee después de setupLighting() para maneja
 let audioEnabled=false;
 let audioCtx=null, ambientMaster=null, musicGainNode=null, hallGainNode=null;
 let ambientNodes=null;            // referencias para detener/limpiar al salir
-const AMBIENT_MUSIC_BASE=0.05;    // música — volumen bajo, no invasivo
-const AMBIENT_HALL_BASE=0.032;    // murmullo de hall — muy tenue
+const AMBIENT_MUSIC_BASE=0.05;    // música -- volumen bajo, no invasivo
+const AMBIENT_HALL_BASE=0.032;    // murmullo de hall -- muy tenue
 let textScale=1;                // Escala de texto del panel de zona (0.85 – 1.4)
 let guidedMode=true;            // true = panel abre automático al entrar a zona
 let startAtZone=-1;             // índice de zona para ir directo al iniciar (goToZone)
@@ -81,17 +81,17 @@ const lookTouch = { active:false, id:null, lastX:0, lastY:0 };
 let rotateLeft=false, rotateRight=false; // botones de rotación móvil
 
 // ── HELPERS ───────────────────────────────────────
-// mkMat: PBR MeshStandardMaterial — mejora visual base automática
+// mkMat: PBR MeshStandardMaterial -- mejora visual base automática
 function mkMat(c,o={}){
   const defaults={ roughness:0.75, metalness:0.0 };
-  // Si se pasa emissive, emissiveIntensity, transparent, opacity — se respetan
+  // Si se pasa emissive, emissiveIntensity, transparent, opacity -- se respetan
   return new THREE.MeshStandardMaterial({color:c, ...defaults, ...o});
 }
 // mkStd: alias explícito con parámetros PBR completos
 function mkStd(c,rough=0.75,metal=0.0,opts={}){
   return new THREE.MeshStandardMaterial({color:c,roughness:rough,metalness:metal,...opts});
 }
-// mkLamb: MeshLambertMaterial — difuso sin cálculos especulares, para props decorativos
+// mkLamb: MeshLambertMaterial -- difuso sin cálculos especulares, para props decorativos
 // Fase 8: úsalo en props pequeños (bancos, señales, detalles de tiendas, etc.)
 function mkLamb(c,opts={}){
   return new THREE.MeshLambertMaterial({color:c,...opts});
@@ -119,16 +119,16 @@ function sign(x,y,z,sw,sh,depth,canvasTex,ry=0,emissive=0x111111){
 }
 
 // ══════════════════════════════════════════════════
-// FASE 13 — TIPS TERAPEUATICOS POR ZONA
+// FASE 13 -- TIPS TERAPEUATICOS POR ZONA
 // ══════════════════════════════════════════════════
 function getZoneTherapyTip(zoneId){
   const tips={
     entrance:'Podes usar la tecnica de respiracion 4-7-8 antes de entrar.',
     checkin:'Tenelos documentos listos reduces la ansiedad al maximo.',
-    security:'Recorda: si el arco suena, no es peligro — es un boton o llaves.',
+    security:'Recorda: si el arco suena, no es peligro -- es un boton o llaves.',
     lounge:'Usa esta zona para descansar. Camina un poco antes de seguir.',
     boarding:'Cuando subas, buscá el asiento de pasillo para sensacion de control.',
-    plane:'La turbulencia es como baches de auto — incomoda pero segura.',
+    plane:'La turbulencia es como baches de auto -- incomoda pero segura.',
     arrival:'Felicitaciones! Cada vuelo completado reduce el miedo al siguiente.'
   };
   return tips[zoneId]||'Tomate un momento para respirar y observar tu entorno.';
@@ -154,7 +154,7 @@ function init(){
 
   renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
   renderer.setSize(innerWidth,innerHeight);
-  // Fase 8: móvil cap 1.5 (era 2) — mayor impacto en batería y frame rate
+  // Fase 8: móvil cap 1.5 (era 2) -- mayor impacto en batería y frame rate
   renderer.setPixelRatio(isMobile?Math.min(devicePixelRatio,1.5):Math.min(devicePixelRatio,2));
   renderer.shadowMap.enabled=true;
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
@@ -173,7 +173,7 @@ function init(){
   // Guardar densidad base de niebla (depende de si Three.Sky está disponible)
   if(scene.fog) _normalFogDensity=scene.fog.density;
   buildWorld();
-  if(!isMobile) spawnNPCs(); // NPCs civiles solo en desktop — mejora performance móvil
+  if(!isMobile) spawnNPCs(); // NPCs civiles solo en desktop -- mejora performance móvil
   spawnStaffNPCs();
   loadCabinCrew();
   setupPostProcessing();
@@ -184,22 +184,22 @@ function init(){
 
 // ── POST PROCESSING ────────────────────────────────
 function setupPostProcessing(){
-  // Sin postprocesado en móvil — ahorra GPU y mejora framerate
+  // Sin postprocesado en móvil -- ahorra GPU y mejora framerate
   if(isMobile){ composer=null; return; }
   if(typeof THREE.EffectComposer==='undefined'){ composer=null; return; }
   composer=new THREE.EffectComposer(renderer);
   const renderPass=new THREE.RenderPass(scene,camera);
   composer.addPass(renderPass);
-  // Bloom MUY sutil — solo afecta fuentes de luz puras (LEDs, pantallas)
+  // Bloom MUY sutil -- solo afecta fuentes de luz puras (LEDs, pantallas)
   // threshold alto = solo píxeles muy brillantes (>0.98) reciben bloom
   const bloomPass=new THREE.UnrealBloomPass(
     new THREE.Vector2(innerWidth,innerHeight),
-    0.12,  // strength — casi imperceptible en superficies normales
+    0.12,  // strength -- casi imperceptible en superficies normales
     0.4,   // radius
-    0.98   // threshold — solo luz pura brilla (LEDs, pantallas EFIS)
+    0.98   // threshold -- solo luz pura brilla (LEDs, pantallas EFIS)
   );
   composer.addPass(bloomPass);
-  // Resize handler del composer — el de camera/renderer está en setupEvents
+  // Resize handler del composer -- el de camera/renderer está en setupEvents
 }
 
 function animLoad(){
@@ -216,10 +216,10 @@ function setupLighting(){
   ambientLight=new THREE.AmbientLight(0xfff0e0,0.28);
   scene.add(ambientLight);
 
-  // Luz solar principal — sombras de alta resolución
+  // Luz solar principal -- sombras de alta resolución
   const sun=new THREE.DirectionalLight(0xfffae8,1.1);
   sun.position.set(60,120,50); sun.castShadow=true;
-  // Fase 8: 2048 desktop (era 4096) — calidad visual idéntica, memoria ×4 menor
+  // Fase 8: 2048 desktop (era 4096) -- calidad visual idéntica, memoria ×4 menor
   sun.shadow.mapSize.width=sun.shadow.mapSize.height=isMobile?512:2048;
   sun.shadow.camera.left=-120; sun.shadow.camera.right=120;
   sun.shadow.camera.top=120; sun.shadow.camera.bottom=-120;
@@ -227,10 +227,10 @@ function setupLighting(){
   sun.shadow.normalBias=0.02;
   scene.add(sun);
 
-  // HemisphereLight — cielo azul + suelo cálido (reducida para evitar sobrexposición)
+  // HemisphereLight -- cielo azul + suelo cálido (reducida para evitar sobrexposición)
   scene.add(new THREE.HemisphereLight(0x9ad5f5,0x9a8060,0.30));
 
-  // Luces de techo del terminal — cálidas, sin saturar
+  // Luces de techo del terminal -- cálidas, sin saturar
   // Fase 8: reducidas de 24 (8z×3x) a 8 (8z×1 central) → misma percepción, mejor rendimiento
   [-55,-40,-25,-10,5,20,35,50].forEach(z=>{
     const l=new THREE.PointLight(0xfff5e0,0.70,30);
@@ -238,7 +238,7 @@ function setupLighting(){
   });
 
   // Luces de acento por zona (colored)
-  // Fase 8: intensidad 0.45 (era 0.7) — más sutil, coherente con baja estimulación
+  // Fase 8: intensidad 0.45 (era 0.7) -- más sutil, coherente con baja estimulación
   ZONE_DATA.forEach(z=>{
     const l=new THREE.PointLight(z.color,0.45,10);
     l.position.set(z.position.x,2,z.position.z); scene.add(l);
@@ -316,7 +316,7 @@ function buildFloorTile(){
     bg.addColorStop(0,'#ede8e0'); bg.addColorStop(0.5,'#f0ece4'); bg.addColorStop(1,'#e8e2d8');
     ctx.fillStyle=bg; ctx.fillRect(0,0,1024,1024);
 
-    // Venas de mármol — múltiples trazos orgánicos
+    // Venas de mármol -- múltiples trazos orgánicos
     const drawVein=(x1,y1,x2,y2,col,w)=>{
       ctx.strokeStyle=col; ctx.lineWidth=w;
       ctx.globalAlpha=0.18+Math.random()*0.12;
@@ -329,7 +329,7 @@ function buildFloorTile(){
     for(let i=0;i<8;i++)  drawVein(0,Math.random()*1024,1024,Math.random()*1024,'#d0c8bc',0.5+Math.random());
     for(let i=0;i<6;i++)  drawVein(Math.random()*1024,0,Math.random()*1024,1024,'#b8b0a4',0.8);
 
-    // Grilla de losas — juntas precisas
+    // Grilla de losas -- juntas precisas
     ctx.globalAlpha=1;
     ctx.strokeStyle='#c0b8b0'; ctx.lineWidth=2.5;
     for(let i=0;i<=1024;i+=128){
@@ -358,7 +358,7 @@ function buildFloorTile(){
   const fm=new THREE.Mesh(new THREE.PlaneGeometry(38,142),floorMat);
   fm.rotation.x=-Math.PI/2; fm.position.set(0,0.09,-5); fm.receiveShadow=true; scene.add(fm);
 
-  // Capa de reflejo especular encima del piso — efecto mármol pulido
+  // Capa de reflejo especular encima del piso -- efecto mármol pulido
   const reflMat=new THREE.MeshStandardMaterial({
     color:0xffffff, roughness:0.05, metalness:0.12,
     transparent:true, opacity:0.10
@@ -438,7 +438,7 @@ function buildWalls(){
       ctx.fillStyle='rgba(0,0,0,0.035)'; ctx.fillRect(px,0,3,512);
       ctx.fillStyle='rgba(255,255,255,0.05)'; ctx.fillRect(px+3,0,2,512);
     }
-    // Textura sutil de pared — pequeña variación de tono
+    // Textura sutil de pared -- pequeña variación de tono
     ctx.globalAlpha=0.04;
     for(let i=0;i<60;i++){
       ctx.fillStyle=i%2===0?'#000':'#fff';
@@ -488,7 +488,7 @@ function buildPillars(){
   const colMat=new THREE.MeshStandardMaterial({map:colT,roughness:0.3,metalness:0.05});
 
   [[-14,-10],[14,-10],[-14,12],[14,12],[-14,-32],[14,-32],[-14,-52],[14,-52],[-14,-66],[14,-66]].forEach(([px,pz])=>{
-    // Columna principal — mármol
+    // Columna principal -- mármol
     const col=new THREE.Mesh(new THREE.CylinderGeometry(0.7,0.72,13,12),colMat);
     col.position.set(px,6.5,pz); col.castShadow=true; col.receiveShadow=true; scene.add(col);
     // Base de columna
@@ -557,7 +557,7 @@ function zoneHeader(x,z,txt,col){
     ctx.fillText(txt,512,80);
   });
   sign(x,9.5,z,15,1.5,0.15,ht,0,0x080e1a);
-  // Fase 8: reducida a 0.40/8 — suficiente para identificar la zona, no satura
+  // Fase 8: reducida a 0.40/8 -- suficiente para identificar la zona, no satura
   const al=new THREE.PointLight(col,0.40,8); al.position.set(x,10,z); scene.add(al);
 }
 
@@ -745,12 +745,12 @@ function buildPlane(){
   const panelMat     = mkStd(0x1a1a22, 0.4, 0.1);            // panel instrumentos
 
   // ══════════════════════════════════════════════════
-  // FUSELAJE — cuerpo principal
+  // FUSELAJE -- cuerpo principal
   // ══════════════════════════════════════════════════
   const fuse = new THREE.Mesh(mkBox(BW,BH,BD), fuselageMat);
   fuse.position.set(x, BH/2, z); fuse.receiveShadow=true; scene.add(fuse);
 
-  // Bóveda del techo (interior curvado — cilindro cortado)
+  // Bóveda del techo (interior curvado -- cilindro cortado)
   const vaultGeo = new THREE.CylinderGeometry(BW*0.52, BW*0.52, BD, 20, 1, true, Math.PI*0.02, Math.PI*0.96);
   const vault = new THREE.Mesh(vaultGeo, fuselageMat);
   vault.rotation.z = Math.PI/2; vault.position.set(x, BH+0.1, z); scene.add(vault);
@@ -765,7 +765,7 @@ function buildPlane(){
   });
 
   // ══════════════════════════════════════════════════
-  // SUELO — moqueta + pasillo duro
+  // SUELO -- moqueta + pasillo duro
   // ══════════════════════════════════════════════════
   // Moqueta lateral (azul marino con patrón)
   const carpetT = tex(256,256,(ctx)=>{
@@ -783,7 +783,7 @@ function buildPlane(){
     const cm=new THREE.Mesh(new THREE.PlaneGeometry(7,BD-1),new THREE.MeshStandardMaterial({map:carpetT,roughness:0.95}));
     cm.rotation.x=-Math.PI/2; cm.position.set(x+cx,0.16,z); cm.receiveShadow=true; scene.add(cm);
   });
-  // Pasillo central — vinilo gris oscuro con línea amarilla
+  // Pasillo central -- vinilo gris oscuro con línea amarilla
   const aisleT=tex(128,512,(ctx)=>{
     ctx.fillStyle='#3a3840'; ctx.fillRect(0,0,128,512);
     ctx.strokeStyle='#888840'; ctx.lineWidth=3; ctx.setLineDash([20,15]);
@@ -796,7 +796,7 @@ function buildPlane(){
   aisle.rotation.x=-Math.PI/2; aisle.position.set(x,0.165,z); scene.add(aisle);
 
   // ══════════════════════════════════════════════════
-  // ASIENTOS DE PASAJEROS — economy class detallados
+  // ASIENTOS DE PASAJEROS -- economy class detallados
   // ══════════════════════════════════════════════════
   // Textura de tela del asiento (tejido con trama)
   const seatT=tex(128,128,(ctx)=>{
@@ -878,7 +878,7 @@ function buildPlane(){
   });
 
   // ══════════════════════════════════════════════════
-  // PORTAEQUIPAJES SUPERIORES — más realistas
+  // PORTAEQUIPAJES SUPERIORES -- más realistas
   // ══════════════════════════════════════════════════
   [-8.5,8.5].forEach(bx=>{
     const side=bx<0?-1:1;
@@ -907,7 +907,7 @@ function buildPlane(){
     });
   });
 
-  // Centro del techo — compartimentos de PSU (Passenger Service Unit)
+  // Centro del techo -- compartimentos de PSU (Passenger Service Unit)
   const psuMat=mkStd(0xe0dcd2,0.55,0.02);
   const psu=new THREE.Mesh(mkBox(3.5,0.45,BD-2),psuMat);
   psu.position.set(x,7.4,z); scene.add(psu);
@@ -927,7 +927,7 @@ function buildPlane(){
   }
 
   // ══════════════════════════════════════════════════
-  // VENTANAS OVALADAS — más realistas
+  // VENTANAS OVALADAS -- más realistas
   // ══════════════════════════════════════════════════
   const makeWindow=(wx,wy,wz)=>{
     // Vista exterior (cielo + nubes procedural)
@@ -1002,7 +1002,7 @@ function buildPlane(){
   const safteyLight=new THREE.PointLight(0x3355ff,0.4,5); safteyLight.position.set(x,5.5,z-12); scene.add(safteyLight);
 
   // ══════════════════════════════════════════════════
-  // ESTACIÓN DE TRIPULACIÓN — más elaborada
+  // ESTACIÓN DE TRIPULACIÓN -- más elaborada
   // ══════════════════════════════════════════════════
   const crewZ=z+14.5;
   box(x,0,crewZ,7,1.25,2.0,0x2a3545);
@@ -1035,7 +1035,7 @@ function buildPlane(){
   });
 
   // ══════════════════════════════════════════════════
-  // COCKPIT — zona del piloto completa
+  // COCKPIT -- zona del piloto completa
   // ══════════════════════════════════════════════════
   buildCockpit(x, z);
 }
@@ -1058,7 +1058,7 @@ function buildCockpit(x, passengerZ){
 
   // Pared divisoria (puerta de cockpit)
   box(x,0,passengerZ+14,18,8,0.35,0x2a3040);
-  // Puerta — más pequeña y oscura
+  // Puerta -- más pequeña y oscura
   const doorMat=mkStd(0x1a2235,0.5,0.1);
   const door=new THREE.Mesh(mkBox(1.1,5.5,0.38),doorMat);
   door.position.set(x+1.5,2.85,passengerZ+14.1); scene.add(door);
@@ -1138,7 +1138,7 @@ function buildCockpit(x, passengerZ){
     const scrLight=new THREE.PointLight(0x22ff88,0.2,1.5); scrLight.position.set(px,py-0.4,pz-0.2); scene.add(scrLight);
   });
 
-  // Panel central (FCU — Flight Control Unit)
+  // Panel central (FCU -- Flight Control Unit)
   const fcuT=tex(256,128,(ctx)=>{
     ctx.fillStyle='#0d1118'; ctx.fillRect(0,0,256,128);
     ctx.fillStyle='#1a8822'; ctx.font='bold 14px monospace'; ctx.textAlign='center';
@@ -1157,7 +1157,7 @@ function buildCockpit(x, passengerZ){
   }));
   fcu.position.set(x,5.5,cz+1.2); scene.add(fcu);
 
-  // Overhead panel (arriba — interruptores)
+  // Overhead panel (arriba -- interruptores)
   const overheadT=tex(512,256,(ctx)=>{
     ctx.fillStyle='#0f1218'; ctx.fillRect(0,0,512,256);
     const systems=['FUEL','ELEC','HYD','PRESS','FIRE','APU','LIGHTS','AC'];
@@ -1208,7 +1208,7 @@ function buildCockpit(x, passengerZ){
     });
   });
 
-  // ── YOKES (columnas de control) — izquierda y derecha
+  // ── YOKES (columnas de control) -- izquierda y derecha
   [-3.5,3.5].forEach(px=>{
     // Columna
     cyl(x+px,0,cz+1.8,0.07,0.07,0.8,8,0x333338);
@@ -1295,7 +1295,7 @@ function buildArrival(){
 // SHOPS
 // ══════════════════════════════════════════════════
 // ══════════════════════════════════════════════════
-// TIENDAS LATERALES DEL HALL — Fase 6
+// TIENDAS LATERALES DEL HALL -- Fase 6
 // Seis locales con identidad visual diferenciada:
 //   Cafetería · Kiosco Express · Librería & Prensa
 //   Farmacia · Restaurante · Regalos & Souvenirs
@@ -1616,7 +1616,7 @@ function drawFlightBoard(){
 // EXTERIOR
 // ══════════════════════════════════════════════════
 // ══════════════════════════════════════════════════
-// FASE 2 — ESTRUCTURAS BASE DEL HALL
+// FASE 2 -- ESTRUCTURAS BASE DEL HALL
 // Bancos · Postes info · Ventanales laterales
 // Marcadores de corredor
 // ══════════════════════════════════════════════════
@@ -1635,7 +1635,7 @@ function buildAirportBench(x,z,ry){
   const g=new THREE.Group();
   // Fase 8: asientos → Lambert (sin especular, ahorra shader calls)
   const seatM=mkLamb(0x374558);             // azul pizarra
-  const frameM=mkStd(0x8899aa,0.28,0.28);  // metal cepillado — mantiene specular
+  const frameM=mkStd(0x8899aa,0.28,0.28);  // metal cepillado -- mantiene specular
 
   // 4 asientos conectados
   for(let i=0;i<4;i++){
@@ -1670,7 +1670,7 @@ function buildAirportBench(x,z,ry){
 
 // ─── POSTES DE INFORMACIÓN DIGITAL ───────────────
 // 3 pares en zonas de transición (x=±7).
-// No bloquean el corredor — están en el área de tiendas.
+// No bloquean el corredor -- están en el área de tiendas.
 function buildInfoPosts(){
   buildInfoPost(-7,+36,'ℹ INFORMACIÓN',0x5ba4d4);
   buildInfoPost(+7,+36,'ℹ INFORMACIÓN',0x5ba4d4);
@@ -1727,7 +1727,7 @@ function buildInfoPost(x,z,label,col){
 }
 
 // ══════════════════════════════════════════════════
-// VENTANALES LATERALES — Fase 7
+// VENTANALES LATERALES -- Fase 7
 // 5 ventanas por lado (vs. 3 anteriores), tamaño ampliado (7.5 × 5.5 u).
 // 3 variantes de escena exterior: apron/plataforma, doble avión, jetway íntima.
 // Las texturas se precomputan (3 canvas total) y se reusan para
@@ -1804,7 +1804,7 @@ function _buildSideWindow(wx,wz,extTexture){
 
 // ── ESCENA EXTERIOR PROCEDURAL ──────────────────
 // Dibuja cielo, nubes, plataforma de asfalto, marcas de rodaje,
-// aeronaves y vehículos de apoyo tierra — todo en canvas 2D.
+// aeronaves y vehículos de apoyo tierra -- todo en canvas 2D.
 function _drawExtScene(ctx,variant){
   const w=ctx.canvas.width, h=ctx.canvas.height;
 
@@ -1922,7 +1922,7 @@ function _drawVehicle(ctx,x,y,color,type){
   }
 }
 
-// ── VISTA DE PLATAFORMA DESDE LA ENTRADA — Fase 7 ─
+// ── VISTA DE PLATAFORMA DESDE LA ENTRADA -- Fase 7 ─
 // Telón exterior visible desde el interior al mirar hacia la entrada
 // (player empieza en z=52 mirando en +z; this plane is at z=62).
 function buildEntranceTarmacView(){
@@ -2005,7 +2005,7 @@ function buildEntranceTarmacView(){
 // ─── MARCADORES DE BORDE DEL CORREDOR ────────────
 // Jardineras/columnitas bajas en x=±10 a intervalos.
 // Definen visualmente el límite corredor↔zona de tiendas.
-// Altura 0.6 m — no bloquean la vista. Alternadas: con/sin planta.
+// Altura 0.6 m -- no bloquean la vista. Alternadas: con/sin planta.
 function buildCorridorEdgeMarkers(){
   const positions=[+44,+34,+22,+10,-1,-14,-25,-38];
   positions.forEach((mz,idx)=>{
@@ -2045,7 +2045,7 @@ function buildCorridorEdgeMarkers(){
 // ─── FASE 3: PUESTOS FUNCIONALES DEL HALL ────────
 // Mostradores modulares que dan identidad aeroportuaria
 // sin invadir el corredor central (|x|>=9, lejos de
-// los radios de activación de zona — distancia > 9).
+// los radios de activación de zona -- distancia > 9).
 // Reutilizan el patrón Group + mkBox/mkStd ya usado
 // en bancos, postes y ventanas (Fase 2).
 function buildServicePosts(){
@@ -2198,7 +2198,7 @@ function addSuitcase(x,y,z,color){
 }
 
 // ══════════════════════════════════════════════════
-// CHARACTER BUILDER V2 — GTA-style realistic humanoids
+// CHARACTER BUILDER V2 -- GTA-style realistic humanoids
 // Proporciones reales 1:7.5, PBR materials, mayor detalle
 // ══════════════════════════════════════════════════
 const SKINS=[0xfde0bd,0xf5c8a0,0xe8b88a,0xc88a52,0x9a6438,0xfad6a5];
@@ -2211,10 +2211,10 @@ function buildCharacter(opts){
   const g=new THREE.Group();
 
   // Materiales PBR por tipo de superficie
-  const sM=mkStd(skin,0.62,0.0);                       // piel — ligera especularidad
-  const tM=mkStd(top,0.88,0.0);                        // tela ropa — mate
+  const sM=mkStd(skin,0.62,0.0);                       // piel -- ligera especularidad
+  const tM=mkStd(top,0.88,0.0);                        // tela ropa -- mate
   const pM=mkStd(pants,0.85,0.0);                      // pantalón
-  const shM=mkStd(shoes,0.35,0.15);                    // zapatos — cuero brillante
+  const shM=mkStd(shoes,0.35,0.15);                    // zapatos -- cuero brillante
   const wM=mkStd(0xfafafa,0.1,0.0);                    // blanco ojos
   const dM=mkStd(0x050508,0.4,0.0);                    // pupilas
   const darkTop=mkStd(top,0.95,0.0,{color:new THREE.Color(top).multiplyScalar(0.6)});
@@ -2258,10 +2258,10 @@ function buildCharacter(opts){
   const legPivotY=0.85;
   [-1,1].forEach(s=>{
     const lg=new THREE.Group(); lg.position.set(s*0.135,legPivotY,0);
-    // Muslo — CylinderGeometry más realista
+    // Muslo -- CylinderGeometry más realista
     lg.add(new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.095,0.40,8),pM)); // thigh
     lg.children[0].position.set(0,-0.20,0); lg.children[0].castShadow=true;
-    // Rodilla — esfera aplanada
+    // Rodilla -- esfera aplanada
     const knee=SP(0.098,7,mkStd(pants,0.9,0),0,-0.42,0.02); knee.scale.set(1,0.75,0.95); lg.add(knee);
     // Pantorrilla
     lg.add(new THREE.Mesh(new THREE.CylinderGeometry(0.087,0.082,0.36,8),pM));
@@ -2272,20 +2272,20 @@ function buildCharacter(opts){
   // ── CINTURA y cadera
   { const h=new THREE.Mesh(new THREE.CylinderGeometry(0.155,0.18,0.12,10),pM); h.position.set(0,0.88,0); h.castShadow=true; g.add(h); }
 
-  // ── TORSO trapezoidal (más ancho en hombros — proporción natural)
+  // ── TORSO trapezoidal (más ancho en hombros -- proporción natural)
   // Parte baja del torso
   g.add(BX(0.42,0.30,0.26,tM,0,1.02,0));
-  // Parte alta (más ancha — pecho)
+  // Parte alta (más ancha -- pecho)
   g.add(BX(0.50,0.32,0.28,tM,0,1.31,0));
   // Detalle costados del torso (ligero sombreado)
   g.add(BX(0.04,0.56,0.24,darkTop,-0.25,1.15,0));
   g.add(BX(0.04,0.56,0.24,darkTop, 0.25,1.15,0));
-  // Hombros redondeados — esferas
+  // Hombros redondeados -- esferas
   [-0.27,0.27].forEach(sx=>{
     const sh=SP(0.115,8,tM,sx,1.43,0); sh.scale.set(1,0.8,0.9); g.add(sh);
   });
 
-  // ── BRAZOS — forma más cilíndrica y natural
+  // ── BRAZOS -- forma más cilíndrica y natural
   [-1,1].forEach(s=>{
     const ag=new THREE.Group(); ag.position.set(s*0.315,1.43,0);
     // Brazo superior
@@ -2308,23 +2308,23 @@ function buildCharacter(opts){
   // ── CUELLO con forma más natural
   const nk=CY(0.082,0.098,0.2,8,sM,0,1.58,0); g.add(nk);
 
-  // ── CABEZA (proporción 1:7.5 — más pequeña que antes)
+  // ── CABEZA (proporción 1:7.5 -- más pequeña que antes)
   const hg=new THREE.Group(); hg.position.set(0,1.72,0);
 
-  // Cráneo — elipsoide
+  // Cráneo -- elipsoide
   const headSph=new THREE.Mesh(new THREE.SphereGeometry(0.195,12,10),sM);
   headSph.scale.set(1,1.08,0.95); hg.add(headSph);
-  // Mandíbula — trapecio
+  // Mandíbula -- trapecio
   hg.add(BX(0.34,0.14,0.28,sM,0,-0.155,0.01));
   // Mentón redondeado
   const chin=SP(0.085,7,sM,0,-0.185,0.08); chin.scale.set(1,0.7,0.9); hg.add(chin);
   // Mejillas
   hg.add(SP(0.09,6,mkStd(Math.min(skin+0x0c0808,0xffffff),0.65,0),-0.165,-0.02,0.12));
   hg.add(SP(0.09,6,mkStd(Math.min(skin+0x0c0808,0xffffff),0.65,0), 0.165,-0.02,0.12));
-  // Frente — supercilios
+  // Frente -- supercilios
   hg.add(BX(0.34,0.07,0.07,mkStd(Math.max(skin-0x0a0606,0x100808),0.7,0),0,0.085,0.17));
 
-  // Ojos — estructura en capas
+  // Ojos -- estructura en capas
   const eyeWhiteM=mkStd(0xfafafa,0.05,0.0);
   const irisColors=[0x2244aa,0x1a6632,0x6b3a18,0x4a4a55,0x1a3066];
   const irisMat=mkStd(irisColors[Math.floor(Math.random()*irisColors.length)],0.3,0.05);
@@ -2344,14 +2344,14 @@ function buildCharacter(opts){
     const br=BX(0.095,0.022,0.018,browM,ex,ey,ez); br.rotation.z=rz; hg.add(br);
   });
 
-  // Nariz — cono + aletas
+  // Nariz -- cono + aletas
   const noseM=mkStd(Math.max(skin-0x060404,0),0.7,0);
   hg.add(CO(0.032,0.09,6,noseM,0,-0.025,0.205));
   hg.add(SP(0.038,6,noseM,0,-0.055,0.215));
   hg.add(SP(0.028,5,noseM,-0.040,-0.063,0.205));
   hg.add(SP(0.028,5,noseM, 0.040,-0.063,0.205));
 
-  // Boca — labio superior e inferior diferenciados
+  // Boca -- labio superior e inferior diferenciados
   const lipUpM=mkStd(Math.max(skin-0x200a0a,0),0.6,0.02);
   const lipLoM=mkStd(Math.max(skin-0x160606,0),0.55,0.02);
   hg.add(BX(0.10,0.022,0.012,mkStd(0x8a2a1a,0.5,0.01),0,-0.118,0.206)); // raya boca
@@ -2364,7 +2364,7 @@ function buildCharacter(opts){
     hg.add(BX(0.02,0.04,0.04,mkStd(Math.max(skin-0x080404,0),0.7,0),ex,-0.04,0.01));
   });
 
-  // PELO — más volumen y detalle
+  // PELO -- más volumen y detalle
   const hrM=mkStd(hair,0.85,0.02);
   const hShineM=mkStd(Math.min(hair+0x181008,0xffffff),0.4,0.05); // brillo de pelo
 
@@ -2390,7 +2390,7 @@ function buildCharacter(opts){
     hg.add(BX(0.09,0.20,0.36,hrM,-0.18,0.13,0));
     hg.add(BX(0.09,0.20,0.36,hrM, 0.18,0.13,0));
   } else {
-    // Pelo civil — más realista con capas
+    // Pelo civil -- más realista con capas
     hg.add(BX(0.40,0.13,0.38,hrM,0,0.195,0.01));  // capa base arriba
     hg.add(BX(0.40,0.20,0.09,hrM,0,0.08,-0.165));  // nuca
     hg.add(BX(0.40,0.09,0.12,hrM,0,0.10,0.175));   // flequillo
@@ -2418,7 +2418,7 @@ function buildCharacter(opts){
     g.add(BX(0.022,0.135,0.022,mkStd(0xfafafa,0.5,0),-0.068,1.295,0.147)); // solapa L
     g.add(BX(0.022,0.135,0.022,mkStd(0xfafafa,0.5,0), 0.068,1.295,0.147)); // solapa R
     g.add(BX(0.135,0.038,0.018,mkStd(0xfafafa,0.3,0),0,1.062,0.148)); // gafete nombre
-    // Detalle gafete — letras insinuadas
+    // Detalle gafete -- letras insinuadas
     g.add(BX(0.12,0.012,0.002,mkStd(0x3355aa,0.6,0),0,1.065,0.152));
     if(role==='attendant'){
       g.add(BX(0.075,0.075,0.055,mkStd(0xcc1111,0.5,0.05),0.162,1.345,0.10)); // pañuelo nudo
@@ -2443,7 +2443,7 @@ function buildCharacter(opts){
 const buildCharacterV2=buildCharacter;
 
 // ══════════════════════════════════════════════════
-// PILOTO DETALLADO — sentado, con yoke y uniforme completo
+// PILOTO DETALLADO -- sentado, con yoke y uniforme completo
 // ══════════════════════════════════════════════════
 function buildPilotDetailed(skinTone, hairCol){
   const skin=skinTone||SKINS[0];
@@ -2481,13 +2481,13 @@ function buildPilotDetailed(skinTone, hairCol){
     g.add(BX(0.18,0.10,0.28,shoeM,sx,0.10,0.16));
   });
 
-  // Piernas (posición sentada — dobladas 90°)
+  // Piernas (posición sentada -- dobladas 90°)
   [-0.13,0.13].forEach(sx=>{
-    // Muslo (horizontal — apuntando hacia adelante)
+    // Muslo (horizontal -- apuntando hacia adelante)
     g.add(BX(0.22,0.20,0.44,uniM,sx,0.20,-0.05));
     // Rodilla
     g.add(SP(0.11,mkStd(0x0a1828,0.8,0),sx,0.20,0.18));
-    // Pantorrilla (vertical — colgando)
+    // Pantorrilla (vertical -- colgando)
     g.add(BX(0.18,0.36,0.19,uniM,sx,0.04,0.18));
   });
 
@@ -2504,7 +2504,7 @@ function buildPilotDetailed(skinTone, hairCol){
   torso.add(BX(0.052,0.30,0.022,mkStd(0x001020,0.5,0.03),0,0.32,0.162));
   // Botones de camisa
   [0.42,0.34,0.26].forEach(by=>torso.add(BX(0.018,0.018,0.02,mkStd(0xdddddd,0.3,0.1),0,by,0.165)));
-  // Epaulettes (hombreras) con 4 galones — comandante
+  // Epaulettes (hombreras) con 4 galones -- comandante
   [-0.285,0.285].forEach(dx=>{
     torso.add(BX(0.18,0.04,0.14,uniM,dx,0.62,0.02));
     // 4 galones dorados = comandante (4 rayas)
@@ -2527,7 +2527,7 @@ function buildPilotDetailed(skinTone, hairCol){
     armG.add(new THREE.Mesh(new THREE.CylinderGeometry(0.085,0.075,0.28,8),uniM));
     // Codo
     const elbow=SP(0.08,uniM,0,0.14,0); armG.add(elbow);
-    // Antebrazo — extendido hacia el panel
+    // Antebrazo -- extendido hacia el panel
     const forearm=new THREE.Mesh(new THREE.CylinderGeometry(0.072,0.065,0.26,8),uniM);
     forearm.position.set(0,0.14,0.13); forearm.rotation.x=-1.05; armG.add(forearm);
     // Mano en yoke
@@ -2582,7 +2582,7 @@ function buildPilotDetailed(skinTone, hairCol){
     ear.scale.set(0.5,0.88,1); ear.position.set(ex,-0.008,0.008); hg.add(ear);
   });
 
-  // ── GORRA DE COMANDANTE — detallada
+  // ── GORRA DE COMANDANTE -- detallada
   const brim=BX(0.44,0.038,0.42,hatM,0,0.188,-0.012);  // ala
   hg.add(brim);
   hg.add(BX(0.36,0.19,0.34,hatM,0,0.295,0.010));        // copa
@@ -2591,7 +2591,7 @@ function buildPilotDetailed(skinTone, hairCol){
   [0,0.016,0.032,0.048].forEach(dy=>hg.add(BX(0.37,0.010,0.35,goldM,0,0.210+dy,0.010)));
   // Insignia dorada frontal
   hg.add(BX(0.085,0.065,0.028,goldM,0,0.370,0.180));
-  // Visera de la gorra — semicírculo estilizado
+  // Visera de la gorra -- semicírculo estilizado
   const visorM=mkStd(0x070c14,0.3,0.15);
   hg.add(BX(0.40,0.022,0.14,visorM,0,0.182,0.172));
   // Pelo lateral visible
@@ -2606,7 +2606,7 @@ function buildPilotDetailed(skinTone, hairCol){
   const yokeG=new THREE.Group(); yokeG.position.set(0,0.48,0.30);
   // Columna central del yoke
   yokeG.add(new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.028,0.22,8),yokeM));
-  // Parte superior en U — barra horizontal
+  // Parte superior en U -- barra horizontal
   yokeG.add(BX(0.32,0.042,0.038,yokeM,0,0.11,0));
   // Mangos verticales
   [-0.155,0.155].forEach(hx=>{
@@ -2627,7 +2627,7 @@ function buildPilotDetailed(skinTone, hairCol){
 }
 
 // ══════════════════════════════════════════════════
-// AUXILIAR DE VUELO DETALLADA — de pie, con carrito
+// AUXILIAR DE VUELO DETALLADA -- de pie, con carrito
 // ══════════════════════════════════════════════════
 function buildAttendantDetailed(skinTone, hairCol, gender){
   const skin=skinTone||SKINS[3];
@@ -2658,7 +2658,7 @@ function buildAttendantDetailed(skinTone, hairCol, gender){
     o.position.set(px,py,pz); o.rotation.x=rx; o.castShadow=true; return o;
   };
 
-  // ── ZAPATOS — tacón bajo para auxiliar femenina
+  // ── ZAPATOS -- tacón bajo para auxiliar femenina
   const heelH=isFemale?0.12:0.07;
   [-0.115,0.115].forEach(sx=>{
     g.add(BX(0.18,0.065,0.30,shoeM,sx,0.04,0.05));
@@ -2672,7 +2672,7 @@ function buildAttendantDetailed(skinTone, hairCol, gender){
   // ── PIERNAS
   const legTone=isFemale?mkStd(0x0e1a2e,0.85,0):uniM; // falda o pantalón
   if(isFemale){
-    // Falda cónica (skirt) — más realista
+    // Falda cónica (skirt) -- más realista
     g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.28,0.52,10),uniM));
     g.children[g.children.length-1].position.set(0,0.30,0);
     // Piernas visibles bajo la falda
@@ -2698,7 +2698,7 @@ function buildAttendantDetailed(skinTone, hairCol, gender){
   torso.add(BX(0.020,0.28,0.040,uniM, 0.075,0.37,0.148));
   // Pañuelo rojo al cuello (auxiliar)
   torso.add(BX(0.09,0.09,0.055,scarfM,0,0.56,0.10));
-  // Nudo del pañuelo — detalle
+  // Nudo del pañuelo -- detalle
   torso.add(SP(0.038,scarfM,0,0.565,0.148,1,0.9,0.9));
   // Gafete nombre
   torso.add(BX(0.12,0.042,0.020,mkStd(0xf0e8cc,0.3,0.1),-0.145,0.44,0.148));
@@ -2706,14 +2706,14 @@ function buildAttendantDetailed(skinTone, hairCol, gender){
   // Botones de chaqueta
   [0.52,0.44,0.36,0.28].forEach(by=>torso.add(BX(0.016,0.016,0.020,mkStd(0x888890,0.25,0.3),0.01,by,0.146)));
 
-  // Epaulette (1 galón — auxiliar estándar)
+  // Epaulette (1 galón -- auxiliar estándar)
   [-0.26,0.26].forEach(dx=>{
     torso.add(BX(0.16,0.036,0.125,uniM,dx,0.575,0.01));
     torso.add(BX(0.16,0.010,0.125,goldM,dx,0.588,0.01));
   });
   g.add(torso);
 
-  // ── BRAZO DERECHO — extendido hacia el carrito (sosteniendo)
+  // ── BRAZO DERECHO -- extendido hacia el carrito (sosteniendo)
   const armRG=new THREE.Group(); armRG.position.set(-0.27,0.98,0);
   armRG.rotation.set(0.4,0,-0.2);
   armRG.add(CY(0.075,0.065,0.26,8,uniM,0,-0.13,0));
@@ -2726,7 +2726,7 @@ function buildAttendantDetailed(skinTone, hairCol, gender){
   fgR.add(BX(0.085,0.082,0.055,sM,0,-0.26,0));
   armRG.add(fgR); g.add(armRG);
 
-  // ── BRAZO IZQUIERDO — natural colgando/sosteniendo
+  // ── BRAZO IZQUIERDO -- natural colgando/sosteniendo
   const armLG=new THREE.Group(); armLG.position.set(0.27,0.98,0);
   armLG.rotation.set(0.1,0,0.18);
   armLG.add(CY(0.075,0.065,0.26,8,uniM,0,-0.13,0));
@@ -2756,7 +2756,7 @@ function buildAttendantDetailed(skinTone, hairCol, gender){
     hg.add(SP(0.007,wE,ex+0.010,0.033,0.177));
     const lid=new THREE.Mesh(new THREE.BoxGeometry(0.082,0.018,0.015),mkStd(Math.max(skin-0x090505,0x3a1010),0.8,0));
     lid.position.set(ex,0.036,0.155); lid.rotation.x=-0.16; hg.add(lid);
-    // Maquillaje — línea de ojo más gruesa para auxiliar femenina
+    // Maquillaje -- línea de ojo más gruesa para auxiliar femenina
     if(isFemale){
       hg.add(BX(0.088,0.008,0.008,mkStd(0x111111,0.5,0.05),ex,0.037,0.155));
     }
@@ -2788,7 +2788,7 @@ function buildAttendantDetailed(skinTone, hairCol, gender){
   // ── PEINADO / SOMBRERO
   const hrM=mkStd(hair,0.82,0.03);
   if(isFemale){
-    // Recogido — moño profesional
+    // Recogido -- moño profesional
     hg.add(BX(0.32,0.08,0.30,hrM,0,0.168,0.002));   // base
     hg.add(BX(0.30,0.10,0.08,hrM,0,0.105,-0.145));   // nuca
     hg.add(BX(0.28,0.06,0.10,hrM,0,0.082,0.155));    // flequillo bajo
@@ -2804,7 +2804,7 @@ function buildAttendantDetailed(skinTone, hairCol, gender){
     hg.add(BX(0.29,0.010,0.27,mkStd(0x0a1520,0.4,0.1),0,0.195,0.008));
     hg.add(BX(0.29,0.010,0.27,goldM,0,0.200,0.008)); // banda dorada
   } else {
-    // Masculino — pelo corto
+    // Masculino -- pelo corto
     hg.add(BX(0.34,0.09,0.32,hrM,0,0.165,0.008));
     hg.add(BX(0.32,0.12,0.08,hrM,0,0.080,-0.148));
     hg.add(BX(0.08,0.18,0.30,hrM,-0.178,0.065,0));
@@ -2823,7 +2823,7 @@ function buildAttendantDetailed(skinTone, hairCol, gender){
 }
 
 // ══════════════════════════════════════════════════
-// CARRITO DE SERVICIO DE VUELO — detallado
+// CARRITO DE SERVICIO DE VUELO -- detallado
 // ══════════════════════════════════════════════════
 function buildServiceCart(){
   const g=new THREE.Group();
@@ -2893,16 +2893,16 @@ function buildServiceCart(){
 // SPAWN WALKING NPCs  (civilians + attendants)
 // ══════════════════════════════════════════════════
 // ══════════════════════════════════════════════════
-// PERFILES DE PERSONAS (Fase 4 — Ambientación)
+// PERFILES DE PERSONAS (Fase 4 -- Ambientación)
 // ──────────────────────────────────────────────────
-// 1) Pasajeros solos       — caminan rutas civiles; alternan entre
+// 1) Pasajeros solos       -- caminan rutas civiles; alternan entre
 //                            caminar, detenerse a esperar y mirar
 //                            carteles/pantallas (ver POI_POINTS).
-// 2) Parejas / grupos chicos— 2 personas que caminan juntas, en
+// 2) Parejas / grupos chicos-- 2 personas que caminan juntas, en
 //                            paralelo, al mismo ritmo (ver "grupo").
-// 3) Personal aeroportuario — agentes de check-in/información y
+// 3) Personal aeroportuario -- agentes de check-in/información y
 //                            tripulación (spawnStaffNPCs / cabina).
-// 4) Seguridad y asistencia — oficiales del control (police) y
+// 4) Seguridad y asistencia -- oficiales del control (police) y
 //                            agente del mostrador de información.
 // Densidad moderada (≈ misma cantidad que antes, redistribuida).
 // Sin movimientos bruscos. En Modo Calma: caminan más lento y
@@ -2947,7 +2947,7 @@ function spawnNPCs(){
     // Random luggage
     if(Math.random()>0.45){
       const bc=TOPS[Math.floor(Math.random()*TOPS.length)];
-      // Fase 9: mkLamb para accesorios pequeños — sin especular necesario
+      // Fase 9: mkLamb para accesorios pequeños -- sin especular necesario
       const bag=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.38,0.14),mkLamb(bc));
       bag.position.set(0.32,0.18,0); npc.add(bag);
       const bh=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.06,0.02),mkLamb(0x888888));
@@ -2957,7 +2957,7 @@ function spawnNPCs(){
   });
 
   // ── Perfil "pareja / grupo pequeño": dos personas que caminan
-  // juntas, en paralelo y al mismo paso — dan sensación de compañía
+  // juntas, en paralelo y al mismo paso -- dan sensación de compañía
   // sin aumentar la densidad general (reemplaza, no suma, al conteo).
   {
     const base={x:-6,z:5,dx:-5,dz:30,spd:1.0};
@@ -3003,7 +3003,7 @@ function spawnNPCs(){
 // ══════════════════════════════════════════════════
 function spawnStaffNPCs(){
   // Fase 8: En móvil se reducen agentes de check-in (3 en vez de 5)
-  // y se omite 1 policía — mantiene presencia sin sobrecargar el render
+  // y se omite 1 policía -- mantiene presencia sin sobrecargar el render
   // ── CHECK-IN AGENTS (behind counters at z=24, facing player z+)
   const agentX=isMobile?[-11,0,11]:[-11,-5.5,0,5.5,11];
   const agentTops=[0x1a3060,0x1a3060,0x25408a,0x1a3060,0x25408a];
@@ -3051,7 +3051,7 @@ function spawnStaffNPCs(){
 
 // ══════════════════════════════════════════════════
 // GLTF CABIN CREW LOADER
-// Intenta cargar modelos de assets/ — si no existen,
+// Intenta cargar modelos de assets/ -- si no existen,
 // usa buildCharacter() como fallback transparente
 // ══════════════════════════════════════════════════
 function loadCabinCrew(){
@@ -3059,7 +3059,7 @@ function loadCabinCrew(){
   if(!gltfLoader){
     spawnCabinCrewFallback(); return;
   }
-  // Intentar cargar GLBs externos — si fallan, spawnCabinCrewFallback ya creó la tripulación
+  // Intentar cargar GLBs externos -- si fallan, spawnCabinCrewFallback ya creó la tripulación
   let fallbackSpawned=false;
   const tryLoad=(file, onSuccess)=>{
     gltfLoader.load(file,
@@ -3086,7 +3086,7 @@ function loadCabinCrew(){
       },
       undefined,
       ()=>{
-        console.info(`ℹ️ ${file} no encontrado — usando tripulación procedural detallada`);
+        console.info(`ℹ️ ${file} no encontrado -- usando tripulación procedural detallada`);
         if(!fallbackSpawned){ fallbackSpawned=true; spawnCabinCrewFallback(); }
       }
     );
@@ -3100,7 +3100,7 @@ function loadCabinCrew(){
 }
 
 function spawnCabinCrewFallback(){
-  // ── COMANDANTE — sentado en asiento izquierdo del cockpit
+  // ── COMANDANTE -- sentado en asiento izquierdo del cockpit
   // El cockpit está en z ≈ -46 + 17.5 = -28.5; piloto en asiento izquierdo
   const pilot1=buildPilotDetailed(SKINS[0], HAIRS[6]);
   pilot1.position.set(-3.8, 0, -28.8);
@@ -3112,7 +3112,7 @@ function spawnCabinCrewFallback(){
   pilot1.traverse(c=>{ if(c.userData&&c.userData.isHead) pilot1.userData.headGroup=c; });
   npcs.push(pilot1); scene.add(pilot1);
 
-  // ── COPILOTO — asiento derecho del cockpit
+  // ── COPILOTO -- asiento derecho del cockpit
   const pilot2=buildPilotDetailed(SKINS[2], HAIRS[3]);
   pilot2.position.set(3.8, 0, -28.8);
   pilot2.rotation.y=Math.PI;
@@ -3122,7 +3122,7 @@ function spawnCabinCrewFallback(){
   pilot2.traverse(c=>{ if(c.userData&&c.userData.isHead) pilot2.userData.headGroup=c; });
   npcs.push(pilot2); scene.add(pilot2);
 
-  // ── AUXILIAR 1 (femenina) — al inicio del pasillo con carrito
+  // ── AUXILIAR 1 (femenina) -- al inicio del pasillo con carrito
   const att1=buildAttendantDetailed(SKINS[3], HAIRS[1], 'female');
   att1.position.set(1.2, 0, -38);
   att1.rotation.y=-Math.PI*0.08; // ligeramente girada hacia el pasillo
@@ -3138,7 +3138,7 @@ function spawnCabinCrewFallback(){
   cart1.rotation.y=-Math.PI*0.08;
   scene.add(cart1);
 
-  // ── AUXILIAR 2 (masculino) — al fondo del pasillo
+  // ── AUXILIAR 2 (masculino) -- al fondo del pasillo
   const att2=buildAttendantDetailed(SKINS[4], HAIRS[0], 'male');
   att2.position.set(-1.2, 0, -53);
   att2.rotation.y=Math.PI*0.05;
@@ -3175,7 +3175,7 @@ function updateNPCs(delta, speedFactor){
     if(_dist2>35*35 && (_npcFrame%4)!==0) return;
     if(_dist2>22*22 && (_npcFrame%2)!==0) return;
 
-    // ── WALKING NPCs (perfiles civiles — Fase 4: caminar / esperar / mirar carteles)
+    // ── WALKING NPCs (perfiles civiles -- Fase 4: caminar / esperar / mirar carteles)
     if(ud.isWalking){
       const walkMult=calmMode?0.15:1.0; // muy lentos en modo calma
 
@@ -3214,7 +3214,7 @@ function updateNPCs(delta, speedFactor){
           if(c.userData.isArm) c.rotation.x=-sw*c.userData.side*0.55;
         });
       } else {
-        // En pausa: de pie, quieto — piernas/brazos vuelven a reposo suavemente
+        // En pausa: de pie, quieto -- piernas/brazos vuelven a reposo suavemente
         npc.children.forEach(c=>{
           if(c.userData.isLeg) c.rotation.x*=(1-Math.min(1,delta*3));
           if(c.userData.isArm) c.rotation.x*=(1-Math.min(1,delta*3));
@@ -3255,7 +3255,7 @@ function updateNPCs(delta, speedFactor){
         });
       }
 
-      // ── PILOTO DETALLADO sentado — respiración + manos en yoke
+      // ── PILOTO DETALLADO sentado -- respiración + manos en yoke
       if(ud.role==='pilot' && ud.isPilotDetailed){
         // Respiración sutil (torso sube/baja)
         npc.children.forEach(c=>{
@@ -3271,11 +3271,11 @@ function updateNPCs(delta, speedFactor){
           ud.headGroup.rotation.x+=(scanX-ud.headGroup.rotation.x)*Math.min(1,delta*1.5);
           ud.headGroup.rotation.y+=(scanY-ud.headGroup.rotation.y)*Math.min(1,delta*1.5);
         }
-        // Manos en yoke — micro-ajuste de timón (realismo)
+        // Manos en yoke -- micro-ajuste de timón (realismo)
         npc.rotation.z=Math.sin(ud.idlePhase*0.4)*0.008;
       }
 
-      // ── AUXILIAR DETALLADA — balanceo natural + movimiento de cabeza
+      // ── AUXILIAR DETALLADA -- balanceo natural + movimiento de cabeza
       if(ud.role==='attendant' && (ud.isAttendantDetailed||ud.isPilotDetailed===undefined)){
         // Balanceo de peso (shift weight)
         npc.rotation.z=Math.sin(ud.idlePhase*0.55)*0.018;
@@ -3302,7 +3302,7 @@ function updateNPCs(delta, speedFactor){
 
     // ── LOOK-AT-PLAYER (all NPCs with head, within 8 units)
     // Si el pasajero está en pausa "mirando un cartel", ese gesto manda
-    // sobre el look-at-player — así no compiten por el control de la cabeza.
+    // sobre el look-at-player -- así no compiten por el control de la cabeza.
     if(ud.headGroup && !(ud.behaviorState==='pause' && ud.lookTarget)){
       const dx=playerPos.x-npc.position.x;
       const dz=playerPos.z-npc.position.z;
@@ -3331,7 +3331,7 @@ function updateNPCs(delta, speedFactor){
 }
 
 // ══════════════════════════════════════════════════
-// FASE C — EFECTOS VISUALES Y ATMÓSFERA
+// FASE C -- EFECTOS VISUALES Y ATMÓSFERA
 // ══════════════════════════════════════════════════
 
 // Flash sutil de color al entrar a una zona
@@ -3382,7 +3382,7 @@ function startMenuAnimation(){
 }
 
 // ══════════════════════════════════════════════════
-// FASE F — GAMIFICACIÓN SUAVE
+// FASE F -- GAMIFICACIÓN SUAVE
 // ══════════════════════════════════════════════════
 
 // ── DIARIO LOCAL ──────────────────────────────────
@@ -3503,18 +3503,18 @@ function toggleCalmMode(){
   if(label) label.textContent=calmMode?'ON':'OFF';
   if(isGameActive) showToast(calmMode?'🧘 Modo Calma activado':'⚡ Modo normal activado');
 
-  // Fase 8 — Visual: desaturación del canvas 3D + fogColor más apagado
+  // Fase 8 -- Visual: desaturación del canvas 3D + fogColor más apagado
   // Transición CSS suave para no ser abrupta
   renderer.domElement.style.transition='filter 1.4s ease';
   renderer.domElement.style.filter=calmMode?'saturate(0.50) brightness(0.96)':'';
 
-  // Fase 8 — NPCs: ocultar peatones civiles caminantes en Modo Calma
-  // (el personal fijo permanece — da sensación de lugar habitado sin movimiento)
+  // Fase 8 -- NPCs: ocultar peatones civiles caminantes en Modo Calma
+  // (el personal fijo permanece -- da sensación de lugar habitado sin movimiento)
   npcs.forEach(n=>{
     if(n.userData.role==='civilian') n.visible=!calmMode;
   });
 
-  // Fase 8 — Niebla más densa en calma → perspectiva más íntima, menos distracción
+  // Fase 8 -- Niebla más densa en calma → perspectiva más íntima, menos distracción
   if(scene.fog){
     scene.fog.density=calmMode?0.010:_normalFogDensity;
   }
@@ -3570,9 +3570,9 @@ function setupEvents(){
   // Overlay click-to-play
   // Click en toda la tarjeta → activar
   document.querySelector('.ctp-inner').addEventListener('click',()=>{ controls.lock(); });
-  // Botón principal — stopPropagation para no disparar dos veces
+  // Botón principal -- stopPropagation para no disparar dos veces
   document.getElementById('btn-ctp-activate').addEventListener('click',(e)=>{ e.stopPropagation(); controls.lock(); });
-  // Botón secundario Volver — no propagar al ctp-inner
+  // Botón secundario Volver -- no propagar al ctp-inner
   document.getElementById('btn-ctp-back').addEventListener('click',(e)=>{ e.stopPropagation(); returnToMenu(); });
   document.getElementById('btn-panel-breathe').addEventListener('click',openBreathing);
   document.getElementById('btn-panel-grounding').addEventListener('click',openGrounding);
@@ -3589,7 +3589,7 @@ function setupEvents(){
   document.querySelectorAll('.tab-btn').forEach(btn=>{ btn.addEventListener('click',()=>{ document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active')); btn.classList.add('active'); document.getElementById('tab-'+btn.dataset.tab).classList.add('active'); }); });
   renderer.domElement.addEventListener('click',()=>{ if(!isMobile&&isGameActive&&!isPaused) controls.lock(); });
   document.addEventListener('keydown',onKeyDown);
-  // Mapa y orientacion — tecla M
+  // Mapa y orientacion -- tecla M
   document.addEventListener('keydown',(e)=>{
     if(e.key==='m' || e.key==='M'){
       if(!isGameActive) return;
@@ -3643,7 +3643,7 @@ function setupMobileControls(){
   const hint=document.getElementById('controls-hint');
   if(hint) hint.querySelector('span').textContent='⬤ Izquierda: moverse  ·  Derecha: mirar  ·  Botones: acciones';
 
-  // Botones de rotación de cámara — pointerdown/up para respuesta inmediata
+  // Botones de rotación de cámara -- pointerdown/up para respuesta inmediata
   const btnRL=document.getElementById('btn-rotate-left');
   const btnRR=document.getElementById('btn-rotate-right');
   const setRL=(v)=>{ rotateLeft=v;  btnRL.classList.toggle('pressed',v); };
@@ -3671,7 +3671,7 @@ function setupMobileControls(){
       'button, a, input, ' +
       '#bottom-bar .hud-action-btn, #btn-pause, .close-btn, .tab-btn, ' +
       '.zone-panel-actions, .breath-btns, ' +
-      // Paneles con scroll — no interceptar sus toques
+      // Paneles con scroll -- no interceptar sus toques
       '#zone-panel, #breathing-modal, #pause-menu, ' +
       // Botones de rotación
       '#mobile-rotate-btns'
@@ -3735,7 +3735,7 @@ function setupMobileControls(){
 
 
 // ══════════════════════════════════════════════════
-// FASE 14 — MAPA MINIMAP Y ORIENTACION
+// FASE 14 -- MAPA MINIMAP Y ORIENTACION
 // ══════════════════════════════════════════════════
 function toggleMap(){
   const existing=document.getElementById('minimap-overlay');
@@ -3834,7 +3834,7 @@ function enterZone(i){
     }
     if(guidedMode){
       if(isMobile){
-        if(i!==0) showToast(`${zone.emoji} ${zone.name} — tocá 💡 para info`);
+        if(i!==0) showToast(`${zone.emoji} ${zone.name} -- tocá 💡 para info`);
         narrateZone(i);
       } else {
         openZonePanel(i);
@@ -3905,7 +3905,7 @@ function endGame(){
       const diff=anxietyPre-level;
       let msg=`${anxietyPre}/10 → ${level}/10`;
       if(diff>0)      msg+=` · Bajó ${diff} ${diff===1?'punto':'puntos'} 🌿`;
-      else if(diff<0) msg+=` · Subió ${Math.abs(diff)} ${Math.abs(diff)===1?'punto':'puntos'} — es normal después del esfuerzo.`;
+      else if(diff<0) msg+=` · Subió ${Math.abs(diff)} ${Math.abs(diff)===1?'punto':'puntos'} -- es normal después del esfuerzo.`;
       else            msg+=` · Se mantuvo igual.`;
       const compEl=document.getElementById('anxiety-comparison');
       compEl.textContent=msg; compEl.classList.remove('hidden');
@@ -4021,11 +4021,11 @@ function showShareFeedback(){
 }
 
 // ════════════════════════════════════════════════════════════
-// AMBIENTE SONORO DEL HALL — Fase 5
+// AMBIENTE SONORO DEL HALL -- Fase 5
 // Música suave tipo "pad" generada con osciladores + filtro,
 // más un murmullo de hall muy tenue generado con ruido filtrado.
 // Todo es procedural (Web Audio API): no requiere archivos de audio.
-// Apagado por defecto — el usuario lo activa desde el menú o pausa.
+// Apagado por defecto -- el usuario lo activa desde el menú o pausa.
 // ════════════════════════════════════════════════════════════
 function ensureAmbientAudio(){
   if(audioCtx) return true;
@@ -4056,7 +4056,7 @@ function ensureAmbientAudio(){
 
 // Pad armónico suave: 3 osciladores tipo seno/triángulo, ligeramente
 // desafinados entre sí, pasando por un filtro pasa-bajos con un LFO
-// lento que lo "respira" — evoca música instrumental ambiental de
+// lento que lo "respira" -- evoca música instrumental ambiental de
 // salas de espera, sin melodía marcada ni ritmo perceptible.
 function buildAmbientPad(){
   const now=audioCtx.currentTime;
@@ -4110,7 +4110,7 @@ function buildAmbientPad(){
 
 // Murmullo de hall: ruido filtrado en banda media-baja, evocando la
 // sensación de espacio amplio y actividad lejana, sin voces inteligibles
-// ni anuncios — sólo una textura de fondo casi imperceptible.
+// ni anuncios -- sólo una textura de fondo casi imperceptible.
 function buildHallMurmur(){
   const now=audioCtx.currentTime;
   const bufferSize=audioCtx.sampleRate*2;
@@ -4163,7 +4163,7 @@ function setAmbientMasterTarget(target,rampSeconds){
 }
 
 // Aplica el factor de Modo Calma a los volúmenes base de música y murmullo
-// (en baja estimulación, el ambiente sonoro se reduce — nunca se vuelve más intenso)
+// (en baja estimulación, el ambiente sonoro se reduce -- nunca se vuelve más intenso)
 function applyCalmAudioGains(){
   if(!audioCtx||!musicGainNode||!hallGainNode) return;
   const now=audioCtx.currentTime;
@@ -4186,7 +4186,7 @@ function syncSoundButtons(){
   if(label) label.textContent=audioEnabled?'ON':'OFF';
 }
 
-// Activa/desactiva el ambiente sonoro — debe llamarse desde un gesto del
+// Activa/desactiva el ambiente sonoro -- debe llamarse desde un gesto del
 // usuario (click) por la política de autoplay de los navegadores.
 function toggleAmbientSound(){
   audioEnabled=!audioEnabled;
@@ -4204,7 +4204,7 @@ function toggleAmbientSound(){
 }
 
 // Silencia el ambiente sin apagar la preferencia del usuario (p.ej. al pausar
-// o volver al menú) — se reanuda suavemente si corresponde.
+// o volver al menú) -- se reanuda suavemente si corresponde.
 function suspendAmbientAudio(){
   if(audioCtx&&ambientMaster) setAmbientMasterTarget(0,0.8);
 }
@@ -4216,7 +4216,7 @@ function resumeAmbientAudioIfEnabled(){
   const calmFactor=calmMode?0.45:1.0;
   setAmbientMasterTarget(calmFactor,1.8);
 }
-// Detiene y libera todos los nodos — usar al finalizar el recorrido.
+// Detiene y libera todos los nodos -- usar al finalizar el recorrido.
 function stopAmbientAudio(){
   if(!audioCtx) return;
   try{
@@ -4262,7 +4262,7 @@ function stopSpeech(){
 
 function openBreathing(){ closeZonePanel(); if(!isMobile)controls.unlock(); document.getElementById('breathing-modal').classList.remove('hidden'); resetBreathUI(); }
 function closeBreathing(){ document.getElementById('breathing-modal').classList.add('hidden'); stopBreathing(); if(!isMobile&&isGameActive&&!isPaused)controls.lock(); }
-function resetBreathUI(){ document.getElementById('breath-phase').textContent='LISTO'; document.getElementById('breath-count').textContent='—'; document.getElementById('breath-instruction').textContent='Presiona "Iniciar" cuando estés preparado'; document.getElementById('btn-start-breath').classList.remove('hidden'); document.getElementById('btn-stop-breath').classList.add('hidden'); const el=document.getElementById('breath-ring-progress'); if(el){el.style.transition='none';el.style.strokeDashoffset='502';} }
+function resetBreathUI(){ document.getElementById('breath-phase').textContent='LISTO'; document.getElementById('breath-count').textContent='--'; document.getElementById('breath-instruction').textContent='Presiona "Iniciar" cuando estés preparado'; document.getElementById('btn-start-breath').classList.remove('hidden'); document.getElementById('btn-stop-breath').classList.add('hidden'); const el=document.getElementById('breath-ring-progress'); if(el){el.style.transition='none';el.style.strokeDashoffset='502';} }
 function startBreathing(){ breathCycles=0; breathCount++; document.getElementById('btn-start-breath').classList.add('hidden'); document.getElementById('btn-stop-breath').classList.remove('hidden'); runBreathPhase('inhale'); }
 function stopBreathing(){ if(breathInterval){clearInterval(breathInterval);breathInterval=null;} if(breathPhaseTimer){clearTimeout(breathPhaseTimer);breathPhaseTimer=null;} }
 function runBreathPhase(phase){ stopBreathing(); const phases={inhale:{label:'INHALA',instruction:'Respira profundo por la nariz',seconds:4,next:'hold'},hold:{label:'RETÉN',instruction:'Mantén el aire en los pulmones',seconds:7,next:'exhale'},exhale:{label:'EXHALA',instruction:'Suelta el aire lentamente por la boca',seconds:8,next:'inhale'}}; const p=phases[phase]; document.getElementById('breath-phase').textContent=p.label; document.getElementById('breath-instruction').textContent=p.instruction; let sec=p.seconds; document.getElementById('breath-count').textContent=sec; animBreathRing(phase); breathInterval=setInterval(()=>{ sec--; document.getElementById('breath-count').textContent=sec>0?sec:''; if(sec<=0){ clearInterval(breathInterval); breathInterval=null; if(phase==='exhale')breathCycles++; if(breathCycles>=3){ document.getElementById('breath-phase').textContent='✓'; document.getElementById('breath-count').textContent=''; document.getElementById('breath-instruction').textContent='¡Excelente! Tu sistema nervioso se ha calmado.'; document.getElementById('btn-start-breath').classList.remove('hidden'); document.getElementById('btn-stop-breath').classList.add('hidden'); } else breathPhaseTimer=setTimeout(()=>runBreathPhase(p.next),300); } },1000); }
@@ -4316,11 +4316,11 @@ function animate(){
     // Fase 9: parametrizar NPCs para calmMode - reduccion de velocidad y actividad
   updateNPCs(delta * (calmMode ? 0.2 : 1.0)); // calm=0.2x, normal=1x (mas lento que antes)
 
-  // Ciclo sutil de luz ambiental — simula variación de iluminación del aeropuerto
+  // Ciclo sutil de luz ambiental -- simula variación de iluminación del aeropuerto
   // Período ~52 s, amplitud ±0.03 → imperceptible pero da vida al espacio
   if(ambientLight) ambientLight.intensity=0.28+Math.sin(t*0.12)*0.03;
 
-  // Rings pulse — más suave en modo calma
+  // Rings pulse -- más suave en modo calma
   ringTime+=delta;
   ringMeshes.forEach((ring,i)=>{
     const amp=calmMode?0.06:0.2, rotSpd=calmMode?0.08:0.2;
@@ -4353,7 +4353,7 @@ function animate(){
 // ══════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════
-// FASE 19 — CHECKS INTEGRALES DE TESTING
+// FASE 19 -- CHECKS INTEGRALES DE TESTING
 // ══════════════════════════════════════════════════
 function runChecks(){
   var results=[];
@@ -4367,7 +4367,7 @@ function runChecks(){
   fns.forEach(function(fn){results.push({name:'fn:'+fn, ok:typeof window[fn]==='function', detail:typeof window[fn]});});
   var allOk=results.every(function(r){return r.ok;});
   var okCount=results.filter(function(r){return r.ok;}).length;
-  showToast('Tests: '+okCount+'/'+results.length+(allOk?' — OK':' — FALLS'));
+  showToast('Tests: '+okCount+'/'+results.length+(allOk?' -- OK':' -- FALLS'));
   console.table(results);
   return {ok:allOk, total:results.length, passed:okCount, results:results};
 }
