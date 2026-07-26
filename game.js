@@ -1269,7 +1269,9 @@ function buildShopBase(x,z,width,depth,wallCol,fasciaCol){
   const bw=new THREE.Mesh(mkBox(0.28,h,width),wm);
   bw.position.set(bx,h/2,z); bw.castShadow=true; scene.add(bw);
   // Paredes laterales
-  [z-width/2,z+width/2].forEach(sz=>{
+  [z-width/2,z+widt
+  // Iluminacion calida interior para tiendas (Fase 10)
+  var shopGlow=new THREE.PointLight(0xffe8c0,0.2,6);shopGlow.position.set(0,2.5,0);scene.add(shopGlow);h/2].forEach(sz=>{
     const sw=new THREE.Mesh(mkBox(depth,h,0.22),wm);
     sw.position.set(x+s*depth/2,h/2,sz); sw.castShadow=true; scene.add(sw);
   });
@@ -1691,6 +1693,15 @@ function buildSidewallWindows(){
   pos.forEach(({z,vL,vR})=>{
     _buildSideWindow(-17,z,extT[vL]);
     _buildSideWindow(+17,z,extT[vR]);
+  });
+
+  // Ventanas adicionales laterales para mayor realismo (Fase 11)
+  var extraWindows=tex(256,256,(ctx)=>{ctx.fillStyle='#c8dff0';ctx.fillRect(0,0,256,256);ctx.strokeStyle='#8ab4d0';ctx.lineWidth=3;ctx.strokeRect(10,10,236,236);ctx.strokeRect(16,16,224,224);});
+  extraWindows.wrapS=extraWindows.wrapT=THREE.RepeatWrapping;
+  var ewMat=new THREE.MeshStandardMaterial({map:extraWindows,roughness:0.1,metalness:0.3,transparent:true,opacity:0.7});
+  [[-16,14],[-16,-2],[-16,-18],[16,14],[16,-2],[16,-18]].forEach(function(p){
+    var ew=new THREE.Mesh(mkBox(0.2,3,5),ewMat);
+    ew.position.set(p[0],2,p[1]);scene.add(ew);
   });
 }
 
