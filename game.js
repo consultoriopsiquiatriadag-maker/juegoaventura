@@ -226,6 +226,7 @@ function buildWorld(){
   buildCorridorEdgeMarkers();
   // ── FASE 3: Puestos funcionales del hall ───────
   buildServicePosts();
+  buildHallAmbience();
   // ───────────────────────────────────────────────
   buildEntranceTarmacView(); // Fase 7: vista de plataforma desde la entrada
   buildExterior(); buildZoneRings();
@@ -356,6 +357,14 @@ function buildCeiling(){
     const frame=new THREE.Mesh(mkBox(30.5,0.1,4.5),mkStd(0x888888,0.4,0.3));
     frame.position.set(0,13.05,cz); scene.add(frame);
   });
+
+  // Conductos de ventilacion del techo
+  [10,0,-10,-20,-30].forEach(cz=>{
+    const duct=new THREE.Mesh(mkBox(14,0.3,2),mkStd(0xc0b8a8,0.5,0.1));
+    duct.position.set(0,12.7,cz); scene.add(duct);
+    const grille=new THREE.Mesh(mkBox(13.5,0.05,1.2),mkStd(0x808080,0.3,0.4));
+    grille.position.set(0,12.85,cz); scene.add(grille);
+  });
 }
 
 // ─── WALLS ── Paredes modernas con paneles ─────────
@@ -454,6 +463,29 @@ function buildZoneRings(){
     const dot=new THREE.Mesh(dg,dm); dot.rotation.x=-Math.PI/2;
     dot.position.set(zone.position.x,0.17,zone.position.z); scene.add(dot);
   });
+}
+
+// Hall Ambience - ambient detail objects in the hall
+function buildHallAmbience(){
+  // Plants in waiting areas
+  const plantPositions=[[-12,24],[-12,-5],[12,24],[12,-5],[-12,-20],[12,-20]];
+  plantPositions.forEach(([px,pz])=>{ addPlant(px,pz,0.8+Math.random()*0.4); });
+
+  // Extra benches in lounge area
+  const benchPositions=[[-8,-14],[8,-14],[-8,-10],[8,-10]];
+  benchPositions.forEach(([px,pz])=>{ buildAirportBench(px,pz); });
+
+  // Scattered luggage carts
+  [[-5,38],[5,38],[-3,36],[3,36],[-4,40],[4,40]].forEach(([px,pz])=>{ addSuitcase(px,pz); });
+
+  // Vending machines near lounge
+  [[13,-6],[-13,-6]].forEach(([px,pz])=>{ addVending(px,pz); });
+
+  // Information monitors on side walls near check-in
+  [[-17,20],[17,20],[-17,10],[17,10]].forEach(([wx,wz])=>{ addMonitor(wx,wz); });
+
+  // Service carts near cafe
+  addCart(-14,34); addCart(14,34);
 }
 
 // ══════════════════════════════════════════════════
