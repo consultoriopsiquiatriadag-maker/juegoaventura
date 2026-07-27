@@ -34,7 +34,8 @@ const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 // FASE 15 -- CALIDAD DE RENDERIZADO
 // ══════════════════════════════════════════════════
 const QUALITY_LEVELS={
-  high:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:2048,bloomStrength:0.12},
+  ultra:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:4096,bloomStrength:0.15},
+  high:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:4096,bloomStrength:0.12},
   normal:{pixelRatio:isMobile?Math.min(devicePixelRatio,1.5):Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:1024,bloomStrength:0.08},
   low:{pixelRatio:1,shadowEnabled:false,bloomStrength:0,reduceNPCs:false}
 };
@@ -150,7 +151,7 @@ function openCurrentZonePanelAndTip(){
 function init(){
   scene=new THREE.Scene();
   scene.background=new THREE.Color(0x87ceeb);
-  scene.fog=new THREE.FogExp2(0xa0c8e8,0.007);
+  scene.fog=new THREE.FogExp2(0xa0c8e8,0.005);
 
   camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,400);
   camera.position.set(0,PLAYER_HEIGHT,52);
@@ -163,7 +164,7 @@ function init(){
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   renderer.outputEncoding=THREE.sRGBEncoding;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure=0.85;
+  renderer.toneMappingExposure=1.1;
   document.body.insertBefore(renderer.domElement,document.getElementById('ui-root'));
 
   controls=new THREE.PointerLockControls(camera,renderer.domElement);
@@ -173,6 +174,7 @@ function init(){
   if(typeof THREE.GLTFLoader !== 'undefined') gltfLoader=new THREE.GLTFLoader();
 
   setupLighting();
+  setupDustParticles();
   // Guardar densidad base de niebla (depende de si Three.Sky está disponible)
   if(scene.fog) _normalFogDensity=scene.fog.density;
   buildWorld();
@@ -197,9 +199,9 @@ function setupPostProcessing(){
   // threshold alto = solo píxeles muy brillantes (>0.98) reciben bloom
   const bloomPass=new THREE.UnrealBloomPass(
     new THREE.Vector2(innerWidth,innerHeight),
-    0.12,  // strength -- casi imperceptible en superficies normales
-    0.4,   // radius
-    0.98   // threshold -- solo luz pura brilla (LEDs, pantallas EFIS)
+    0.12,  // strength -- sutil pero perceptible en superficies brillantes
+    0.5,   // radius
+    0.85   // threshold -- luz suave también brilla (no solo LEDs pura)
   );
   composer.addPass(bloomPass);
   // Resize handler del composer -- el de camera/renderer está en setupEvents
@@ -216,14 +218,14 @@ function animLoad(){
 // ── LIGHTING ──────────────────────────────────────
 function setupLighting(){
   // Ambiente suave con tonos cálidos de aeropuerto moderno
-  ambientLight=new THREE.AmbientLight(0xfff0e0,0.28);
+  ambientLight=new THREE.AmbientLight(0xfff0e0,0.35);
   scene.add(ambientLight);
 
   // Luz solar principal -- sombras de alta resolución
   const sun=new THREE.DirectionalLight(0xfffae8,1.1);
   sun.position.set(60,120,50); sun.castShadow=true;
   // Fase 8: 2048 desktop (era 4096) -- calidad visual idéntica, memoria ×4 menor
-  sun.shadow.mapSize.width=sun.shadow.mapSize.height=isMobile?512:2048;
+  sun.shadow.mapSize.width=sun.shadow.mapSize.height=isMobile?1024:2048;
   sun.shadow.camera.left=-120; sun.shadow.camera.right=120;
   sun.shadow.camera.top=120; sun.shadow.camera.bottom=-120;
   sun.shadow.camera.far=400; sun.shadow.bias=-0.0005;
@@ -259,14 +261,32 @@ function setupLighting(){
     sky.scale.setScalar(450);
     scene.add(sky);
     const su=sky.material.uniforms;
-    su['turbidity'].value=3;
-    su['rayleigh'].value=1.5;
-    su['mieCoefficient'].value=0.005;
-    su['mieDirectionalG'].value=0.85;
-    su['sunPosition'].value.set(0.5,0.3,0.2);
+    su['turbidity'].value=2.5;
+    su['rayleigh'].value=2.0;
+    su['mieCoefficient'].value=0.008;
+    su['mieDirectionalG'].value=0.82;
+    su['sunPosition'].value.set(0.4,0.35,0.1);
     scene.background=null; // Sky reemplaza el fondo sólido
-    scene.fog=new THREE.FogExp2(0xb0d8f0,0.006);
+    scene.fog=new THREE.FogExp2(0xb0d8f0,0.004);
   }
+}
+
+// ══════════════════════════════════════════════════
+// ATMOSPHERIC DUST PARTICLES
+// ══════════════════════════════════════════════════
+function setupDustParticles(){
+  const count=300;
+  const positions=new Float32Array(count*3);
+  for(let i=0;i<count;i++){
+    positions[i*3]=(Math.random()-0.5)*36;
+    positions[i*3+1]=Math.random()*8+0.5;
+    positions[i*3+2]=(Math.random()-0.5)*140;
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.BufferAttribute(positions,3));
+  const mat=new THREE.PointsMaterial({color:0xfff5e0,size:0.04,transparent:true,opacity:0.35,sizeAttenuation:true});
+  const particles=new THREE.Points(geo,mat);
+  scene.add(particles);
 }
 
 // ══════════════════════════════════════════════════
@@ -313,7 +333,7 @@ function buildShell(){
 // ─── FLOOR TILE ── Mármol pulido aeropuerto moderno ─
 function buildFloorTile(){
   // Textura de mármol blanco + beige con venas
-  const t=tex(1024,1024,(ctx)=>{
+  const t=tex(2048,2048,(ctx)=>{
     // Base de mármol cremoso
     const bg=ctx.createLinearGradient(0,0,1024,1024);
     bg.addColorStop(0,'#ede8e0'); bg.addColorStop(0.5,'#f0ece4'); bg.addColorStop(1,'#e8e2d8');
