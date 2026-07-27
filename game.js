@@ -4380,13 +4380,8 @@ function animate(){
   if(playerMesh){
     playerMesh.visible=isThirdPerson;
     if(isThirdPerson){
-      playerWorldPos.lerp(camera.position,0.3);
-      playerMesh.position.copy(playerWorldPos);
-      playerMesh.position.y-=PLAYER_HEIGHT;
-      camera.position.set(playerWorldPos.x,playerWorldPos.y+2.2,playerWorldPos.z+3.5);
-      camera.lookAt(playerWorldPos.x,playerWorldPos.y+1.2,playerWorldPos.z);
-    } else {
-      playerWorldPos.set(camera.position.x,PLAYER_HEIGHT,camera.position.z);
+      playerMesh.position.set(camera.position.x,camera.position.y-PLAYER_HEIGHT,camera.position.z);
+      playerMesh.position.add(new THREE.Vector3(0,0,2.8));
     }
   }
 
