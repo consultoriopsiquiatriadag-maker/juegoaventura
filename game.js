@@ -57,6 +57,9 @@ function setQuality(level){
 // Auto-detect quality on mobile
 if(isMobile) setQuality('low');
 let calmMode=false;             // Modo Calma: estimulación reducida
+let isThirdPerson=false;
+let playerMesh=null;
+let playerWorldPos=new THREE.Vector3(0,PLAYER_HEIGHT,52);
 let _normalFogDensity=0.006;   // se lee después de setupLighting() para manejar Sky on/off
 
 // ── AMBIENTE SONORO (Fase 5) ──────────────────────
@@ -3626,6 +3629,7 @@ function onKeyDown(e){
     case 'KeyD': case 'ArrowRight': movement.right=true;    break;
     case 'KeyB': openBreathing();        break;
     case 'KeyE': openCurrentZonePanel(); break;
+    case 'Tab': e.preventDefault(); isThirdPerson=!isThirdPerson; if(isThirdPerson){ if(!isMobile && controls.isLocked) controls.unlock(); } else { if(!isMobile) controls.lock(); } showToast(isThirdPerson?'Cámara tercera persona':'Cámara primera persona'); break;
   }
 }
 function onKeyUp(e){ switch(e.code){ case 'KeyW': case 'ArrowUp': movement.forward=false; break; case 'KeyS': case 'ArrowDown': movement.backward=false; break; case 'KeyA': case 'ArrowLeft': movement.left=false; break; case 'KeyD': case 'ArrowRight': movement.right=false; break; } }
@@ -3780,6 +3784,9 @@ function startGame(){
   visitedZones.clear(); breathCount=0;
   document.getElementById('breath-count-stat').textContent='0';
   camera.position.set(0,PLAYER_HEIGHT,52);
+  playerMesh=buildPlayerBody();
+  playerMesh.visible=false;
+  scene.add(playerMesh);
   if(isMobile){
     mobileYaw=Math.PI; mobilePitch=0;
     camera.rotation.order='YXZ';
@@ -4273,6 +4280,32 @@ function showToast(text){ const t=document.getElementById('toast'); t.textConten
 // ══════════════════════════════════════════════════
 let ringTime=0;
 
+function buildPlayerBody(){
+  const g=new THREE.Group();
+  const sM=mkStd(0xfde0bd,0.62,0.0);
+  const tM=mkStd(0x1a4a99,0.88,0.0);
+  const pM=mkStd(0x223344,0.85,0.0);
+  const shM=mkStd(0x111111,0.35,0.15);
+  const BX=(w,h,d,m,px,py,pz,rx,ry)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(px,py,pz);o.rotation.x=rx;o.rotation.y=ry;o.castShadow=true;o.receiveShadow=true;return o;};
+  const CY=(rt,rb,h,s,m,px,py,pz)=>{const o=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,s),m);o.position.set(px,py,pz);o.castShadow=true;return o;};
+  const SP=(r,segs,m,px,py,pz)=>{const o=new THREE.Mesh(new THREE.SphereGeometry(r,segs,Math.ceil(segs*0.7)),m);o.position.set(px,py,pz);o.castShadow=true;return o;};
+  [-0.08,0.08].forEach(sx=>{g.add(CY(0.07,0.065,0.42,8,pM,sx,0.21,0));g.add(CY(0.075,0.06,0.38,8,pM,sx,0.62,0));});
+  [-0.1,0.1].forEach(sx=>{g.add(BX(0.18,0.04,0.26,shM,sx,0.02,0.03));});
+  g.add(BX(0.34,0.34,0.19,tM,0,1.02,0));g.add(BX(0.28,0.26,0.17,tM,0,1.16,0.01));
+  g.add(CY(0.065,0.06,0.28,8,tM,-0.21,1.02,-0.02,0,Math.PI/2));
+  g.add(CY(0.065,0.06,0.28,8,tM,0.21,1.02,-0.02,0,-Math.PI/2));
+  g.add(BX(0.055,0.10,0.055,shM,-0.21,0.84,-0.09,0,Math.PI/2));
+  g.add(BX(0.055,0.10,0.055,shM,0.21,0.84,-0.09,0,-Math.PI/2));
+  g.add(CY(0.045,0.05,0.06,8,sM,0,1.55,0));
+  g.add(BX(0.13,0.11,0.13,sM,0,1.77,0));
+  g.add(SP(0.06,8,sM,0,1.88,0));
+  g.add(SP(0.025,8,0x050508,0.02,1.89,-0.03));
+  g.add(SP(0.025,8,0x050508,-0.02,1.89,-0.03));
+  g.add(SP(0.007,6,0xffffff,0,1.89,-0.06));
+  g.castShadow=true;
+  return g;
+}
+
 function animate(){
   requestAnimationFrame(animate);
   const delta=Math.min(clock.getDelta(),0.05);
@@ -4342,6 +4375,20 @@ function animate(){
   const targetFov = calmMode ? 58 : 72;
   camera.fov += (targetFov - camera.fov) * 0.03;
   camera.updateProjectionMatrix();
+
+  // Third-person camera offset
+  if(playerMesh){
+    playerMesh.visible=isThirdPerson;
+    if(isThirdPerson){
+      playerWorldPos.lerp(camera.position,0.3);
+      playerMesh.position.copy(playerWorldPos);
+      playerMesh.position.y-=PLAYER_HEIGHT;
+      camera.position.set(playerWorldPos.x,playerWorldPos.y+0.35,playerWorldPos.z+2.8);
+      camera.lookAt(playerWorldPos.x,playerWorldPos.y+1.5,playerWorldPos.z);
+    } else {
+      playerWorldPos.set(camera.position.x,PLAYER_HEIGHT,camera.position.z);
+    }
+  }
 
   // Render: sin bloom en móvil o en modo calma
   if(composer && !calmMode) composer.render(delta);
