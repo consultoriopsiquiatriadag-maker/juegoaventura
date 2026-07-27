@@ -29,6 +29,7 @@ let gameStartTime=0;            // ms al iniciar recorrido
 let menuAnimId=null;            // requestAnimationFrame del canvas del menú
 const prefersReducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 // ══════════════════════════════════════════════════
 // FASE 15 -- CALIDAD DE RENDERIZADO
 // ══════════════════════════════════════════════════
@@ -73,7 +74,6 @@ const DIARY_KEY='aerocalma_diary';
 let anxietyPre=-1;              // nivel de ansiedad antes del recorrido (0-10, -1 = no seleccionó)
 let anxietyPost=-1;             // nivel de ansiedad al terminar el recorrido
 // ── MOBILE ─────────────────────────────────────────
-const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 let mobileYaw = Math.PI;
 let mobilePitch = 0;
 const joystick  = { active:false, id:null, baseX:0, baseY:0, nx:0, ny:0 };
