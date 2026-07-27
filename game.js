@@ -3629,7 +3629,7 @@ function onKeyDown(e){
     case 'KeyD': case 'ArrowRight': movement.right=true;    break;
     case 'KeyB': openBreathing();        break;
     case 'KeyE': openCurrentZonePanel(); break;
-    case 'Tab': e.preventDefault(); isThirdPerson=!isThirdPerson; if(isThirdPerson){ if(!isMobile && controls.isLocked) controls.unlock(); } else { if(!isMobile) controls.lock(); } showToast(isThirdPerson?'Cámara tercera persona':'Cámara primera persona'); break;
+    case 'Tab': e.preventDefault(); isThirdPerson=!isThirdPerson; showToast(isThirdPerson?'Cámara tercera persona':'Cámara primera persona'); break;
   }
 }
 function onKeyUp(e){ switch(e.code){ case 'KeyW': case 'ArrowUp': movement.forward=false; break; case 'KeyS': case 'ArrowDown': movement.backward=false; break; case 'KeyA': case 'ArrowLeft': movement.left=false; break; case 'KeyD': case 'ArrowRight': movement.right=false; break; } }
@@ -4383,8 +4383,8 @@ function animate(){
       playerWorldPos.lerp(camera.position,0.3);
       playerMesh.position.copy(playerWorldPos);
       playerMesh.position.y-=PLAYER_HEIGHT;
-      camera.position.set(playerWorldPos.x,playerWorldPos.y+0.35,playerWorldPos.z+2.8);
-      camera.lookAt(playerWorldPos.x,playerWorldPos.y+1.5,playerWorldPos.z);
+      camera.position.set(playerWorldPos.x,playerWorldPos.y+2.2,playerWorldPos.z+3.5);
+      camera.lookAt(playerWorldPos.x,playerWorldPos.y+1.2,playerWorldPos.z);
     } else {
       playerWorldPos.set(camera.position.x,PLAYER_HEIGHT,camera.position.z);
     }
