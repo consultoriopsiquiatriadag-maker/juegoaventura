@@ -4396,12 +4396,13 @@ function animate(){
   camera.fov += (targetFov - camera.fov) * 0.03;
   camera.updateProjectionMatrix();
 
-  // Third-person camera offset
+  // Third-person camera offset — character always behind camera in local -Z
   if(playerMesh){
     playerMesh.visible=isThirdPerson;
     if(isThirdPerson){
-      playerMesh.position.set(camera.position.x,camera.position.y-PLAYER_HEIGHT,camera.position.z);
-      playerMesh.position.add(new THREE.Vector3(0,0,2.8));
+      const bx=new THREE.Vector3(0,0,1).applyQuaternion(camera.quaternion);
+      playerMesh.position.copy(camera.position).add(bx.multiplyScalar(2.8));
+      playerMesh.position.y=camera.position.y-PLAYER_HEIGHT;
     }
   }
 
