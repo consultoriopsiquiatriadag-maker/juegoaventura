@@ -2249,7 +2249,7 @@ function buildExterior(){
   buildGroundVehicle(-10,0,-48,0.4,0xcccccc);
   buildGroundVehicle(15,0,-42,Math.PI*0.5,0xdd4400);
   buildGroundVehicle(-5,0,-38,-Math.PI*0.3,0xeeeeee);
-  // Terminal approach approach lights (PAPI-style)
+  // Terminal approach lights (PAPI-style)
   const strobeMat=mkMat(0xffffff,{emissive:0xffffff,emissiveIntensity:1.0});
   for(let i=0;i<12;i++){
     const s=new THREE.Mesh(mkBox(0.3,0.5,0.3),strobeMat);
