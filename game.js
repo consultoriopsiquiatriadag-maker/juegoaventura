@@ -356,7 +356,7 @@ function buildGround(){
   }
   // Approach lights (PAPI-style row + runway end lights)
   for(let i=0;i<25;i++){
-    const al=new THREE.Mesh(mkBox(0.2,0.4,0.2),whtL); al.position.set(0,0.2,-115-i*3); scene.add(al);
+    const al=new THREE.Mesh(mkBox(0.2,0.4,0.2),edgeMat); al.position.set(0,0.2,-115-i*3); scene.add(al);
   }
   // Runway end lights (red at far end)
   for(let i=0;i<6;i++){
