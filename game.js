@@ -315,20 +315,75 @@ function buildWorld(){
 function buildGround(){
   const gm=new THREE.Mesh(new THREE.PlaneGeometry(600,600),mkMat(0x5a8a55));
   gm.rotation.x=-Math.PI/2; gm.receiveShadow=true; scene.add(gm);
-  const tm=new THREE.Mesh(new THREE.PlaneGeometry(130,320),mkMat(0x555566));
+  // Tarmac
+  const tm=new THREE.Mesh(new THREE.PlaneGeometry(130,320),mkMat(0x4a4a4a));
   tm.rotation.x=-Math.PI/2; tm.position.set(0,0.02,-55); scene.add(tm);
-  for(let i=0;i<8;i++){ const m=new THREE.Mesh(new THREE.PlaneGeometry(3,12),mkMat(0xffffff)); m.rotation.x=-Math.PI/2; m.position.set(-30+i*8.5,0.04,-90); scene.add(m); }
+  // Runway markings (centerline + threshold)
+  const rkMat=mkMat(0xffffff,{roughness:0.5});
+  for(let i=0;i<8;i++){ const m=new THREE.Mesh(new THREE.PlaneGeometry(2.5,12),rkMat); m.rotation.x=-Math.PI/2; m.position.set(-30+i*8.5,0.04,-90); scene.add(m); }
+  // Runway edge lights (red at near end, green at far end)
+  const redL=mkMat(0xff0000,{emissive:0xff0000,emissiveIntensity:0.5});
+  const grnL=mkMat(0x00ff00,{emissive:0x00ff00,emissiveIntensity:0.5});
+  const whtL=mkMat(0xffffff,{emissive:0xffffff,emissiveIntensity:0.3});
+  for(let i=0;i<4;i++){
+    const rl=new THREE.Mesh(mkBox(0.3,0.2,0.3),redL); rl.position.set(-30+i*10,0.15,-83); scene.add(rl);
+    const gl=new THREE.Mesh(mkBox(0.3,0.2,0.3),grnL); gl.position.set(-30+i*10,0.15,-97); scene.add(gl);
+  }
+  // Approach lights (white line leading to runway)
+  for(let i=0;i<20;i++){
+    const al=new THREE.Mesh(mkBox(0.2,0.3,0.2),whtL); al.position.set(0,0.18,-110-i*3); scene.add(al);
+  }
+  // Taxiway strip (dashed yellow centerline)
+  for(let i=0;i<12;i++){
+    const td=new THREE.Mesh(new THREE.PlaneGeometry(2,3),mkMat(0xddaa00,{emissive:0x332200,emissiveIntensity:0.2}));
+    td.rotation.x=-Math.PI/2; td.position.set(0,0.05,-65-i*8); scene.add(td);
+  }
+  // Terminal approach apron
+  const apMat=mkMat(0x505050,{roughness:0.6});
+  const apron=new THREE.Mesh(new THREE.PlaneGeometry(50,20),apMat);
+  apron.rotation.x=-Math.PI/2; apron.position.set(0,0.01,-40); scene.add(apron);
 }
 
 // ─── SHELL ───────────────────────────────────────
 function buildShell(){
+  // Main terminal body -- beige structural box
   box(0,0,-5,40,14,142,0xe0d8cc,false,false);
-  const gMat=mkMat(0x88b8d8,{transparent:true,opacity:0.35});
-  const glF=new THREE.Mesh(mkBox(40,12,0.4),gMat); glF.position.set(0,7,21); scene.add(glF);
-  box(0,12.6,23,44,0.6,10,0xb0a898,false,false);
+
+  // Glass curtain wall facade (multi-panel airport terminal glass)
+  const gMat=mkMat(0x88b8d8,{transparent:true,opacity:0.3,roughness:0.1,metalness:0.05});
+  const gMat2=mkMat(0x99ccee,{transparent:true,opacity:0.25,roughness:0.15,metalness:0.08});
+  // Left glass panel (z=6)
+  const glL=new THREE.Mesh(mkBox(12,10,0.3),gMat); glL.position.set(-14,6,6); scene.add(glL);
+  // Center-left glass panel
+  const glCL=new THREE.Mesh(mkBox(12,10,0.3),gMat); glCL.position.set(-1,6,6); scene.add(glCL);
+  // Center-right glass panel
+  const glCR=new THREE.Mesh(mkBox(12,10,0.3),gMat2); glCR.position.set(12,6,6); scene.add(glCR);
+  // Right glass panel
+  const glR=new THREE.Mesh(mkBox(12,10,0.3),gMat); glR.position.set(25,6,6); scene.add(glR);
+  // Upper glass band (clerestory)
+  const glU=new THREE.Mesh(mkBox(40,1.5,0.2),gMat); glU.position.set(0,13,6); scene.add(glU);
+
+  // Roof overhang with deeper fascia
+  box(0,13.5,23,46,0.8,14,0xb0a898,false,false);
+  box(0,13.8,23,46,0.3,2,0xa09888,false,false);
+
+  // Side walls (glass strip lower, solid upper)
+  const sideMat=mkMat(0xccc4b8,{roughness:0.7});
+  const glassSide=mkMat(0x88b8d8,{transparent:true,opacity:0.2,roughness:0.2});
   box(-20,0,-5,0.5,14,142,0xccc4b8,false,false);
   box(20,0,-5,0.5,14,142,0xccc4b8,false,false);
-}
+  // Lower glass strip on left wall (z=6 to z=56)
+  const sideGlassL=new THREE.Mesh(mkBox(0.3,3,50),glassSide); sideGlassL.position.set(-20.15,2,26); scene.add(sideGlassL);
+  // Lower glass strip on right wall
+  const sideGlassR=new THREE.Mesh(mkBox(0.3,3,50),glassSide); sideGlassR.position.set(20.15,2,26); scene.add(sideGlassR);
+
+  // Main entrance canopy -- large overhang above door zone
+  box(0,10.5,36,24,1.5,3,0x808890,false,false);
+  const canMat=mkMat(0x9098a0,{roughness:0.3,metalness:0.15});
+  const canopy=new THREE.Mesh(mkBox(24,0.15,5),canMat); canopy.position.set(0,11.3,36); scene.add(canopy);
+  // Two entrance door frames
+  box(-6,3.5,35,1.5,7,0.3,0x404040,false,false);
+  box(6,3.5,35,1.5,7,0.404040,false,false);
 
 // ─── FLOOR TILE ── Mármol pulido aeropuerto moderno ─
 function buildFloorTile(){
