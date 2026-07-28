@@ -318,25 +318,70 @@ function buildGround(){
   // Tarmac
   const tm=new THREE.Mesh(new THREE.PlaneGeometry(130,320),mkMat(0x4a4a4a));
   tm.rotation.x=-Math.PI/2; tm.position.set(0,0.02,-55); scene.add(tm);
-  // Runway markings (centerline + threshold)
-  const rkMat=mkMat(0xffffff,{roughness:0.5});
-  for(let i=0;i<8;i++){ const m=new THREE.Mesh(new THREE.PlaneGeometry(2.5,12),rkMat); m.rotation.x=-Math.PI/2; m.position.set(-30+i*8.5,0.04,-90); scene.add(m); }
-  // Runway edge lights (red at near end, green at far end)
-  const redL=mkMat(0xff0000,{emissive:0xff0000,emissiveIntensity:0.5});
-  const grnL=mkMat(0x00ff00,{emissive:0x00ff00,emissiveIntensity:0.5});
-  const whtL=mkMat(0xffffff,{emissive:0xffffff,emissiveIntensity:0.3});
-  for(let i=0;i<4;i++){
-    const rl=new THREE.Mesh(mkBox(0.3,0.2,0.3),redL); rl.position.set(-30+i*10,0.15,-83); scene.add(rl);
-    const gl=new THREE.Mesh(mkBox(0.3,0.2,0.3),grnL); gl.position.set(-30+i*10,0.15,-97); scene.add(gl);
+  // Touchdown zone markings (two rows of barred rectangles)
+  const tdMat=mkMat(0xffffff,{roughness:0.5});
+  for(let row=0;row<2;row++){
+    for(let i=0;i<10;i++){
+      const bar=new THREE.Mesh(new THREE.PlaneGeometry(2.5,1.5),tdMat);
+      bar.rotation.x=-Math.PI/2; bar.position.set(-15+i*3,0.05,-78-row*8); scene.add(bar);
+    }
   }
-  // Approach lights (white line leading to runway)
+  // Centerline dashed
+  for(let i=0;i<15;i++){ const m=new THREE.Mesh(new THREE.PlaneGeometry(2.5,18),tdMat); m.rotation.x=-Math.PI/2; m.position.set(0,0.04,-70-i*10); scene.add(m); }
+  // Threshold markings (4 bars wide)
+  for(let row=0;row<4;row++){
+    for(let col=0;col<3;col++){
+      const m=new THREE.Mesh(new THREE.PlaneGeometry(1.5,5),tdMat); m.rotation.x=-Math.PI/2; m.position.set(-3+col*3,0.04,-88+row*2.5); scene.add(m);
+    }
+  }
+  // Runway edge lights (continuous white along edges)
+  const edgeMat=mkMat(0xffffff,{emissive:0xffffff,emissiveIntensity:0.4});
+  const redMat=mkMat(0xff0000,{emissive:0xff0000,emissiveIntensity:0.6});
+  const grnMat=mkMat(0x00ff00,{emissive:0x00ff00,emissiveIntensity:0.6});
   for(let i=0;i<20;i++){
-    const al=new THREE.Mesh(mkBox(0.2,0.3,0.2),whtL); al.position.set(0,0.18,-110-i*3); scene.add(al);
+    const rz=-70-i*10;
+    const side=new THREE.Mesh(mkBox(0.2,0.3,0.2),i<4?redMat:i>15?grnMat:edgeMat);
+    side.position.set(-14.5,0.2,rz); scene.add(side);
+    const side2=new THREE.Mesh(mkBox(0.2,0.3,0.2),i<4?redMat:i>15?grnMat:edgeMat);
+    side2.position.set(14.5,0.2,rz); scene.add(side2);
   }
-  // Taxiway strip (dashed yellow centerline)
-  for(let i=0;i<12;i++){
-    const td=new THREE.Mesh(new THREE.PlaneGeometry(2,3),mkMat(0xddaa00,{emissive:0x332200,emissiveIntensity:0.2}));
-    td.rotation.x=-Math.PI/2; td.position.set(0,0.05,-65-i*8); scene.add(td);
+  // PAPI lights (4 per side, on short pylons at runway edge)
+  for(let side=-1;side<=1;side+=2){
+    for(let i=0;i<4;i++){
+      const papi=new THREE.Mesh(mkBox(0.15,0.15,0.15),grnMat);
+      papi.position.set(side*15,2.5,-90+i*3); scene.add(papi);
+      const papiPole=new THREE.Mesh(mkBox(0.05,2.5,0.05),mkMat(0x333333));
+      papiPole.position.set(side*15,1.25,-90+i*3); scene.add(papiPole);
+    }
+  }
+  // Approach lights (PAPI-style row + runway end lights)
+  for(let i=0;i<25;i++){
+    const al=new THREE.Mesh(mkBox(0.2,0.4,0.2),whtL); al.position.set(0,0.2,-115-i*3); scene.add(al);
+  }
+  // Runway end lights (red at far end)
+  for(let i=0;i<6;i++){
+    const rel=new THREE.Mesh(mkBox(0.3,0.3,0.3),redMat); rel.position.set(-25+i*10,0.2,-140); scene.add(rel);
+    const rel2=new THREE.Mesh(mkBox(0.3,0.3,0.3),redMat); rel2.position.set(-25+i*10,0.2,-143); scene.add(rel2);
+  }
+  // Taxiway edge blue lights
+  const blueMat=mkMat(0x0000ff,{emissive:0x0000ff,emissiveIntensity:0.5});
+  for(let i=0;i<15;i++){
+    const bl=new THREE.Mesh(mkBox(0.15,0.15,0.15),blueMat); bl.position.set(-18,0.15,-60-i*8); scene.add(bl);
+    const bl2=new THREE.Mesh(mkBox(0.15,0.15,0.15),blueMat); bl2.position.set(18,0.15,-60-i*8); scene.add(bl2);
+  }
+  // Taxiway dashed centerline (yellow)
+  for(let i=0;i<15;i++){
+    const td=new THREE.Mesh(new THREE.PlaneGeometry(1.5,3),mkMat(0xddaa00,{emissive:0x443300,emissiveIntensity:0.3}));
+    td.rotation.x=-Math.PI/2; td.position.set(0,0.05,-60-i*8); scene.add(td);
+  }
+  // Apron markings (parking zone lines)
+  for(let i=0;i<5;i++){
+    const pz=new THREE.Mesh(new THREE.PlaneGeometry(8,0.3),mkMat(0xffffff,{roughness:0.6}));
+    pz.rotation.x=-Math.PI/2; pz.position.set(0,0.05,-30-i*6); scene.add(pz);
+    const pzl=new THREE.Mesh(new THREE.PlaneGeometry(0.3,6),mkMat(0xffffff,{roughness:0.6}));
+    pzl.rotation.x=-Math.PI/2; pzl.position.set(-4,0.05,-30-i*6); scene.add(pzl);
+    const pzr=new THREE.Mesh(new THREE.PlaneGeometry(0.3,6),mkMat(0xffffff,{roughness:0.6}));
+    pzr.rotation.x=-Math.PI/2; pzr.position.set(4,0.05,-30-i*6); scene.add(pzr);
   }
   // Terminal approach apron
   const apMat=mkMat(0x505050,{roughness:0.6});
@@ -2194,11 +2239,59 @@ function buildServiceDesk(x,z,ry,cfg){
 }
 
 function buildExterior(){
+  // Detailed planes at runway positions
   buildDetailedPlane(-28,0,-44,0.12);
   buildDetailedPlane(26,0,-30,-0.15);
   buildDetailedPlane(-18,0,-12,0.05);
+  buildDetailedPlane(5,0,-55,Math.PI);
+  buildDetailedPlane(-35,0,-65,0.3);
+  // Ground service vehicles
+  buildGroundVehicle(-10,0,-48,0.4,0xcccccc);
+  buildGroundVehicle(15,0,-42,Math.PI*0.5,0xdd4400);
+  buildGroundVehicle(-5,0,-38,-Math.PI*0.3,0xeeeeee);
+  // Terminal approach approach lights (PAPI-style)
+  const strobeMat=mkMat(0xffffff,{emissive:0xffffff,emissiveIntensity:1.0});
+  for(let i=0;i<12;i++){
+    const s=new THREE.Mesh(mkBox(0.3,0.5,0.3),strobeMat);
+    s.position.set(0,0.3,-120-i*4); scene.add(s);
+  }
+  // Terminal directional signage (large signs visible from runway)
+  const signMat=mkMat(0xffffff,{emissive:0xffffcc,emissiveIntensity:0.8});
+  // "TERMINAL" sign above entrance
+  const termSign=tex(512,128,(ctx)=>{
+    ctx.fillStyle='#1a1a2e'; ctx.fillRect(0,0,512,128);
+    ctx.fillStyle='#ffffff'; ctx.font='bold 60px Arial'; ctx.textAlign='center';
+    ctx.fillText('AEROCALMA',256,75);
+  });
+  const termPanel=new THREE.Mesh(mkBox(20,3,0.5),new THREE.MeshLambertMaterial({map:termSign}));
+  termPanel.position.set(0,10.5,35); scene.add(termPanel);
+  // Perimeter fence posts along tarmac edges
+  const fenceMat=mkMat(0x888888);
+  for(let i=0;i<25;i++){
+    const p=new THREE.Mesh(mkBox(0.2,2.5,0.2),fenceMat);
+    p.position.set(-48,1.25,-55+i*12); scene.add(p); p.castShadow=true;
+  }
+  // Runway perimeter lights (faint white along runway edges visible from far)
+  const periMat=mkMat(0xffffff,{emissive:0xffffff,emissiveIntensity:0.15});
+  for(let i=0;i<40;i++){
+    const pL=new THREE.Mesh(mkBox(0.15,0.15,0.15),periMat);
+    pL.position.set(-15,0.1,-70+i*7); scene.add(pL);
+    const pR=new THREE.Mesh(mkBox(0.15,0.15,0.15),periMat);
+    pR.position.set(15,0.1,-70+i*7); scene.add(pR);
+  }
   buildTower(55,0,0);
   addClouds();
+}
+
+function buildGroundVehicle(x,y,z,rot,color){
+  const g=new THREE.Group(); g.position.set(x,y,z); g.rotation.y=rot;
+  const body=new THREE.Mesh(mkBox(2.5,1.2,4),mkMat(color)); g.add(body);
+  const cab=new THREE.Mesh(mkBox(1.2,1.0,1.5),mkMat(0x222233)); cab.position.set(0,0.7,-0.5); g.add(cab);
+  [-1,1].forEach(sx=>{
+    const w=new THREE.Mesh(mkBox(0.4,0.3,0.4),mkMat(0x111111));
+    w.position.set(sx*0.8,0.15,1.2); g.add(w);
+  });
+  scene.add(g);
 }
 
 function buildDetailedPlane(x,y,z,ry){
