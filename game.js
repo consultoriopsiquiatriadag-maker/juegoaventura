@@ -429,6 +429,7 @@ function buildShell(){
   // Two entrance door frames
   box(-6,3.5,35,1.5,7,0.3,0x404040,false,false);
   box(6,3.5,35,1.5,7,0.404040,false,false);
+}
 
 // ─── FLOOR TILE ── Mármol pulido aeropuerto moderno ─
 function buildFloorTile(){
