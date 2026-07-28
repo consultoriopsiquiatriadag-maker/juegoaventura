@@ -4357,28 +4357,36 @@ let ringTime=0;
 
 function buildPlayerBody(){
   const g=new THREE.Group();
-  const sM=mkStd(0xfde0bd,0.62,0.0);
-  const tM=mkStd(0x1a4a99,0.88,0.0);
-  const pM=mkStd(0x223344,0.85,0.0);
-  const shM=mkStd(0x111111,0.35,0.15);
-  const BX=(w,h,d,m,px,py,pz,rx,ry)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(px,py,pz);o.rotation.x=rx;o.rotation.y=ry;o.castShadow=true;o.receiveShadow=true;return o;};
+  const skin=mkStd(0xfde0bd,0.62,0.0);const shirt=mkStd(0x1a4a99,0.88,0.0);const pants=mkStd(0x223344,0.85,0.0);const shoes=mkStd(0x111111,0.35,0.15);
+  const BX=(w,h,d,m,px,py,pz)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(px,py,pz);o.castShadow=true;o.receiveShadow=true;return o;};
   const CY=(rt,rb,h,s,m,px,py,pz)=>{const o=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,s),m);o.position.set(px,py,pz);o.castShadow=true;return o;};
   const SP=(r,segs,m,px,py,pz)=>{const o=new THREE.Mesh(new THREE.SphereGeometry(r,segs,Math.ceil(segs*0.7)),m);o.position.set(px,py,pz);o.castShadow=true;return o;};
-  [-0.08,0.08].forEach(sx=>{g.add(CY(0.07,0.065,0.42,8,pM,sx,0.21,0));g.add(CY(0.075,0.06,0.38,8,pM,sx,0.62,0));});
-  [-0.1,0.1].forEach(sx=>{g.add(BX(0.18,0.04,0.26,shM,sx,0.02,0.03));});
-  g.add(BX(0.34,0.34,0.19,tM,0,1.02,0));g.add(BX(0.28,0.26,0.17,tM,0,1.16,0.01));
-  g.add(CY(0.065,0.06,0.28,8,tM,-0.21,1.02,-0.02,0,Math.PI/2));
-  g.add(CY(0.065,0.06,0.28,8,tM,0.21,1.02,-0.02,0,-Math.PI/2));
-  g.add(BX(0.055,0.10,0.055,shM,-0.21,0.84,-0.09,0,Math.PI/2));
-  g.add(BX(0.055,0.10,0.055,shM,0.21,0.84,-0.09,0,-Math.PI/2));
-  g.add(CY(0.045,0.05,0.06,8,sM,0,1.55,0));
-  g.add(BX(0.13,0.11,0.13,sM,0,1.77,0));
-  g.add(SP(0.06,8,sM,0,1.88,0));
-  g.add(SP(0.025,8,0x050508,0.02,1.89,-0.03));
-  g.add(SP(0.025,8,0x050508,-0.02,1.89,-0.03));
-  g.add(SP(0.007,6,0xffffff,0,1.89,-0.06));
-  g.castShadow=true;
-  return g;
+  // Shoes
+  [-0.1,0.1].forEach(sx=>{g.add(BX(0.2,0.04,0.28,shoes,sx,0.02,0.03));});
+  // Lower legs
+  [-0.09,0.09].forEach(sx=>{g.add(CY(0.075,0.07,0.40,8,pants,sx,0.22,0));});
+  // Upper legs
+  [-0.09,0.09].forEach(sx=>{g.add(CY(0.08,0.075,0.42,8,pants,sx,0.64,0));});
+  // Torso (wider for visibility)
+  g.add(BX(0.38,0.36,0.20,shirt,0,1.05,0));g.add(BX(0.30,0.24,0.18,shirt,0,1.20,0.01));
+  // Shoulders (prominent)
+  [-0.20,0.20].forEach(sx=>{g.add(SP(0.09,8,shirt,sx,1.10,-0.05));});
+  // Upper arms
+  g.add(CY(0.065,0.06,0.30,8,shirt,-0.22,1.05,-0.04,0,Math.PI/2));
+  g.add(CY(0.065,0.06,0.30,8,shirt,0.22,1.05,-0.04,0,-Math.PI/2));
+  // Forearms
+  g.add(BX(0.07,0.22,0.07,shoes,-0.22,0.85,-0.07,0,Math.PI/2));
+  g.add(BX(0.07,0.22,0.07,shoes,0.22,0.85,-0.07,0,-Math.PI/2));
+  // Hands
+  g.add(SP(0.04,6,skin,-0.22,0.71,-0.07));g.add(SP(0.04,6,skin,0.22,0.71,-0.07));
+  // Neck
+  g.add(CY(0.05,0.06,0.08,8,skin,0,1.60,0));
+  // Head
+  g.add(BX(0.16,0.14,0.16,skin,0,1.82,0));
+  g.add(SP(0.07,10,skin,0,1.95,0));
+  g.add(SP(0.03,8,0x050508,0.02,1.97,-0.03));g.add(SP(0.03,8,0x050508,-0.02,1.97,-0.03));
+  g.add(SP(0.008,6,0xffffff,0,1.97,-0.065));
+  g.castShadow=true;return g;
 }
 
 function animate(){
