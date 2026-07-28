@@ -428,7 +428,7 @@ function buildShell(){
   const canopy=new THREE.Mesh(mkBox(24,0.15,5),canMat); canopy.position.set(0,11.3,36); scene.add(canopy);
   // Two entrance door frames
   box(-6,3.5,35,1.5,7,0.3,0x404040,false,false);
-  box(6,3.5,35,1.5,7,0.404040,false,false);
+  box(6,3.5,35,1.5,7,0.3,0x404040,false,false);
 }
 
 // ─── FLOOR TILE ── Mármol pulido aeropuerto moderno ─
@@ -587,8 +587,30 @@ function buildWalls(){
     const crown=new THREE.Mesh(mkBox(0.35,0.3,140),mkStd(0xd8d0c0,0.6,0.02));
     crown.position.set(wx,13.15,-5); scene.add(crown);
   });
-  // Pared del fondo con textura y logo de aeropuerto
-  const ew=new THREE.Mesh(mkBox(36,13,0.3),wm); ew.position.set(0,6.5,-73); scene.add(ew);
+  // Pared del fondo: muro cortina de cristal (vista real a la pista y aviones)
+  const paneMat=new THREE.MeshStandardMaterial({
+    color:0xa8d4ee, transparent:true, opacity:0.12,
+    roughness:0.05, metalness:0.1, side:THREE.DoubleSide, depthWrite:false
+  });
+  const mullMat=mkStd(0x333844,0.4,0.2);
+  // Panel de vidrio continuo (0.6m sobre el zócalo hasta 10.5m)
+  const pane=new THREE.Mesh(mkBox(36,9.9,0.1),paneMat);
+  pane.position.set(0,5.55,-73); scene.add(pane);
+  // Montantes verticales cada 4m
+  for(let mx=-18;mx<=18;mx+=4){
+    const mull=new THREE.Mesh(mkBox(0.18,9.9,0.3),mullMat);
+    mull.position.set(mx,5.55,-73); scene.add(mull);
+  }
+  // Travesaño horizontal a media altura y superior
+  [4.2,10.5].forEach(my=>{
+    const rail=new THREE.Mesh(mkBox(36,0.18,0.3),mullMat);
+    rail.position.set(0,my,-73); scene.add(rail);
+  });
+  // Banda opaca superior (10.5 a 13) y zócalo inferior
+  const topBand=new THREE.Mesh(mkBox(36,2.5,0.3),wm);
+  topBand.position.set(0,11.75,-73); scene.add(topBand);
+  const botBand=new THREE.Mesh(mkBox(36,0.6,0.3),mkStd(0x333844,0.5,0.1));
+  botBand.position.set(0,0.3,-73); scene.add(botBand);
   const baseBk=new THREE.Mesh(mkBox(36,0.45,0.35),mkStd(0x7a6a54,0.55,0.05));
   baseBk.position.set(0,0.23,-73); scene.add(baseBk);
 }
