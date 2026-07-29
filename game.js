@@ -592,32 +592,50 @@ function buildWalls(){
     const crown=new THREE.Mesh(mkBox(0.35,0.3,140),mkStd(0xd8d0c0,0.6,0.02));
     crown.position.set(wx,13.15,-5); scene.add(crown);
   });
-  // Pared del fondo: muro cortina de cristal (vista real a la pista y aviones)
-  const paneMat=new THREE.MeshStandardMaterial({
-    color:0xa8d4ee, transparent:true, opacity:0.12,
-    roughness:0.05, metalness:0.1, side:THREE.DoubleSide, depthWrite:false
+  // F28: vidrio diferenciado interior/exterior, mullions, clearcoat, renderOrder
+  var reflCvs=document.createElement("canvas");reflCvs.width=64;reflCvs.height=512;
+  var reflCtx=reflCvs.getContext("2d");reflCtx.fillStyle="rgba(0,0,0,0)";reflCtx.fillRect(0,0,64,512);
+  var reflGrad=reflCtx.createLinearGradient(0,0,0,512);
+  reflGrad.addColorStop(0,"rgba(255,255,255,0.10)");reflGrad.addColorStop(0.06,"rgba(200,220,240,0.05)");
+  reflGrad.addColorStop(0.35,"rgba(180,210,235,0.02)");reflGrad.addColorStop(1,"rgba(0,0,0,0)");
+  reflCtx.fillStyle=reflGrad;reflCtx.fillRect(0,0,64,512);
+  var reflTex=new THREE.CanvasTexture(reflCvs);reflTex.wrapS=reflTex.wrapT=THREE.RepeatWrapping;
+  var interiorGlassMat=new THREE.MeshStandardMaterial({
+    color:0xdde8f0,transparent:true,opacity:0.14,roughness:0.08,metalness:0.0,
+    side:THREE.DoubleSide,depthWrite:false,envMap:reflTex,envMapIntensity:0.3
   });
-  const mullMat=mkStd(0x333844,0.4,0.2);
-  // Panel de vidrio continuo (0.6m sobre el zócalo hasta 10.5m)
-  const pane=new THREE.Mesh(mkBox(36,9.9,0.1),paneMat);
-  pane.position.set(0,5.55,-73); scene.add(pane);
-  // Montantes verticales cada 4m
-  for(let mx=-18;mx<=18;mx+=4){
-    const mull=new THREE.Mesh(mkBox(0.18,9.9,0.3),mullMat);
-    mull.position.set(mx,5.55,-73); scene.add(mull);
+  var exteriorGlassMat=new THREE.MeshPhysicalMaterial({
+    color:0x88ccee,transparent:true,opacity:0.10,roughness:0.02,metalness:0.05,
+    side:THREE.DoubleSide,depthWrite:false,clearcoat:1.0,clearcoatRoughness:0.05,
+    envMap:reflTex,envMapIntensity:0.6
+  });
+  var metalFrameMat=mkStd(0x2a2e38,0.35,0.25);
+  var subMullMat=mkStd(0x3a3e48,0.4,0.15);
+  var paneW=36,paneH=9.9,paneY=5.55,paneZ=-73,paneDepth=0.12;
+  var extPane=new THREE.Mesh(mkBox(paneW,paneH,paneDepth),exteriorGlassMat);
+  extPane.position.set(0,paneY,paneZ);extPane.renderOrder=1;scene.add(extPane);
+  var intPane=new THREE.Mesh(mkBox(paneW,paneH,0.06),interiorGlassMat);
+  intPane.position.set(0,paneY,paneZ+0.08);intPane.renderOrder=1;scene.add(intPane);
+  for(var mx=-18;mx<=18;mx+=4){
+    var mull=new THREE.Mesh(mkBox(0.15,paneH+0.06,0.35),metalFrameMat);
+    mull.position.set(mx,paneY,paneZ);mull.renderOrder=0;scene.add(mull);
   }
-  // Travesaño horizontal a media altura y superior
-  [4.2,10.5].forEach(my=>{
-    const rail=new THREE.Mesh(mkBox(36,0.18,0.3),mullMat);
-    rail.position.set(0,my,-73); scene.add(rail);
+  for(var mx=-16.5;mx<=16.5;mx+=3){
+    var subMull=new THREE.Mesh(mkBox(0.04,paneH,0.02),subMullMat);
+    subMull.position.set(mx,paneY,paneZ+0.04);subMull.renderOrder=1;scene.add(subMull);
+  }
+  [4.2,10.5].forEach(function(my){
+    var rail=new THREE.Mesh(mkBox(paneW,0.18,0.4),metalFrameMat);
+    rail.position.set(0,my,paneZ);rail.renderOrder=0;scene.add(rail);
   });
-  // Banda opaca superior (10.5 a 13) y zócalo inferior
-  const topBand=new THREE.Mesh(mkBox(36,2.5,0.3),wm);
-  topBand.position.set(0,11.75,-73); scene.add(topBand);
-  const botBand=new THREE.Mesh(mkBox(36,0.6,0.3),mkStd(0x333844,0.5,0.1));
-  botBand.position.set(0,0.3,-73); scene.add(botBand);
-  const baseBk=new THREE.Mesh(mkBox(36,0.45,0.35),mkStd(0x7a6a54,0.55,0.05));
-  baseBk.position.set(0,0.23,-73); scene.add(baseBk);
+  var topReflect=new THREE.Mesh(mkBox(paneW,0.5,paneDepth+0.02),exteriorGlassMat);
+  topReflect.position.set(0,paneY+paneH/2-0.25,paneZ);topReflect.renderOrder=1;scene.add(topReflect);
+  var topBand=new THREE.Mesh(mkBox(36,2.5,0.3),wm);
+  topBand.position.set(0,11.75,-73);scene.add(topBand);
+  var botBand=new THREE.Mesh(mkBox(36,0.6,0.3),mkStd(0x333844,0.5,0.1));
+  botBand.position.set(0,0.3,-73);scene.add(botBand);
+  var baseBk=new THREE.Mesh(mkBox(36,0.45,0.35),mkStd(0x7a6a54,0.55,0.05));
+  baseBk.position.set(0,0.23,-73);scene.add(baseBk);
 }
 
 // ─── PILLARS ── Columnas de mármol con iluminación ─
@@ -4673,60 +4691,92 @@ function buildStreetScene(){
 
 // ── VIDRIERA DE FACHADA DE ENTRADA (F25) ──
 function buildEntranceFacadeWindows(){
-  var paneMat=new THREE.MeshStandardMaterial({
-    color:0x99ccee, transparent:true, opacity:0.12,
-    roughness:0.05, metalness:0.0, side:THREE.DoubleSide, depthWrite:false
+  var reflCvs2=document.createElement("canvas");reflCvs2.width=64;reflCvs2.height=512;
+  var reflCtx2=reflCvs2.getContext("2d");reflCtx2.fillStyle="rgba(0,0,0,0)";reflCtx2.fillRect(0,0,64,512);
+  var reflGrad2=reflCtx2.createLinearGradient(0,0,0,512);
+  reflGrad2.addColorStop(0,"rgba(255,255,255,0.08)");reflGrad2.addColorStop(0.06,"rgba(180,210,235,0.04)");
+  reflGrad2.addColorStop(0.4,"rgba(160,200,230,0.02)");reflGrad2.addColorStop(1,"rgba(0,0,0,0)");
+  reflCtx2.fillStyle=reflGrad2;reflCtx2.fillRect(0,0,64,512);
+  var reflTex2=new THREE.CanvasTexture(reflCvs2);reflTex2.wrapS=reflTex2.wrapT=THREE.RepeatWrapping;
+  var interiorGlassMat=new THREE.MeshStandardMaterial({
+    color:0xdde8f0,transparent:true,opacity:0.14,roughness:0.08,metalness:0.0,
+    side:THREE.DoubleSide,depthWrite:false,envMap:reflTex2,envMapIntensity:0.3
   });
-  var mullMat=mkStd(0x2a2e38,0.4,0.2);
+  var exteriorGlassMat=new THREE.MeshPhysicalMaterial({
+    color:0x88ccee,transparent:true,opacity:0.10,roughness:0.02,metalness:0.05,
+    side:THREE.DoubleSide,depthWrite:false,clearcoat:1.0,clearcoatRoughness:0.05,
+    envMap:reflTex2,envMapIntensity:0.6
+  });
+  var frameMat=mkStd(0x2a2e38,0.35,0.25);
   var railMat=mkStd(0x333844,0.5,0.1);
   [{z:40,w:10},{z:52,w:10},{z:64,w:10}].forEach(function(cfg){
-    var pane=new THREE.Mesh(mkBox(cfg.w,10,0.1),paneMat);
-    pane.position.set(0,5.5,cfg.z); scene.add(pane);
+    var paneW=cfg.w,paneH=10,paneY=5.5,paneDepth=0.12;
+    var extPane=new THREE.Mesh(mkBox(paneW,paneH,paneDepth),exteriorGlassMat);
+    extPane.position.set(0,paneY,cfg.z);extPane.renderOrder=1;scene.add(extPane);
+    var intPane=new THREE.Mesh(mkBox(paneW,paneH,0.06),interiorGlassMat);
+    intPane.position.set(0,paneY,cfg.z+0.06);intPane.renderOrder=1;scene.add(intPane);
     for(var mx=-8;mx<=8;mx+=3.3){
-      var mull=new THREE.Mesh(mkBox(0.15,10.3,0.25),mullMat);
-      mull.position.set(mx,5.65,cfg.z); scene.add(mull);
+      var mull=new THREE.Mesh(mkBox(0.12,paneH+0.06,0.3),frameMat);
+      mull.position.set(mx,paneY,cfg.z);mull.renderOrder=0;scene.add(mull);
     }
     [1,9.5].forEach(function(my){
-      var rail=new THREE.Mesh(mkBox(cfg.w,0.12,0.2),railMat);
-      rail.position.set(0,my,cfg.z); scene.add(rail);
+      var rail=new THREE.Mesh(mkBox(paneW,0.12,0.22),railMat);
+      rail.position.set(0,my,cfg.z);rail.renderOrder=0;scene.add(rail);
     });
-    var tintM=new THREE.MeshStandardMaterial({color:0xd8f0ff,transparent:true,opacity:0.08,roughness:0.05,metalness:0.2});
+    var tintM=new THREE.MeshStandardMaterial({color:0xd8f0ff,transparent:true,opacity:0.08,roughness:0.05,metalness:0.2,envMap:reflTex2,envMapIntensity:0.4});
     var tint=new THREE.Mesh(mkBox(0.04,9.5,cfg.w-0.1),tintM);
-    tint.position.set(0.1,5.5,cfg.z); scene.add(tint);
+    tint.position.set(0.1,paneY,cfg.z);tint.renderOrder=1;scene.add(tint);
   });
   var topBand=new THREE.Mesh(mkBox(36,2.5,0.3),mkStd(0xe0d8cc,0.6,0.02));
-  topBand.position.set(0,12,52); scene.add(topBand);
+  topBand.position.set(0,12,52);scene.add(topBand);
   var botBand=new THREE.Mesh(mkBox(36,0.6,0.35),mkStd(0x333844,0.5,0.1));
-  botBand.position.set(0,0.3,52); scene.add(botBand);
+  botBand.position.set(0,0.3,52);scene.add(botBand);
   var baseBand=new THREE.Mesh(mkBox(36,0.45,0.4),mkStd(0x7a6a54,0.55,0.05));
-  baseBand.position.set(0,0.23,52); scene.add(baseBand);
+  baseBand.position.set(0,0.23,52);scene.add(baseBand);
   var windowLight=new THREE.PointLight(0xffecd0,0.5,20);
-  windowLight.position.set(0,6,52); scene.add(windowLight);
+  windowLight.position.set(0,6,52);scene.add(windowLight);
 }
 
 // ── VIDRIERAS LATERALES DE ENTRADA (F25) ──
 function buildEntranceSideWindows(){
-  var mullMat=mkStd(0x2a2e38,0.4,0.2);
   var frameMat=mkStd(0xc8c8cc,0.28,0.35);
+  var frameMat2=mkStd(0x2a2e38,0.4,0.25);
+  var reflCvs3=document.createElement("canvas");reflCvs3.width=32;reflCvs3.height=512;
+  var reflCtx3=reflCvs3.getContext("2d");reflCtx3.fillStyle="rgba(0,0,0,0)";reflCtx3.fillRect(0,0,32,512);
+  var reflGrad3=reflCtx3.createLinearGradient(0,0,0,512);
+  reflGrad3.addColorStop(0,"rgba(255,255,255,0.06)");reflGrad3.addColorStop(0.08,"rgba(180,210,235,0.03)");
+  reflGrad3.addColorStop(0.5,"rgba(150,190,220,0.01)");reflGrad3.addColorStop(1,"rgba(0,0,0,0)");
+  reflCtx3.fillStyle=reflGrad3;reflCtx3.fillRect(0,0,32,512);
+  var reflTex3=new THREE.CanvasTexture(reflCvs3);reflTex3.wrapS=reflTex3.wrapT=THREE.RepeatWrapping;
+  var exteriorGlassMat=new THREE.MeshPhysicalMaterial({
+    color:0x88ccee,transparent:true,opacity:0.12,roughness:0.02,metalness:0.05,
+    side:THREE.DoubleSide,depthWrite:false,clearcoat:1.0,clearcoatRoughness:0.05,
+    envMap:reflTex3,envMapIntensity:0.5
+  });
+  var interiorGlassMat=new THREE.MeshStandardMaterial({
+    color:0xdde8f0,transparent:true,opacity:0.15,roughness:0.08,metalness:0.0,
+    side:THREE.DoubleSide,depthWrite:false,envMap:reflTex3,envMapIntensity:0.2
+  });
   [{x:-17,z:38},{x:17,z:38},{x:-17,z:48},{x:17,z:48},{x:-17,z:58},{x:17,z:58}].forEach(function(pos){
     var W=5,H=4,yc=5;
     var f=new THREE.Mesh(mkBox(0.22,0.14,W+0.3),frameMat);
-    f.position.set(pos.x,yc+H/2+0.08,pos.z); scene.add(f);
+    f.position.set(pos.x,yc+H/2+0.08,pos.z);scene.add(f);
     var f2=new THREE.Mesh(mkBox(0.22,0.14,W+0.3),frameMat);
-    f2.position.set(pos.x,yc-H/2-0.08,pos.z); scene.add(f2);
+    f2.position.set(pos.x,yc-H/2-0.08,pos.z);scene.add(f2);
     var fz1=new THREE.Mesh(mkBox(0.22,H+0.3,0.14),frameMat);
-    fz1.position.set(pos.x,yc,pos.z-W/2-0.08); scene.add(fz1);
+    fz1.position.set(pos.x,yc,pos.z-W/2-0.08);scene.add(fz1);
     var fz2=new THREE.Mesh(mkBox(0.22,H+0.3,0.14),frameMat);
-    fz2.position.set(pos.x,yc,pos.z+W/2+0.08); scene.add(fz2);
+    fz2.position.set(pos.x,yc,pos.z+W/2+0.08);scene.add(fz2);
     var bH=new THREE.Mesh(mkBox(0.20,0.10,W-0.08),frameMat);
-    bH.position.set(pos.x,yc,pos.z); scene.add(bH);
+    bH.position.set(pos.x,yc,pos.z);scene.add(bH);
     var bV=new THREE.Mesh(mkBox(0.20,H-0.08,0.10),frameMat);
-    bV.position.set(pos.x,yc,pos.z); scene.add(bV);
-    var glassMat=new THREE.MeshStandardMaterial({color:0xc8e8ff,transparent:true,opacity:0.85,roughness:0.05,metalness:0.05});
-    var glass=new THREE.Mesh(mkBox(0.08,H-0.14,W-0.14),glassMat);
-    glass.position.set(pos.x<0?pos.x+0.14:pos.x-0.14,yc,pos.z); scene.add(glass);
+    bV.position.set(pos.x,yc,pos.z);scene.add(bV);
+    var extGlass=new THREE.Mesh(mkBox(0.06,H-0.14,W-0.14),exteriorGlassMat);
+    extGlass.position.set(pos.x<0?pos.x+0.14:pos.x-0.14,yc,pos.z-0.02);extGlass.renderOrder=1;scene.add(extGlass);
+    var intGlass=new THREE.Mesh(mkBox(0.06,H-0.14,W-0.14),interiorGlassMat);
+    intGlass.position.set(pos.x<0?pos.x+0.14:pos.x-0.14,yc,pos.z+0.02);intGlass.renderOrder=1;scene.add(intGlass);
     var wl=new THREE.PointLight(0xffecd0,0.18,6);
-    wl.position.set(pos.x<0?pos.x-2:pos.x+2,5.5,pos.z); scene.add(wl);
+    wl.position.set(pos.x<0?pos.x-2:pos.x+2,5.5,pos.z);scene.add(wl);
   });
 }
 
