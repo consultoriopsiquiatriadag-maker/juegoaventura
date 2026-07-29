@@ -309,6 +309,11 @@ function buildWorld(){
   // ───────────────────────────────────────────────
   buildEntranceTarmacView(); // Fase 7: vista de plataforma desde la entrada
   buildExterior(); buildZoneRings();
+  // ── FASE 25: Calidad máxima del hall ───────────
+  buildStreetScene();
+  buildEntranceFacadeWindows();
+  buildEntranceSideWindows();
+  buildHallQuality();
 }
 
 // ─── GROUND ──────────────────────────────────────
@@ -3188,6 +3193,47 @@ function spawnNPCs(){
     npc.userData.dest=new THREE.Vector3(d.dx,0,d.dz);
     npcs.push(npc); scene.add(npc);
   });
+
+  // ── FASE 25: NPCs de ambiente adicionales (15-25 total) ──
+  var extraNPCdefs=[
+    {x:5,z:40,dx:-3,dz:35,spd:0.8,role:'civilian',skin:0xfde0bd,hair:0xd4a832,top:0xbb7711,pants:0x444422},
+    {x:-10,z:35,dx:-7,dz:40,spd:0.9,role:'civilian',skin:0xc88a52,hair:0x888888,top:0x6622aa,pants:0x223344},
+    {x:2,z:50,dx:4,dz:48,spd:0.7,role:'civilian',skin:0x9a6438,hair:0x1a1008,top:0x1a7744,pants:0x334433},
+    {x:-4,z:30,dx:-2,dz:20,spd:1.0,role:'civilian',skin:0xfad6a5,hair:0xcc4400,top:0x991144,pants:0x442233},
+    {x:8,z:10,dx:6,dz:0,spd:1.2,role:'civilian',skin:0xf5c8a0,hair:0x0f0b08,top:0x1199bb,pants:0x444422},
+    {x:-3,z:15,dx:-6,dz:5,spd:0.85,role:'civilian',skin:0xe8b88a,hair:0x3b1f0f,top:0xbb2211,pants:0x1a2a3a},
+    // Familia con niño
+    {x:-2,z:44,dx:3,dz:38,spd:0.7,role:'civilian',skin:0xfde0bd,hair:0x6b4226,top:0x1a4a99,pants:0x1a2a3a,isFamily:true},
+    {x:4,z:46,dx:1,dz:40,spd:0.65,role:'civilian',skin:0xf5c8a0,hair:0x0f0b08,top:0x1a7744,pants:0x334433,isFamily:true},
+    // Ejecutivo con traje
+    {x:-8,z:38,dx:-4,dz:30,spd:0.9,role:'civilian',skin:0xf5c8a0,hair:0x1a0f08,top:0x222222,pants:0x1a1a1a},
+    // Personal de limpieza
+    {x:10,z:32,dx:6,dz:25,spd:0.6,role:'civilian',skin:0xe8b88a,hair:0x888888,top:0x1a3050,pants:0x1a3050},
+    // Caminando hacia zona de check-in
+    {x:-15,z:20,dx:-10,dz:10,spd:1.1,role:'civilian',skin:0xfad6a5,hair:0x3b1f0f,top:0xbb7711,pants:0x444422},
+    // Gente en fila cerca de check-in (estática)
+    {x:-6,z:26,dx:-6,dz:26,spd:0,role:'civilian',skin:0x9a6438,hair:0x1a1008,top:0xbb2211,pants:0x1a2a3a,behaviorState:'queue'},
+    {x:-6,z:27,dx:-6,dz:27,spd:0,role:'civilian',skin:0xfde0bd,hair:0x6b4226,top:0x1a4a99,pants:0x1a2a3a,behaviorState:'queue'},
+    {x:-6,z:28,dx:-6,dz:28,spd:0,role:'civilian',skin:0xc88a52,hair:0x3b1f0f,top:0x6622aa,pants:0x333322,behaviorState:'queue'},
+  ];
+  extraNPCdefs.forEach(function(d){
+    var npc=buildCharacter({skin:d.skin,hair:d.hair,top:d.top,pants:d.pants||0x1a2a3a,shoes:0x111111,role:d.role||'civilian'});
+    npc.position.set(d.x,0,d.z);
+    npc.userData.isNPC=true; npc.userData.isWalking=d.spd>0;
+    npc.userData.spd=d.spd; npc.userData.wt=Math.random()*Math.PI*2;
+    npc.userData.progress=Math.random();
+    npc.userData.start=new THREE.Vector3(d.x,0,d.z);
+    npc.userData.dest=new THREE.Vector3(d.dx,0,d.dz);
+    npc.userData.behaviorState=d.behaviorState||(d.spd>0?'walk':'idle');
+    npc.userData.behaviorTimer=3+Math.random()*6;
+    npc.userData.lookTarget=null;
+    npc.userData.idlePhase=Math.random()*Math.PI*2;
+    if(d.isFamily){
+      npc.scale.set(0.75,0.75,0.75);
+      npc.position.set(d.x,0.5*(1-0.75),d.z);
+    }
+    npcs.push(npc); scene.add(npc);
+  });
 }
 
 // ══════════════════════════════════════════════════
@@ -3391,11 +3437,22 @@ function updateNPCs(delta, speedFactor){
         }
       }
 
-      if(ud.behaviorState!=='pause'){
-        ud.progress+=delta*ud.spd*0.055*walkMult*(speedFactor||1.0);
-        if(ud.progress>=1){ ud.progress=0; const tmp=ud.start.clone(); ud.start.copy(ud.dest); ud.dest.copy(tmp); }
-        const pos=ud.start.clone().lerp(ud.dest,ud.progress);
-        npc.position.copy(pos);
+       if(ud.behaviorState!=='pause'){
+         // ── FASE 25: EVITACIÓN DEL JUGADOR ── desvío simple por distancia
+         var avoidX=0,avoidZ=0;
+         var pdx=camera.position.x-npc.position.x;
+         var pdz=camera.position.z-npc.position.z;
+         var pdist=Math.sqrt(pdx*pdx+pdz*pdz);
+         if(pdist<6&&pdist>0.3){
+           var avoidStr=(3-pdist)*0.6;
+           var avoidAng=Math.atan2(-pdz,-pdx)+Math.PI/2;
+           avoidX=Math.sin(avoidAng)*avoidStr*delta*2;
+           avoidZ=Math.cos(avoidAng)*avoidStr*delta*2;
+         }
+         ud.progress+=delta*ud.spd*0.055*walkMult*(speedFactor||1.0);
+         if(ud.progress>=1){ ud.progress=0; const tmp=ud.start.clone(); ud.start.copy(ud.dest); ud.dest.copy(tmp); }
+         const pos=ud.start.clone().lerp(ud.dest,ud.progress);
+         npc.position.set(pos.x+avoidX,0,pos.z+avoidZ);
         const dir=ud.dest.clone().sub(ud.start).normalize();
         if(dir.length()>0.01) npc.rotation.y=Math.atan2(dir.x,dir.z);
         // Walk cycle
@@ -4502,7 +4559,213 @@ function buildPlayerBody(){
   g.add(SP(0.07,10,skin,0,1.95,0));
   g.add(SP(0.03,8,0x050508,0.02,1.97,-0.03));g.add(SP(0.03,8,0x050508,-0.02,1.97,-0.03));
   g.add(SP(0.008,6,0xffffff,0,1.97,-0.065));
-  g.castShadow=true;return g;
+    g.castShadow=true;return g;
+}
+
+// ══════════════════════════════════════════════════
+// FASE 25: CALIDAD MÁXIMA DEL HALL
+// ══════════════════════════════════════════════════
+
+// ── CONSTRUIR ESCENA DE CALLE TRAS VIDRIERA ──
+// Textura canvas del exterior urbano: vereda, taxi, autos, señalética, árboles, farolas, siluetas de gente, fondo de edificios.
+function _drawStreetScene(ctx){
+  const w=ctx.canvas.width, h=ctx.canvas.height;
+  const sky=ctx.createLinearGradient(0,0,0,h*0.45);
+  sky.addColorStop(0,'#e8c8a0'); sky.addColorStop(0.5,'#f0d8b8'); sky.addColorStop(1,'#f5e8d0');
+  ctx.fillStyle=sky; ctx.fillRect(0,0,w,h*0.45);
+  ctx.fillStyle='#fff8e0'; ctx.globalAlpha=0.25;
+  ctx.beginPath(); ctx.arc(w*0.7,h*0.15,60,0,Math.PI*2); ctx.fill();
+  ctx.globalAlpha=1;
+  ctx.globalAlpha=0.4; ctx.fillStyle='#fff';
+  [[w*0.1,h*0.12,90,18],[w*0.4,h*0.08,110,14],[w*0.65,h*0.15,80,16]].forEach(function(p){
+    ctx.beginPath(); ctx.ellipse(p[0],p[1],p[2],p[3],0,0,Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha=1;
+  ctx.fillStyle='#c8b8a0';
+  [[w*0.02,70,90],[w*0.18,55,70],[w*0.55,80,100],[w*0.78,50,65],[w*0.92,65,85]].forEach(function(b){
+    var bx=b[0],bh=b[1],bw=b[2];
+    ctx.fillRect(bx-bw/2,h*0.42-bh,bw,bh);
+    ctx.fillStyle='#ffe8c0';
+    for(var wy=h*0.42-bh+8;wy<h*0.42-8;wy+=18){
+      for(var wx=bx-bw/2+6;wx<bx+bw/2-6;wx+=14){
+        ctx.fillRect(wx,wy,10,12);
+      }
+    }
+    ctx.fillStyle='#c8b8a0';
+  });
+  var street=ctx.createLinearGradient(0,h*0.42,0,h);
+  street.addColorStop(0,'#908878'); street.addColorStop(0.3,'#a09888'); street.addColorStop(1,'#888070');
+  ctx.fillStyle=street; ctx.fillRect(0,h*0.42,w,h*0.58);
+  ctx.strokeStyle='rgba(0,0,0,0.08)'; ctx.lineWidth=1;
+  for(var bx=0;bx<w;bx+=32){ctx.beginPath();ctx.moveTo(bx,h*0.42);ctx.lineTo(bx,h);ctx.stroke();}
+  for(var by=h*0.42;by<h;by+=32){ctx.beginPath();ctx.moveTo(0,by);ctx.lineTo(w,by);ctx.stroke();}
+  ctx.fillStyle='#d0c8b8'; ctx.fillRect(w*0.15,h*0.58,w*0.45,h*0.42);
+  ctx.strokeStyle='rgba(0,0,0,0.15)'; ctx.lineWidth=2; ctx.strokeRect(w*0.15,h*0.58,w*0.45,h*0.42);
+  ctx.strokeStyle='rgba(0,0,0,0.25)'; ctx.lineWidth=2; ctx.setLineDash([12,8]);
+  ctx.beginPath(); ctx.moveTo(w*0.18,h*0.72); ctx.lineTo(w*0.58,h*0.72); ctx.stroke();
+  ctx.setLineDash([]);
+  var taxiX=w*0.22, taxiY=h*0.62;
+  ctx.fillStyle='#f5c518';
+  ctx.beginPath(); ctx.moveTo(taxiX-20,taxiY+8); ctx.lineTo(taxiX+20,taxiY+8); ctx.lineTo(taxiX+22,taxiY-6); ctx.lineTo(taxiX-18,taxiY-6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#333';
+  ctx.beginPath(); ctx.arc(taxiX-8,taxiY+10,6,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(taxiX+8,taxiY+10,6,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#ff2222'; ctx.fillRect(taxiX+16,taxiY-2,3,3); ctx.fillRect(taxiX+16,taxiY+4,3,3);
+  ctx.fillStyle='#a0d0f0'; ctx.fillRect(taxiX-10,taxiY-4,12,5);
+  var ax1=w*0.72, ay1=h*0.66;
+  ctx.fillStyle='#e0e0e0'; ctx.fillRect(ax1-22,ay1+6,44,10);
+  ctx.fillStyle='#aaa'; ctx.fillRect(ax1-20,ay1+8,36,3);
+  ctx.fillStyle='#333';
+  ctx.beginPath(); ctx.arc(ax1-12,ay1+10,4,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(ax1+12,ay1+10,4,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#ff3333'; ctx.fillRect(ax1+18,ay1,2,3);
+  ctx.fillStyle='#a0d0f0'; ctx.fillRect(ax1-12,ay1-2,10,4);
+  var ax2=w*0.82, ay2=h*0.68;
+  ctx.fillStyle='#2255aa'; ctx.fillRect(ax2-18,ay2+6,36,9);
+  ctx.fillStyle='#1a4a8a'; ctx.fillRect(ax2-16,ay2+8,32,3);
+  ctx.fillStyle='#333';
+  ctx.beginPath(); ctx.arc(ax2-10,ay2+10,3.5,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(ax2+10,ay2+10,3.5,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#a0d0f0'; ctx.fillRect(ax2-10,ay2-2,9,4);
+  ctx.fillStyle='#1a2a4a'; ctx.fillRect(w*0.68,h*0.46,55,28);
+  ctx.fillStyle='#ffcc00'; ctx.fillRect(w*0.68,h*0.46,55,3);
+  ctx.fillStyle='#ffffff'; ctx.font='bold 11px Arial'; ctx.textAlign='center';
+  ctx.fillText('SALIDAS',w*0.68+27.5,h*0.46+18);
+  ctx.fillStyle='#00aa00'; ctx.fillRect(w*0.68,h*0.46+31,55,2);
+  ctx.fillStyle='#ffffff'; ctx.font='bold 11px Arial'; ctx.fillText('LLEGADAS',w*0.68+27.5,h*0.46+42);
+  ctx.fillStyle='#ff6600'; ctx.beginPath(); ctx.arc(w*0.25,h*0.55,10,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.font='bold 8px Arial'; ctx.fillText('NO',w*0.25,h*0.55+3);
+  ctx.fillStyle='#555'; ctx.fillRect(w*0.12,h*0.38,3,20);
+  ctx.fillStyle='#ffe880'; ctx.beginPath(); ctx.arc(w*0.12+1.5,h*0.36,8,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#555'; ctx.fillRect(w*0.85,h*0.40,3,18);
+  ctx.fillStyle='#ffe880'; ctx.beginPath(); ctx.arc(w*0.85+1.5,h*0.38,7,0,Math.PI*2); ctx.fill();
+  [[w*0.08,h*0.78],[w*0.55,h*0.72],[w*0.92,h*0.75]].forEach(function(tp){
+    var tx=tp[0],ty=tp[1];
+    ctx.fillStyle='#8a7a64'; ctx.fillRect(tx-3,ty,6,10);
+    ctx.fillStyle='#2a5a2a'; ctx.beginPath(); ctx.arc(tx,ty-5,9,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#3a7a3a'; ctx.beginPath(); ctx.arc(tx-2,ty-7,6,0,Math.PI*2); ctx.fill();
+  });
+  ctx.fillStyle='#3a3028';
+  var people=[[w*0.35,h*0.66],[w*0.42,h*0.64],[w*0.38,h*0.63],[w*0.7,h*0.72],[w*0.75,h*0.71],[w*0.5,h*0.56]];
+  people.forEach(function(pp){
+    var px=pp[0],py=pp[1];
+    ctx.fillRect(px-1.5,py-6,3,6); ctx.fillRect(px-2,py-6,4,10);
+    ctx.fillRect(px-2.5,py+4,2,6); ctx.fillRect(px+0.5,py+4,2,6);
+  });
+  ctx.globalAlpha=0.08; ctx.fillStyle='#888'; ctx.fillRect(0,h*0.44,w,4);
+  ctx.globalAlpha=1;
+}
+
+function buildStreetScene(){
+  var streetTex=tex(1024,512,function(ctx){_drawStreetScene(ctx);});
+  var mat=new THREE.MeshStandardMaterial({map:streetTex,roughness:0.6,metalness:0.05});
+  var backdrop=new THREE.Mesh(mkBox(38,12,0.15),mat);
+  backdrop.position.set(0,7,68); scene.add(backdrop);
+  var sidewalkTex=tex(512,512,function(ctx){
+    ctx.fillStyle='#b0a898'; ctx.fillRect(0,0,512,512);
+    ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=2;
+    for(var i=0;i<=512;i+=64){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,512);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(512,i);ctx.stroke();}
+  });
+  sidewalkTex.wrapS=sidewalkTex.wrapT=THREE.RepeatWrapping; sidewalkTex.repeat.set(4,2);
+  var sidewalk=new THREE.Mesh(new THREE.PlaneGeometry(38,12),new THREE.MeshStandardMaterial({map:sidewalkTex,roughness:0.8,metalness:0}));
+  sidewalk.rotation.x=-Math.PI/2; sidewalk.position.set(0,0.02,68); scene.add(sidewalk);
+}
+
+// ── VIDRIERA DE FACHADA DE ENTRADA (F25) ──
+function buildEntranceFacadeWindows(){
+  var paneMat=new THREE.MeshStandardMaterial({
+    color:0x99ccee, transparent:true, opacity:0.12,
+    roughness:0.05, metalness:0.0, side:THREE.DoubleSide, depthWrite:false
+  });
+  var mullMat=mkStd(0x2a2e38,0.4,0.2);
+  var railMat=mkStd(0x333844,0.5,0.1);
+  [{z:40,w:10},{z:52,w:10},{z:64,w:10}].forEach(function(cfg){
+    var pane=new THREE.Mesh(mkBox(cfg.w,10,0.1),paneMat);
+    pane.position.set(0,5.5,cfg.z); scene.add(pane);
+    for(var mx=-8;mx<=8;mx+=3.3){
+      var mull=new THREE.Mesh(mkBox(0.15,10.3,0.25),mullMat);
+      mull.position.set(mx,5.65,cfg.z); scene.add(mull);
+    }
+    [1,9.5].forEach(function(my){
+      var rail=new THREE.Mesh(mkBox(cfg.w,0.12,0.2),railMat);
+      rail.position.set(0,my,cfg.z); scene.add(rail);
+    });
+    var tintM=new THREE.MeshStandardMaterial({color:0xd8f0ff,transparent:true,opacity:0.08,roughness:0.05,metalness:0.2});
+    var tint=new THREE.Mesh(mkBox(0.04,9.5,cfg.w-0.1),tintM);
+    tint.position.set(0.1,5.5,cfg.z); scene.add(tint);
+  });
+  var topBand=new THREE.Mesh(mkBox(36,2.5,0.3),mkStd(0xe0d8cc,0.6,0.02));
+  topBand.position.set(0,12,52); scene.add(topBand);
+  var botBand=new THREE.Mesh(mkBox(36,0.6,0.35),mkStd(0x333844,0.5,0.1));
+  botBand.position.set(0,0.3,52); scene.add(botBand);
+  var baseBand=new THREE.Mesh(mkBox(36,0.45,0.4),mkStd(0x7a6a54,0.55,0.05));
+  baseBand.position.set(0,0.23,52); scene.add(baseBand);
+  var windowLight=new THREE.PointLight(0xffecd0,0.5,20);
+  windowLight.position.set(0,6,52); scene.add(windowLight);
+}
+
+// ── VIDRIERAS LATERALES DE ENTRADA (F25) ──
+function buildEntranceSideWindows(){
+  var mullMat=mkStd(0x2a2e38,0.4,0.2);
+  var frameMat=mkStd(0xc8c8cc,0.28,0.35);
+  [{x:-17,z:38},{x:17,z:38},{x:-17,z:48},{x:17,z:48},{x:-17,z:58},{x:17,z:58}].forEach(function(pos){
+    var W=5,H=4,yc=5;
+    var f=new THREE.Mesh(mkBox(0.22,0.14,W+0.3),frameMat);
+    f.position.set(pos.x,yc+H/2+0.08,pos.z); scene.add(f);
+    var f2=new THREE.Mesh(mkBox(0.22,0.14,W+0.3),frameMat);
+    f2.position.set(pos.x,yc-H/2-0.08,pos.z); scene.add(f2);
+    var fz1=new THREE.Mesh(mkBox(0.22,H+0.3,0.14),frameMat);
+    fz1.position.set(pos.x,yc,pos.z-W/2-0.08); scene.add(fz1);
+    var fz2=new THREE.Mesh(mkBox(0.22,H+0.3,0.14),frameMat);
+    fz2.position.set(pos.x,yc,pos.z+W/2+0.08); scene.add(fz2);
+    var bH=new THREE.Mesh(mkBox(0.20,0.10,W-0.08),frameMat);
+    bH.position.set(pos.x,yc,pos.z); scene.add(bH);
+    var bV=new THREE.Mesh(mkBox(0.20,H-0.08,0.10),frameMat);
+    bV.position.set(pos.x,yc,pos.z); scene.add(bV);
+    var glassMat=new THREE.MeshStandardMaterial({color:0xc8e8ff,transparent:true,opacity:0.85,roughness:0.05,metalness:0.05});
+    var glass=new THREE.Mesh(mkBox(0.08,H-0.14,W-0.14),glassMat);
+    glass.position.set(pos.x<0?pos.x+0.14:pos.x-0.14,yc,pos.z); scene.add(glass);
+    var wl=new THREE.PointLight(0xffecd0,0.18,6);
+    wl.position.set(pos.x<0?pos.x-2:pos.x+2,5.5,pos.z); scene.add(wl);
+  });
+}
+
+// ── CALIDAD PERCIBIDA DEL HALL (F25) ──
+function buildHallQuality(){
+  var specularMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.08,metalness:0.12,transparent:true,opacity:0.07});
+  var specPlane=new THREE.Mesh(new THREE.PlaneGeometry(38,142),specularMat);
+  specPlane.rotation.x=-Math.PI/2; specPlane.position.set(0,0.11,-5); scene.add(specPlane);
+  var signEmissiveData=[
+    {text:'EMBARQUE',x:0,z:-28,color:0x4a9eff},{text:'SALIDAS',x:-2,z:44,color:0x4ecdc4},
+    {text:'LLEGADAS',x:3,z:44,color:0x4ecdc4}
+  ];
+  signEmissiveData.forEach(function(s){
+    var st=tex(512,128,function(ctx){
+      ctx.fillStyle='#'+s.color.toString(16).padStart(6,'0'); ctx.fillRect(0,0,512,128);
+      ctx.fillStyle='#fff'; ctx.font='bold 42px Arial'; ctx.textAlign='center';
+      ctx.fillText(s.text,256,80);
+    });
+    var sm=new THREE.MeshLambertMaterial({map:st,emissive:s.color,emissiveIntensity:0.4});
+    var sign=new THREE.Mesh(mkBox(4,1.2,0.1),sm);
+    sign.position.set(s.x,8,s.z); scene.add(sign);
+  });
+  var tapeMat=new THREE.MeshStandardMaterial({color:0xffcc00,roughness:0.5,metalness:0.1,emissive:0xffcc00,emissiveIntensity:0.15});
+  var postMat=mkStd(0xdddddd,0.5,0.05);
+  for(var ti=0;ti<=20;ti+=5){
+    var post=new THREE.Mesh(mkBox(0.08,2.2,0.08),postMat);
+    post.position.set(-8+ti,1.1,28); scene.add(post);
+    var tape=new THREE.Mesh(mkBox(0.08,0.04,6),tapeMat);
+    tape.position.set(-8+ti,1.8,28); scene.add(tape);
+  }
+  [[-16,38],[16,38],[-16,30],[16,30],[-16,22],[16,22]].forEach(function(pp){ addPlant(pp[0],pp[1],1.0+Math.random()*0.5); });
+  var binColors=[0x44aa44,0x4488cc,0xcccc44];
+  var binPos=[[-12,32],[12,32],[-14,32],[14,32],[-8,36],[8,36]];
+  binPos.forEach(function(bp,bi){
+    var bin=new THREE.Mesh(mkBox(0.5,0.8,0.5),mkStd(binColors[bi%3],0.7,0.05));
+    bin.position.set(bp[0],0.4,bp[1]); bin.castShadow=true; scene.add(bin);
+    var lid=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.30,0.06,8),mkStd(0xaaaaaa,0.4,0.1));
+    lid.position.set(bp[0],0.84,bp[1]); scene.add(lid);
+  });
 }
 
 function animate(){
