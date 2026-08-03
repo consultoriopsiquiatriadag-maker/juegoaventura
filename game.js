@@ -599,7 +599,7 @@ function buildWalls(){
   reflGrad.addColorStop(0,"rgba(255,255,255,0.10)");reflGrad.addColorStop(0.06,"rgba(200,220,240,0.05)");
   reflGrad.addColorStop(0.35,"rgba(180,210,235,0.02)");reflGrad.addColorStop(1,"rgba(0,0,0,0)");
   reflCtx.fillStyle=reflGrad;reflCtx.fillRect(0,0,64,512);
-  var reflTex=new THREE.CanvasTexture(reflCvs);reflTex.wrapS=reflTex.wrapT=THREE.RepeatWrapping;
+  var reflTex=new THREE.CanvasTexture(reflCvs);reflTex.wrapS=reflTex.wrapT=THREE.RepeatWrapping;reflTex.mapping=THREE.EquirectangularReflectionMapping;
   var interiorGlassMat=new THREE.MeshStandardMaterial({
     color:0xdde8f0,transparent:true,opacity:0.14,roughness:0.08,metalness:0.0,
     side:THREE.DoubleSide,depthWrite:false,envMap:reflTex,envMapIntensity:0.3
@@ -4697,7 +4697,7 @@ function buildEntranceFacadeWindows(){
   reflGrad2.addColorStop(0,"rgba(255,255,255,0.08)");reflGrad2.addColorStop(0.06,"rgba(180,210,235,0.04)");
   reflGrad2.addColorStop(0.4,"rgba(160,200,230,0.02)");reflGrad2.addColorStop(1,"rgba(0,0,0,0)");
   reflCtx2.fillStyle=reflGrad2;reflCtx2.fillRect(0,0,64,512);
-  var reflTex2=new THREE.CanvasTexture(reflCvs2);reflTex2.wrapS=reflTex2.wrapT=THREE.RepeatWrapping;
+  var reflTex2=new THREE.CanvasTexture(reflCvs2);reflTex2.wrapS=reflTex2.wrapT=THREE.RepeatWrapping;reflTex2.mapping=THREE.EquirectangularReflectionMapping;
   var interiorGlassMat=new THREE.MeshStandardMaterial({
     color:0xdde8f0,transparent:true,opacity:0.14,roughness:0.08,metalness:0.0,
     side:THREE.DoubleSide,depthWrite:false,envMap:reflTex2,envMapIntensity:0.3
@@ -4747,7 +4747,7 @@ function buildEntranceSideWindows(){
   reflGrad3.addColorStop(0,"rgba(255,255,255,0.06)");reflGrad3.addColorStop(0.08,"rgba(180,210,235,0.03)");
   reflGrad3.addColorStop(0.5,"rgba(150,190,220,0.01)");reflGrad3.addColorStop(1,"rgba(0,0,0,0)");
   reflCtx3.fillStyle=reflGrad3;reflCtx3.fillRect(0,0,32,512);
-  var reflTex3=new THREE.CanvasTexture(reflCvs3);reflTex3.wrapS=reflTex3.wrapT=THREE.RepeatWrapping;
+  var reflTex3=new THREE.CanvasTexture(reflCvs3);reflTex3.wrapS=reflTex3.wrapT=THREE.RepeatWrapping;reflTex3.mapping=THREE.EquirectangularReflectionMapping;
   var exteriorGlassMat=new THREE.MeshPhysicalMaterial({
     color:0x88ccee,transparent:true,opacity:0.12,roughness:0.02,metalness:0.05,
     side:THREE.DoubleSide,depthWrite:false,clearcoat:1.0,clearcoatRoughness:0.05,
