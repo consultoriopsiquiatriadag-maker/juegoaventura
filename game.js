@@ -24,7 +24,12 @@ let npcs=[], ringMeshes=[], luggageBelt=null;
 let flightBoardCanvas, flightBoardCtx, flightBoardTexture;
 let boardTimer=0;
 let gltfLoader=null, cabinMixers=[];
-let ambientLight=null;          // referencia para ciclo de luz ambiental
+let ambientLight=null;
+const AMBIENT_COLOR=0xffe2bf;     // ambiente cálido (≈3200 K)
+const AMBIENT_BASE=0.20;          // intensidad base del ciclo ambiental (relleno bajo → sombras visibles)
+const SUN_INTENSITY=1.8;          // sol dominante sobre el piso iluminado
+const HEMI_INTENSITY=0.10;        // relleno de cielo
+const CEIL_LIGHT_INTENSITY=0.22;  // luces puntuales del techo del hall          // referencia para ciclo de luz ambiental
 let gameStartTime=0;            // ms al iniciar recorrido
 let menuAnimId=null;            // requestAnimationFrame del canvas del menú
 const prefersReducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -217,28 +222,40 @@ function animLoad(){
 
 // ── LIGHTING ──────────────────────────────────────
 function setupLighting(){
-  // Ambiente suave con tonos cálidos de aeropuerto moderno
-  ambientLight=new THREE.AmbientLight(0xfff0e0,0.35);
+  // Ambiente cálido (tono miel suave) -- rellena las zonas en sombra sin aplanarlas
+  ambientLight=new THREE.AmbientLight(AMBIENT_COLOR,AMBIENT_BASE);
   scene.add(ambientLight);
 
-  // Luz solar principal -- sombras de alta resolución
-  const sun=new THREE.DirectionalLight(0xfffae8,1.1);
-  sun.position.set(60,120,50); sun.castShadow=true;
-  // Fase 8: 2048 desktop (era 4096) -- calidad visual idéntica, memoria ×4 menor
+  // Luz solar de media tarde entrando por los ventanales laterales.
+  // Viene del lado +X (ventanales derechos), baja (~36° de elevación),
+  // así los pilares, bancos y personas proyectan sombras largas y oblicuas
+  // que cruzan el hall hacia los ventanales de enfrente.
+  // El sol es la fuente dominante sobre el piso iluminado; si el relleno
+  // (ambiente + hemisferio + techo) pesa más, las sombras desaparecen.
+  const HALL_CENTER=new THREE.Vector3(0,0,-5);
+  const SUN_DIR=new THREE.Vector3(65,50,25).normalize();
+  const sun=new THREE.DirectionalLight(0xffe9c4,SUN_INTENSITY); // blanco cálido de sol bajo
+  sun.position.copy(HALL_CENTER).addScaledVector(SUN_DIR,140);
+  sun.target.position.copy(HALL_CENTER);
+  scene.add(sun.target);
+  sun.castShadow=true;
   sun.shadow.mapSize.width=sun.shadow.mapSize.height=isMobile?1024:2048;
-  sun.shadow.camera.left=-120; sun.shadow.camera.right=120;
-  sun.shadow.camera.top=120; sun.shadow.camera.bottom=-120;
-  sun.shadow.camera.far=400; sun.shadow.bias=-0.0005;
-  sun.shadow.normalBias=0.02;
+  // Frustum ajustado al hall (38×142) en vez de ±120 → ~40% más resolución por texel
+  sun.shadow.camera.left=-85; sun.shadow.camera.right=85;
+  sun.shadow.camera.top=85;   sun.shadow.camera.bottom=-85;
+  sun.shadow.camera.near=1;   sun.shadow.camera.far=300;
+  sun.shadow.bias=-0.0004;
+  sun.shadow.normalBias=0.03; // sol rasante → evita "shadow acne" en el piso
   scene.add(sun);
 
-  // HemisphereLight -- cielo azul + suelo cálido (reducida para evitar sobrexposición)
-  scene.add(new THREE.HemisphereLight(0x9ad5f5,0x9a8060,0.30));
+  // Relleno de cielo suave (era 0.30), no compite con el sol
+  scene.add(new THREE.HemisphereLight(0x9ad5f5,0x9a8060,HEMI_INTENSITY));
 
   // Luces de techo del terminal -- cálidas, sin saturar
   // Fase 8: reducidas de 24 (8z×3x) a 8 (8z×1 central) → misma percepción, mejor rendimiento
+  // Bajadas (eran 0.70): de día el sol manda; fuertes "rellenaban" todas las sombras
   [-55,-40,-25,-10,5,20,35,50].forEach(z=>{
-    const l=new THREE.PointLight(0xfff5e0,0.70,30);
+    const l=new THREE.PointLight(0xfff5e0,CEIL_LIGHT_INTENSITY,30);
     l.position.set(0,11.5,z); scene.add(l);
   });
 
@@ -265,7 +282,7 @@ function setupLighting(){
     su['rayleigh'].value=2.0;
     su['mieCoefficient'].value=0.008;
     su['mieDirectionalG'].value=0.82;
-    su['sunPosition'].value.set(0.4,0.35,0.1);
+    su['sunPosition'].value.copy(SUN_DIR); // cielo coherente con la luz direccional
     scene.background=null; // Sky reemplaza el fondo sólido
     scene.fog=new THREE.FogExp2(0xb0d8f0,0.004);
   }
@@ -440,6 +457,7 @@ function buildShell(){
 function buildFloorTile(){
   // Textura de mármol blanco + beige con venas
   const t=tex(2048,2048,(ctx)=>{
+    ctx.scale(2,2); // el dibujo está en coordenadas de 1024 → cubrir todo el canvas de 2048
     // Base de mármol cremoso
     const bg=ctx.createLinearGradient(0,0,1024,1024);
     bg.addColorStop(0,'#ede8e0'); bg.addColorStop(0.5,'#f0ece4'); bg.addColorStop(1,'#e8e2d8');
@@ -480,20 +498,35 @@ function buildFloorTile(){
   });
   t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(8,22);
 
+  t.anisotropy=renderer.capabilities.getMaxAnisotropy(); // juntas nítidas en ángulo rasante
+
+  // Mapa de rugosidad: losa pulida (oscuro = liso) y juntas de pastina mate (claro = rugoso)
+  const rt=tex(256,256,(ctx)=>{
+    ctx.fillStyle='#3a3a3a'; ctx.fillRect(0,0,256,256);   // ≈0.23 losa pulida
+    ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=2;            // ≈0.88 pastina
+    for(let i=0;i<=256;i+=32){
+      ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,256); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(256,i); ctx.stroke();
+    }
+  });
+  rt.wrapS=rt.wrapT=THREE.RepeatWrapping; rt.repeat.copy(t.repeat);
+
+  // Mármol / porcelanato pulido: dieléctrico (metalness 0), rugosidad baja.
+  // roughness se multiplica por el roughnessMap → losa ≈0.23, juntas ≈0.88
   const floorMat=new THREE.MeshStandardMaterial({
-    map:t, roughness:0.18, metalness:0.08,
-    envMapIntensity:0.6
+    map:t, roughnessMap:rt, roughness:1.0, metalness:0.0
   });
   const fm=new THREE.Mesh(new THREE.PlaneGeometry(38,142),floorMat);
   fm.rotation.x=-Math.PI/2; fm.position.set(0,0.09,-5); fm.receiveShadow=true; scene.add(fm);
 
-  // Capa de reflejo especular encima del piso -- efecto mármol pulido
+  // Capa de brillo encima del piso -- efecto mármol pulido.
+  // Recibe sombras para no "lavar" las sombras proyectadas por el sol.
   const reflMat=new THREE.MeshStandardMaterial({
-    color:0xffffff, roughness:0.05, metalness:0.12,
-    transparent:true, opacity:0.10
+    color:0xffffff, roughness:0.08, metalness:0.0,
+    transparent:true, opacity:0.08, depthWrite:false
   });
   const refl=new THREE.Mesh(new THREE.PlaneGeometry(38,142),reflMat);
-  refl.rotation.x=-Math.PI/2; refl.position.set(0,0.10,-5); scene.add(refl);
+  refl.rotation.x=-Math.PI/2; refl.position.set(0,0.10,-5); refl.receiveShadow=true; scene.add(refl);
 }
 
 // ─── CEILING ── Techo moderno con luminarias ───────
@@ -520,15 +553,19 @@ function buildCeiling(){
     [128,384,640,896].forEach(lx=>{ ctx.fillRect(lx-60,185,120,70); });
   });
   t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(5,12);
-  const ceilMat=new THREE.MeshStandardMaterial({map:t, roughness:0.75, metalness:0.0});
+  // Paneles acústicos de fibra mineral: muy mates, sin componente metálica
+  const ceilMat=new THREE.MeshStandardMaterial({map:t, roughness:0.92, metalness:0.0});
   const cm=new THREE.Mesh(new THREE.PlaneGeometry(38,142),ceilMat);
-  cm.rotation.x=Math.PI/2; cm.position.set(0,13,-5); scene.add(cm);
+  cm.rotation.x=Math.PI/2; cm.position.set(0,13,-5); cm.receiveShadow=true; scene.add(cm);
 
   // Travesaños de techo con luminaria LED integrada
+  // Chapa pintada (satinada): rugosidad media, metalness bajo -- sin envMap global,
+  // un metalness alto se vería casi negro.
+  const beamMat=mkStd(0xd0c8bc,0.55,0.1);
   [-8,-4,0,4,8].forEach(px=>{
     // Viga
-    const beam=new THREE.Mesh(mkBox(1.4,0.22,138),mkStd(0xd0c8bc,0.65,0.05));
-    beam.position.set(px,12.9,-5); scene.add(beam);
+    const beam=new THREE.Mesh(mkBox(1.4,0.22,138),beamMat);
+    beam.position.set(px,12.9,-5); beam.receiveShadow=true; scene.add(beam);
     // LED strip en cada viga
     const ledMat=mkStd(0xfff8e8,0.1,0,{emissive:0xfff5cc,emissiveIntensity:0.95});
     const led=new THREE.Mesh(mkBox(0.55,0.06,135),ledMat);
@@ -539,7 +576,7 @@ function buildCeiling(){
     const skyGlass=new THREE.Mesh(mkBox(30,0.12,4),mkStd(0xaad8f8,0.05,0.0,{transparent:true,opacity:0.45}));
     skyGlass.position.set(0,13.06,cz); scene.add(skyGlass);
     // Marco de claraboya
-    const frame=new THREE.Mesh(mkBox(30.5,0.1,4.5),mkStd(0x888888,0.4,0.3));
+    const frame=new THREE.Mesh(mkBox(30.5,0.1,4.5),mkStd(0x9a9a9e,0.35,0.4)); // aluminio anodizado
     frame.position.set(0,13.05,cz); scene.add(frame);
   });
 
@@ -4861,7 +4898,7 @@ function animate(){
 
   // Ciclo sutil de luz ambiental -- simula variación de iluminación del aeropuerto
   // Período ~52 s, amplitud ±0.03 → imperceptible pero da vida al espacio
-  if(ambientLight) ambientLight.intensity=0.28+Math.sin(t*0.12)*0.03;
+  if(ambientLight) ambientLight.intensity=AMBIENT_BASE+Math.sin(t*0.12)*0.03;
 
   // Rings pulse -- más suave en modo calma
   ringTime+=delta;
