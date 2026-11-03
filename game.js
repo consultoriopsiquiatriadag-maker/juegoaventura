@@ -331,6 +331,8 @@ function buildWorld(){
   buildEntranceFacadeWindows();
   buildEntranceSideWindows();
   buildHallQuality();
+  // ── FASE 29: Señalética suspendida (puertas, baños, FIDS) ──
+  if(window.AeroSignage){ AeroSignage.build(scene); AeroSignage.setCalm(calmMode); }
 }
 
 // ─── GROUND ──────────────────────────────────────
@@ -3811,6 +3813,8 @@ function toggleCalmMode(){
   // Transición CSS suave para no ser abrupta
   renderer.domElement.style.transition='filter 1.4s ease';
   renderer.domElement.style.filter=calmMode?'saturate(0.50) brightness(0.96)':'';
+  // F29 -- Señalética: menos brillo emisivo en calma
+  if(window.AeroSignage) AeroSignage.setCalm(calmMode);
 
   // Fase 8 -- NPCs: ocultar peatones civiles caminantes en Modo Calma
   // (el personal fijo permanece -- da sensación de lugar habitado sin movimiento)
@@ -4915,6 +4919,7 @@ function animate(){
 
   // Flight board refresh every 30s
   boardTimer+=delta;
+  if(window.AeroSignage) AeroSignage.update(delta); // reloj de las pantallas FIDS
   if(boardTimer>30&&flightBoardTexture){ boardTimer=0; drawFlightBoard(); flightBoardTexture.needsUpdate=true; }
 
   // Actualizar animaciones de modelos GLTF (Mixamo)
