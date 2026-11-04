@@ -50,10 +50,18 @@ const BLOOM_STRENGTH=0.25;      // bloom base (calidad normal/alta): halo sutil,
 const QUALITY_LEVELS={
   ultra:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:4096,bloomStrength:0.35},
   high:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:4096,bloomStrength:BLOOM_STRENGTH},
-  normal:{pixelRatio:isMobile?Math.min(devicePixelRatio,1.5):Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:1024,bloomStrength:BLOOM_STRENGTH},
+  normal:{pixelRatio:isMobile?Math.min(devicePixelRatio,1.5):Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:isMobile?1024:2048,bloomStrength:BLOOM_STRENGTH},
   low:{pixelRatio:1,shadowEnabled:false,bloomStrength:0,reduceNPCs:false}
 };
 let currentQuality='normal';
+let sunLight=null; // sol principal (setupLighting); su mapa de sombras sigue a la calidad
+// Resolución del mapa de sombras del sol. Antes shadowSize no se usaba:
+// el sol quedaba siempre en 2048 aunque se eligiera "alta" o "ultra".
+function applySunShadowSize(size){
+  if(!sunLight || sunLight.shadow.mapSize.x===size) return;
+  sunLight.shadow.mapSize.set(size,size);
+  if(sunLight.shadow.map){ sunLight.shadow.map.dispose(); sunLight.shadow.map=null; } // se recrea al próximo render
+}
 function setQuality(level){
   if(!QUALITY_LEVELS[level]) return;
   currentQuality=level;
@@ -62,6 +70,7 @@ function setQuality(level){
   renderer.shadowMap.enabled=q.shadowEnabled;
   if(q.shadowSize>0 && renderer.shadowMap.enabled){
     renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    applySunShadowSize(q.shadowSize);
   }
   if(composer){
     var bloomPass=composer.passes.find(function(p){return p instanceof THREE.UnrealBloomPass;});
@@ -283,7 +292,8 @@ function setupLighting(){
   sun.target.position.copy(HALL_CENTER);
   scene.add(sun.target);
   sun.castShadow=true;
-  sun.shadow.mapSize.width=sun.shadow.mapSize.height=isMobile?1024:2048;
+  sunLight=sun;
+  sun.shadow.mapSize.width=sun.shadow.mapSize.height=QUALITY_LEVELS[currentQuality].shadowSize||1024;
   // Frustum ajustado al hall (38×142) en vez de ±120 → ~40% más resolución por texel
   sun.shadow.camera.left=-85; sun.shadow.camera.right=85;
   sun.shadow.camera.top=85;   sun.shadow.camera.bottom=-85;
@@ -641,7 +651,7 @@ function buildTransitGuide(){
   tex.repeat.set(1,len/4);                        // un módulo cada 4 m
   tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
   const stripMat=new THREE.MeshStandardMaterial({
-    map:tex, roughness:0.28, metalness:0.05,       // pulido como el resto del piso
+    map:tex, roughness:0.2, metalness:0.05,        // mismo pulido que el piso del hall
     // Oscurece la textura ~35%: bajo el sol el piso claro satura y con el tono
     // original la franja se perdía (medido: mismo brillo que el piso).
     color:new THREE.Color(0.62,0.66,0.72),
