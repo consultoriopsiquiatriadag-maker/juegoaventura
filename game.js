@@ -29,7 +29,14 @@ const AMBIENT_COLOR=0xffe2bf;     // ambiente cálido (≈3200 K)
 const AMBIENT_BASE=0.20;          // intensidad base del ciclo ambiental (relleno bajo → sombras visibles)
 const SUN_INTENSITY=1.8;          // sol dominante sobre el piso iluminado
 const HEMI_INTENSITY=0.10;        // relleno de cielo
-const CEIL_LIGHT_INTENSITY=0.22;  // luces puntuales del techo del hall          // referencia para ciclo de luz ambiental
+const CEIL_LIGHT_INTENSITY=0.22;  // luces puntuales del techo del hall
+const SUN_COLOR=0xfffaed;         // sol de tarde, blanco apenas cálido
+// Dirección HACIA el sol: entra por los ventanales del lado +X, ~36° de elevación.
+// La usan la luz direccional, el cielo y los haces volumétricos (js/light-shafts.js).
+const SUN_DIRECTION=new THREE.Vector3(65,50,25).normalize();
+// Niebla: da profundidad a la terminal sin tapar el fondo del hall
+// (0.007 → 25% a 75 m, el avión sigue visible).
+const FOG_COLOR=0xd6e0ec, FOG_DENSITY=0.007;
 let gameStartTime=0;            // ms al iniciar recorrido
 let menuAnimId=null;            // requestAnimationFrame del canvas del menú
 const prefersReducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -157,7 +164,7 @@ function openCurrentZonePanelAndTip(){
 function init(){
   scene=new THREE.Scene();
   scene.background=new THREE.Color(0x87ceeb);
-  scene.fog=new THREE.FogExp2(0xa0c8e8,0.005);
+  scene.fog=new THREE.FogExp2(FOG_COLOR,FOG_DENSITY);
 
   camera=new THREE.PerspectiveCamera(72,innerWidth/innerHeight,0.1,400);
   camera.position.set(0,PLAYER_HEIGHT,52);
@@ -269,8 +276,8 @@ function setupLighting(){
   // El sol es la fuente dominante sobre el piso iluminado; si el relleno
   // (ambiente + hemisferio + techo) pesa más, las sombras desaparecen.
   const HALL_CENTER=new THREE.Vector3(0,0,-5);
-  const SUN_DIR=new THREE.Vector3(65,50,25).normalize();
-  const sun=new THREE.DirectionalLight(0xffe9c4,SUN_INTENSITY); // blanco cálido de sol bajo
+  const SUN_DIR=SUN_DIRECTION;
+  const sun=new THREE.DirectionalLight(SUN_COLOR,SUN_INTENSITY);
   sun.position.copy(HALL_CENTER).addScaledVector(SUN_DIR,140);
   sun.target.position.copy(HALL_CENTER);
   scene.add(sun.target);
@@ -320,7 +327,7 @@ function setupLighting(){
     su['mieDirectionalG'].value=0.82;
     su['sunPosition'].value.copy(SUN_DIR); // cielo coherente con la luz direccional
     scene.background=null; // Sky reemplaza el fondo sólido
-    scene.fog=new THREE.FogExp2(0xb0d8f0,0.004);
+    scene.fog=new THREE.FogExp2(FOG_COLOR,FOG_DENSITY);
   }
 }
 
@@ -355,6 +362,8 @@ function buildWorld(){
   buildTransitionBenches();
   buildInfoPosts();
   buildSidewallWindows();
+  // F31: haces de luz volumétrica entrando por los ventanales soleados
+  if(window.AeroLightShafts){ AeroLightShafts.build(scene,SUN_DIRECTION); AeroLightShafts.setCalm(calmMode); }
   buildCorridorEdgeMarkers();
   // ── FASE 3: Puestos funcionales del hall ───────
   buildServicePosts();
@@ -3855,6 +3864,7 @@ function toggleCalmMode(){
   renderer.domElement.style.filter=calmMode?'saturate(0.50) brightness(0.96)':'';
   // F29 -- Señalética: menos brillo emisivo en calma
   if(window.AeroSignage) AeroSignage.setCalm(calmMode);
+  if(window.AeroLightShafts) AeroLightShafts.setCalm(calmMode);
 
   // Fase 8 -- NPCs: ocultar peatones civiles caminantes en Modo Calma
   // (el personal fijo permanece -- da sensación de lugar habitado sin movimiento)
