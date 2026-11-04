@@ -188,6 +188,7 @@ function init(){
   // Guardar densidad base de niebla (depende de si Three.Sky está disponible)
   if(scene.fog) _normalFogDensity=scene.fog.density;
   buildWorld();
+  captureFloorReflections(); // después del mundo y antes de las personas
   if(!isMobile) spawnNPCs(); // NPCs civiles solo en desktop -- mejora performance móvil
   spawnStaffNPCs();
   loadCabinCrew();
@@ -490,80 +491,82 @@ function buildShell(){
   box(6,3.5,35,1.5,7,0.3,0x404040,false,false);
 }
 
-// ─── FLOOR TILE ── Mármol pulido aeropuerto moderno ─
+// ─── FLOOR TILE ── Granito claro pulido con reflejos reales ─
+// Textura procedural: baldosones grandes de granito/mármol claro con juntas.
+function createTileFloorTexture(){
+  const canvas=document.createElement('canvas');
+  canvas.width=1024; canvas.height=1024;
+  const ctx=canvas.getContext('2d');
+
+  // Fondo de granito/mármol claro
+  ctx.fillStyle='#e8ecf0';
+  ctx.fillRect(0,0,1024,1024);
+
+  // Cuadrícula de baldosas grandes
+  ctx.strokeStyle='#c5ccd6';
+  ctx.lineWidth=4;
+  const tileSize=128;
+  for(let x=0;x<=1024;x+=tileSize){
+    ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,1024); ctx.stroke();
+  }
+  for(let y=0;y<=1024;y+=tileSize){
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(1024,y); ctx.stroke();
+  }
+
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.wrapS=THREE.RepeatWrapping;
+  texture.wrapT=THREE.RepeatWrapping;
+  // Piso de 38×142 → 4×15 repeticiones = baldosas cuadradas de ~1.2 m
+  // (con 10×20 quedaban rectangulares de 0.47×0.89 m).
+  texture.repeat.set(4,15);
+  texture.anisotropy=renderer.capabilities.getMaxAnisotropy(); // juntas nítidas en ángulo rasante
+  return texture;
+}
+
+let hallFloorMat=null; // recibe el envMap en captureFloorReflections()
+
 function buildFloorTile(){
-  // Textura de mármol blanco + beige con venas
-  const t=tex(2048,2048,(ctx)=>{
-    ctx.scale(2,2); // el dibujo está en coordenadas de 1024 → cubrir todo el canvas de 2048
-    // Base de mármol cremoso
-    const bg=ctx.createLinearGradient(0,0,1024,1024);
-    bg.addColorStop(0,'#ede8e0'); bg.addColorStop(0.5,'#f0ece4'); bg.addColorStop(1,'#e8e2d8');
-    ctx.fillStyle=bg; ctx.fillRect(0,0,1024,1024);
-
-    // Venas de mármol -- múltiples trazos orgánicos
-    const drawVein=(x1,y1,x2,y2,col,w)=>{
-      ctx.strokeStyle=col; ctx.lineWidth=w;
-      ctx.globalAlpha=0.18+Math.random()*0.12;
-      ctx.beginPath(); ctx.moveTo(x1,y1);
-      const mx=(x1+x2)/2+(-100+Math.random()*200), my=(y1+y2)/2+(-100+Math.random()*200);
-      ctx.quadraticCurveTo(mx,my,x2,y2); ctx.stroke();
-      ctx.globalAlpha=1;
-    };
-    for(let i=0;i<18;i++) drawVein(Math.random()*1024,0,Math.random()*1024,1024,'#c8c0b4',1+Math.random()*2);
-    for(let i=0;i<8;i++)  drawVein(0,Math.random()*1024,1024,Math.random()*1024,'#d0c8bc',0.5+Math.random());
-    for(let i=0;i<6;i++)  drawVein(Math.random()*1024,0,Math.random()*1024,1024,'#b8b0a4',0.8);
-
-    // Grilla de losas -- juntas precisas
-    ctx.globalAlpha=1;
-    ctx.strokeStyle='#c0b8b0'; ctx.lineWidth=2.5;
-    for(let i=0;i<=1024;i+=128){
-      ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,1024); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(1024,i); ctx.stroke();
-    }
-    // Juntas más finas entre losas
-    ctx.strokeStyle='#ccc4bc'; ctx.lineWidth=1;
-    for(let i=0;i<=1024;i+=64){
-      ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,1024); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(1024,i); ctx.stroke();
-    }
-
-    // Efecto de reflejo especular simulado
-    const spec=ctx.createRadialGradient(512,512,0,512,512,600);
-    spec.addColorStop(0,'rgba(255,255,255,0.12)');
-    spec.addColorStop(1,'rgba(255,255,255,0)');
-    ctx.fillStyle=spec; ctx.fillRect(0,0,1024,1024);
+  // Muy pulido para que refleje el entorno del hall (ver captureFloorReflections)
+  hallFloorMat=new THREE.MeshStandardMaterial({
+    map:createTileFloorTexture(),
+    roughness:0.2,
+    metalness:0.05
   });
-  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(8,22);
-
-  t.anisotropy=renderer.capabilities.getMaxAnisotropy(); // juntas nítidas en ángulo rasante
-
-  // Mapa de rugosidad: losa pulida (oscuro = liso) y juntas de pastina mate (claro = rugoso)
-  const rt=tex(256,256,(ctx)=>{
-    ctx.fillStyle='#3a3a3a'; ctx.fillRect(0,0,256,256);   // ≈0.23 losa pulida
-    ctx.strokeStyle='#e0e0e0'; ctx.lineWidth=2;            // ≈0.88 pastina
-    for(let i=0;i<=256;i+=32){
-      ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,256); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(256,i); ctx.stroke();
-    }
-  });
-  rt.wrapS=rt.wrapT=THREE.RepeatWrapping; rt.repeat.copy(t.repeat);
-
-  // Mármol / porcelanato pulido: dieléctrico (metalness 0), rugosidad baja.
-  // roughness se multiplica por el roughnessMap → losa ≈0.23, juntas ≈0.88
-  const floorMat=new THREE.MeshStandardMaterial({
-    map:t, roughnessMap:rt, roughness:1.0, metalness:0.0
-  });
-  const fm=new THREE.Mesh(new THREE.PlaneGeometry(38,142),floorMat);
+  const fm=new THREE.Mesh(new THREE.PlaneGeometry(38,142),hallFloorMat);
   fm.rotation.x=-Math.PI/2; fm.position.set(0,0.09,-5); fm.receiveShadow=true; scene.add(fm);
+}
 
-  // Capa de brillo encima del piso -- efecto mármol pulido.
-  // Recibe sombras para no "lavar" las sombras proyectadas por el sol.
-  const reflMat=new THREE.MeshStandardMaterial({
-    color:0xffffff, roughness:0.08, metalness:0.0,
-    transparent:true, opacity:0.08, depthWrite:false
+// Reflejos reales en el piso: una sola captura del hall al cargar.
+// Sin envMap, roughness 0.2 solo da brillos puntuales de las luces; con él, el
+// piso refleja techo, ventanales, carteles y pantallas (borrosos según la rugosidad).
+// Se captura una vez (costo de carga, no por cuadro): las personas y lo que se
+// mueve no aparecen en el reflejo.
+function captureFloorReflections(){
+  if(!hallFloorMat || !THREE.CubeCamera || !THREE.PMREMGenerator) return;
+  const caps=renderer.capabilities;
+  const halfFloatOK=caps.isWebGL2 || !!renderer.extensions.get('OES_texture_half_float');
+  const cubeRT=new THREE.WebGLCubeRenderTarget(isMobile?128:256,{
+    format:THREE.RGBAFormat,
+    type:halfFloatOK?THREE.HalfFloatType:THREE.UnsignedByteType,
+    generateMipmaps:false
   });
-  const refl=new THREE.Mesh(new THREE.PlaneGeometry(38,142),reflMat);
-  refl.rotation.x=-Math.PI/2; refl.position.set(0,0.10,-5); refl.receiveShadow=true; scene.add(refl);
+  const cubeCam=new THREE.CubeCamera(0.3,300,cubeRT);
+  cubeCam.position.set(0,1.6,-5); // altura de ojos, centro del hall
+  // Capturar en lineal sin tone mapping: ACES se aplica una sola vez, al final
+  const tm=renderer.toneMapping;
+  renderer.toneMapping=THREE.NoToneMapping;
+  scene.add(cubeCam);
+  cubeCam.update(renderer,scene);
+  scene.remove(cubeCam);
+  renderer.toneMapping=tm;
+
+  const pmrem=new THREE.PMREMGenerator(renderer);
+  const env=pmrem.fromCubemap(cubeRT.texture).texture; // mips prefiltrados por rugosidad
+  pmrem.dispose(); cubeRT.dispose();
+
+  hallFloorMat.envMap=env;
+  hallFloorMat.envMapIntensity=1.0; // físicamente correcto: el Fresnel ya limita el reflejo
+  hallFloorMat.needsUpdate=true;
 }
 
 // ─── CEILING ── Techo moderno con luminarias ───────
@@ -4860,9 +4863,8 @@ function buildEntranceSideWindows(){
 
 // ── CALIDAD PERCIBIDA DEL HALL (F25) ──
 function buildHallQuality(){
-  var specularMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.08,metalness:0.12,transparent:true,opacity:0.07});
-  var specPlane=new THREE.Mesh(new THREE.PlaneGeometry(38,142),specularMat);
-  specPlane.rotation.x=-Math.PI/2; specPlane.position.set(0,0.11,-5); scene.add(specPlane);
+  // (La capa translúcida de 'brillo' sobre el piso se quitó: el piso ahora tiene
+  //  reflejos reales con envMap, ver captureFloorReflections.)
   var signEmissiveData=[
     {text:'EMBARQUE',x:0,z:-28,color:0x4a9eff},{text:'SALIDAS',x:-2,z:44,color:0x4ecdc4},
     {text:'LLEGADAS',x:3,z:44,color:0x4ecdc4}
