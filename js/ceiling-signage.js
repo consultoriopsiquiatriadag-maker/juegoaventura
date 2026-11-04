@@ -5,7 +5,8 @@
    Crea, colgados del techo del hall:
    - Carteles de puertas de embarque (estilo aeroportuario: amarillo sobre negro)
    - Carteles de baños (pictogramas blancos sobre gris carbón)
-   - Pantallas FIDS de salidas / llegadas (doble cara, en marco común)
+   - Pantallas FIDS de salidas / llegadas (doble cara, en marco común),
+     dinámicas: datos de js/flight-schedule.js (window.AeroFlights)
 
    Las caras usan MeshStandardMaterial con emissiveMap = la propia textura,
    así se ven encendidas aunque estén en sombra. La intensidad emisiva se
@@ -58,16 +59,6 @@ const LAYOUT = {
   ],
 };
 
-// Llegadas (no existen en data.js). Las salidas salen de FLIGHTS.
-const ARRIVALS = [
-  { code:'IB6830', from:'Buenos Aires', time:'07:55', belt:'3', status:'ATERRIZADO', color:'#52b788' },
-  { code:'LA8064', from:'Santiago',     time:'08:20', belt:'1', status:'EN HORA',    color:'#52b788' },
-  { code:'UX0042', from:'Montevideo',   time:'08:45', belt:'2', status:'EN HORA',    color:'#52b788' },
-  { code:'AR1132', from:'Córdoba',      time:'09:10', belt:'4', status:'DEMORADO',   color:'#f59e0b' },
-  { code:'AV0010', from:'Bogotá',       time:'09:35', belt:'3', status:'EN HORA',    color:'#52b788' },
-  { code:'CM0471', from:'Panamá',       time:'10:00', belt:'1', status:'EN HORA',    color:'#52b788' },
-];
-
 // ── ESTADO ────────────────────────────────────────
 const _signMats = [];   // materiales de carteles (puertas / baños)
 const _fidsMats = [];   // materiales de pantallas FIDS
@@ -75,6 +66,7 @@ const _fidsScreens = []; // {canvas, ctx, texture, kind}
 let _timeOfDay = 'day';
 let _calm = false;
 let _clockTimer = 0;
+let _pageTimer = 0, _page = 0, _lastVersion = -1, _lastClock = '';
 let _built = false;
 
 // ── HELPERS ───────────────────────────────────────
@@ -216,41 +208,69 @@ function _restroomTex(arrow){
 }
 
 // ── FIDS ──────────────────────────────────────────
-function _clock(){
-  const n = new Date();
-  return String(n.getHours()).padStart(2,'0') + ':' + String(n.getMinutes()).padStart(2,'0');
+// Estilo panel LED de aeropuerto: fondo negro, encabezados ámbar, texto
+// monoespaciado blanco y último llamado en naranja.
+const FIDS_ROWS = 6;          // filas por página
+const PAGE_SECONDS = 15;      // cambio de página (sin animación); en Calma no pagina
+const LED_AMBER = '#ffb703', LED_BG = '#0a0a0c';
+
+function _fidsRows(dep){
+  const F = window.AeroFlights;
+  if (!F) return [];
+  return dep
+    ? F.departures().map(f => [f.code, f.dest, f.time, f.gate, f.status, f.color])
+    : F.arrivals().map(a => [a.code, a.from, a.time, a.belt, a.status, a.color]);
 }
 
 function _drawFids(scr){
   const ctx = scr.ctx, w = scr.canvas.width, h = scr.canvas.height;
   const dep = scr.kind === 'dep';
-  // Fondo azul noche, típico de FIDS
-  ctx.fillStyle = '#06132a'; ctx.fillRect(0, 0, w, h);
-  // Cabecera
-  ctx.fillStyle = dep ? '#f2c200' : '#1fa37a'; ctx.fillRect(0, 0, w, 86);
-  ctx.fillStyle = '#06132a'; ctx.font = 'bold 46px Arial'; ctx.textAlign = 'left';
-  ctx.fillText(dep ? '✈  SALIDAS · DEPARTURES' : '✈  LLEGADAS · ARRIVALS', 24, 60);
-  ctx.textAlign = 'right'; ctx.font = 'bold 44px monospace';
-  ctx.fillText(_clock(), w - 24, 60);
-  // Columnas
-  const cols = dep ? [24, 190, 520, 650, 770] : [24, 190, 520, 650, 770];
+  const all = _fidsRows(dep);
+  const pages = Math.max(1, Math.ceil(all.length / FIDS_ROWS));
+  const page = _calm ? 0 : (_page % pages);
+  const rows = all.slice(page * FIDS_ROWS, page * FIDS_ROWS + FIDS_ROWS);
+
+  // Fondo negro típico de panel de aeropuerto
+  ctx.fillStyle = LED_BG; ctx.fillRect(0, 0, w, h);
+
+  // Título + reloj
+  ctx.textAlign = 'left'; ctx.fillStyle = LED_AMBER; ctx.font = 'bold 44px monospace';
+  ctx.fillText(dep ? 'SALIDAS  DEPARTURES' : 'LLEGADAS  ARRIVALS', 24, 58);
+  ctx.textAlign = 'right'; ctx.fillStyle = WHITE;
+  ctx.fillText(window.AeroFlights ? AeroFlights.clock() : '', w - 24, 58);
+  ctx.fillStyle = '#26262b'; ctx.fillRect(16, 78, w - 32, 3);
+
+  // Encabezado de columnas (ámbar)
+  const cols = [24, 214, 474, 606, 744];
   const heads = dep ? ['VUELO','DESTINO','HORA','PUERTA','ESTADO'] : ['VUELO','ORIGEN','HORA','CINTA','ESTADO'];
-  ctx.textAlign = 'left'; ctx.fillStyle = '#7fb2ff'; ctx.font = 'bold 26px Arial';
-  heads.forEach((t, i) => ctx.fillText(t, cols[i], 124));
-  ctx.fillStyle = '#7fb2ff'; ctx.fillRect(16, 136, w - 32, 2);
+  ctx.textAlign = 'left'; ctx.fillStyle = LED_AMBER; ctx.font = 'bold 32px monospace';
+  heads.forEach((t, i) => ctx.fillText(t, cols[i], 128));
+
   // Filas
-  const rows = dep
-    ? (typeof FLIGHTS !== 'undefined' ? FLIGHTS : []).slice(0, 7).map(f => [f.code, f.dest, f.time, f.gate, f.status, f.statusColor])
-    : ARRIVALS.slice(0, 7).map(a => [a.code, a.from, a.time, a.belt, a.status, a.color]);
   rows.forEach((r, i) => {
-    const y = 186 + i * 54;
-    if (i % 2 === 0){ ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fillRect(16, y - 38, w - 32, 52); }
-    ctx.fillStyle = WHITE; ctx.font = '32px monospace';
-    for (let c = 0; c < 4; c++) ctx.fillText(r[c], cols[c], y);
-    ctx.fillStyle = r[5]; ctx.font = 'bold 28px Arial';
+    const y = 192 + i * 62;
+    if (i % 2 === 1){ ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fillRect(16, y - 42, w - 32, 58); }
+    ctx.fillStyle = WHITE; ctx.font = '34px monospace';
+    for (let c = 0; c < 4; c++) ctx.fillText(String(r[c]).slice(0, c === 1 ? 12 : 8), cols[c], y);
+    ctx.fillStyle = r[5]; ctx.font = 'bold 30px monospace';
     ctx.fillText(r[4], cols[4], y);
   });
+
+  // Indicador de página
+  if (pages > 1 && !_calm){
+    ctx.textAlign = 'right'; ctx.fillStyle = '#6b7280'; ctx.font = '24px monospace';
+    ctx.fillText((page + 1) + '/' + pages, w - 24, h - 16);
+  }
   scr.texture.needsUpdate = true;
+}
+
+// Material de pantalla: MeshBasicMaterial (no depende de la iluminación de la
+// escena, se ve "encendida" de día o de noche). El brillo se regula escalando
+// el color (>1 = más luminosa: el texto blanco supera el umbral del bloom).
+function _screenMat(texture){
+  const m = new THREE.MeshBasicMaterial({ map: texture });
+  _fidsMats.push(m);
+  return m;
 }
 
 function _fidsScreen(kind){
@@ -273,8 +293,8 @@ function _fidsCluster(depScr, arrScr, mats){
   const rail = new THREE.Mesh(new THREE.BoxGeometry(totalW + 0.2, 0.08, 0.16), mats.frame);
   rail.position.y = totalH/2 + 0.04; g.add(rail);
   const geo = new THREE.PlaneGeometry(SW, SH);
-  const depMat = _faceMat(depScr.texture, _fidsMats);
-  const arrMat = _faceMat(arrScr.texture, _fidsMats);
+  const depMat = _screenMat(depScr.texture);
+  const arrMat = _screenMat(arrScr.texture);
   [[-1, depMat], [1, arrMat]].forEach(([side, mat]) => {
     const x = side * (SW/2 + GAP/2);
     const f = new THREE.Mesh(geo, mat); f.position.set(x, 0, D/2 + 0.002); g.add(f);
@@ -326,7 +346,7 @@ function _applyIntensity(){
   const p = EMISSIVE_PRESETS[_timeOfDay] || EMISSIVE_PRESETS.day;
   const k = _calm ? CALM_FACTOR : 1;
   _signMats.forEach(m => { m.emissiveIntensity = p.sign * k; });
-  _fidsMats.forEach(m => { m.emissiveIntensity = p.fids * k; });
+  _fidsMats.forEach(m => { m.color.setScalar(p.fids * k); });
 }
 
 function setTimeOfDay(mode){
@@ -334,15 +354,28 @@ function setTimeOfDay(mode){
   _timeOfDay = mode; _applyIntensity();
 }
 
-function setCalm(on){ _calm = !!on; _applyIntensity(); }
+function setCalm(on){
+  _calm = !!on; _applyIntensity();
+  if (_built) _fidsScreens.forEach(_drawFids); // en Calma: sin paginado
+}
 
-// Redibuja el reloj de las FIDS cada 30 s (sin parpadeos: baja estimulación).
+// Redibuja las FIDS solo cuando hace falta (revisa 1 vez por segundo):
+// cambió algún vuelo, cambió el minuto del reloj o toca pasar de página.
+// Sin animaciones ni parpadeos: baja estimulación.
 function update(delta){
   if (!_built) return;
   _clockTimer += delta;
-  if (_clockTimer < 30) return;
+  _pageTimer += delta;
+  if (_clockTimer < 1) return;
   _clockTimer = 0;
-  _fidsScreens.forEach(_drawFids);
+  let dirty = false;
+  if (!_calm && _pageTimer >= PAGE_SECONDS){ _pageTimer = 0; _page++; dirty = true; }
+  const F = window.AeroFlights;
+  if (F){
+    const v = F.version(), c = F.clock();
+    if (v !== _lastVersion || c !== _lastClock){ _lastVersion = v; _lastClock = c; dirty = true; }
+  }
+  if (dirty) _fidsScreens.forEach(_drawFids);
 }
 
 window.AeroSignage = { build, update, setTimeOfDay, setCalm, LAYOUT, EMISSIVE_PRESETS };

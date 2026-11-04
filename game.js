@@ -23,6 +23,7 @@ const PLAYER_SPEED_CALM=4.5; // Modo calma: velocidad reducida para menor estimu
 let npcs=[], ringMeshes=[], luggageBelt=null;
 let flightBoardCanvas, flightBoardCtx, flightBoardTexture;
 let boardTimer=0;
+let _boardVersion=-1;  // F32: última versión del horario dibujada en el tablero
 let gltfLoader=null, cabinMixers=[];
 let ambientLight=null;
 const AMBIENT_COLOR=0xffe2bf;     // ambiente cálido (≈3200 K)
@@ -1855,12 +1856,14 @@ function drawFlightBoard(){
   ctx.fillStyle='#4a9eff'; ctx.font='bold 22px Arial'; ctx.textAlign='left';
   ['VUELO','DESTINO','HORA','PUERTA','ESTADO'].forEach((h2,i)=>ctx.fillText(h2,cols[i],96));
   ctx.strokeStyle='#4a9eff'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(10,102); ctx.lineTo(w-10,102); ctx.stroke();
-  FLIGHTS.forEach((f,i)=>{
+  // F32: mismos datos dinámicos que las pantallas del techo (js/flight-schedule.js)
+  const list=window.AeroFlights?AeroFlights.departures().slice(0,8):FLIGHTS;
+  list.forEach((f,i)=>{
     const y=135+i*46;
     ctx.fillStyle=i%2===0?'rgba(255,255,255,0.04)':'transparent'; ctx.fillRect(10,y-28,w-20,44);
     ctx.fillStyle='#fff'; ctx.font='24px monospace';
     ctx.fillText(f.code,cols[0],y); ctx.fillText(f.dest,cols[1],y); ctx.fillText(f.time,cols[2],y); ctx.fillText(f.gate,cols[3],y);
-    ctx.fillStyle=f.statusColor; ctx.font='bold 20px Arial'; ctx.fillText(f.status,cols[4],y);
+    ctx.fillStyle=f.color||f.statusColor; ctx.font='bold 20px Arial'; ctx.fillText(f.status,cols[4],y);
   });
   const now=new Date();
   ctx.fillStyle='#555'; ctx.font='18px monospace'; ctx.textAlign='right';
@@ -4969,6 +4972,8 @@ function animate(){
   // Flight board refresh every 30s
   boardTimer+=delta;
   if(window.AeroSignage) AeroSignage.update(delta); // reloj de las pantallas FIDS
+  // Tablero de salidas: redibujar cuando cambia algún vuelo o cada 30 s (reloj)
+  if(window.AeroFlights && flightBoardTexture && AeroFlights.version()!==_boardVersion){ _boardVersion=AeroFlights.version(); boardTimer=31; }
   if(boardTimer>30&&flightBoardTexture){ boardTimer=0; drawFlightBoard(); flightBoardTexture.needsUpdate=true; }
 
   // Actualizar animaciones de modelos GLTF (Mixamo)
