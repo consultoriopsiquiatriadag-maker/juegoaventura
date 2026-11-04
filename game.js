@@ -46,7 +46,7 @@ const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 // ══════════════════════════════════════════════════
 // FASE 15 -- CALIDAD DE RENDERIZADO
 // ══════════════════════════════════════════════════
-const BLOOM_STRENGTH=0.3;       // bloom base (calidad normal/alta)
+const BLOOM_STRENGTH=0.25;      // bloom base (calidad normal/alta): halo sutil, no deslumbra
 const QUALITY_LEVELS={
   ultra:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:4096,bloomStrength:0.35},
   high:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:4096,bloomStrength:BLOOM_STRENGTH},
