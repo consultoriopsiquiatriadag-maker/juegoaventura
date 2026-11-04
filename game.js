@@ -38,10 +38,11 @@ const isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 // ══════════════════════════════════════════════════
 // FASE 15 -- CALIDAD DE RENDERIZADO
 // ══════════════════════════════════════════════════
+const BLOOM_STRENGTH=0.3;       // bloom base (calidad normal/alta)
 const QUALITY_LEVELS={
-  ultra:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:4096,bloomStrength:0.15},
-  high:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:4096,bloomStrength:0.12},
-  normal:{pixelRatio:isMobile?Math.min(devicePixelRatio,1.5):Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:1024,bloomStrength:0.08},
+  ultra:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:4096,bloomStrength:0.35},
+  high:{pixelRatio:Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:4096,bloomStrength:BLOOM_STRENGTH},
+  normal:{pixelRatio:isMobile?Math.min(devicePixelRatio,1.5):Math.min(devicePixelRatio,2),shadowEnabled:true,shadowSize:1024,bloomStrength:BLOOM_STRENGTH},
   low:{pixelRatio:1,shadowEnabled:false,bloomStrength:0,reduceNPCs:false}
 };
 let currentQuality='normal';
@@ -167,6 +168,10 @@ function init(){
   renderer.setPixelRatio(isMobile?Math.min(devicePixelRatio,1.5):Math.min(devicePixelRatio,2));
   renderer.shadowMap.enabled=true;
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+  // Color: ACES Filmic comprime las luces altas de forma suave (look cinematográfico,
+  // sin blancos quemados) y sRGB es el espacio de salida de la pantalla.
+  // Con el composer, ACES se aplica en la RenderPass y el sRGB en la pasada final
+  // (ver setupPostProcessing).
   renderer.outputEncoding=THREE.sRGBEncoding;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure=1.1;
@@ -197,18 +202,48 @@ function setupPostProcessing(){
   // Sin postprocesado en móvil -- ahorra GPU y mejora framerate
   if(isMobile){ composer=null; return; }
   if(typeof THREE.EffectComposer==='undefined'){ composer=null; return; }
-  composer=new THREE.EffectComposer(renderer);
-  const renderPass=new THREE.RenderPass(scene,camera);
-  composer.addPass(renderPass);
-  // Bloom MUY sutil -- solo afecta fuentes de luz puras (LEDs, pantallas)
-  // threshold alto = solo píxeles muy brillantes (>0.98) reciben bloom
+
+  // Buffers intermedios en media precisión (HalfFloat): la imagen viaja en
+  // espacio lineal y en 8 bits se verían bandas en sombras y degradés.
+  const caps=renderer.capabilities;
+  const halfFloatOK=caps.isWebGL2 || !!renderer.extensions.get('OES_texture_half_float');
+  const pr=renderer.getPixelRatio();
+  // Mínimo 1 px: si la ventana arranca oculta (tamaño 0) los buffers quedarían
+  // vacíos y WebGL tiraría errores hasta el primer resize.
+  const vw=Math.max(1,innerWidth), vh=Math.max(1,innerHeight);
+  const rtOpts={
+    minFilter:THREE.LinearFilter, magFilter:THREE.LinearFilter, format:THREE.RGBAFormat,
+    type:halfFloatOK?THREE.HalfFloatType:THREE.UnsignedByteType
+  };
+  // El antialias del canvas no aplica a los buffers del composer: en WebGL2 se
+  // usa un buffer con multisampling para que los bordes no salgan dentados.
+  const useMSAA=caps.isWebGL2 && THREE.WebGLMultisampleRenderTarget;
+  const rt=useMSAA
+    ? new THREE.WebGLMultisampleRenderTarget(vw*pr,vh*pr,rtOpts)
+    : new THREE.WebGLRenderTarget(vw*pr,vh*pr,rtOpts);
+  if(useMSAA) rt.samples=4;
+  composer=new THREE.EffectComposer(renderer,rt);
+
+  // 1) Escena → buffer lineal. ACES se aplica acá (renderer.toneMapping),
+  //    así el umbral del bloom trabaja sobre valores ya tonemapeados (0..1).
+  composer.addPass(new THREE.RenderPass(scene,camera));
+
+  // 2) Bloom con umbral alto: solo lo casi blanco brilla (LEDs del techo,
+  //    texto de las pantallas FIDS, claraboyas). El piso al sol queda debajo.
   const bloomPass=new THREE.UnrealBloomPass(
-    new THREE.Vector2(innerWidth,innerHeight),
-    0.12,  // strength -- sutil pero perceptible en superficies brillantes
-    0.5,   // radius
-    0.85   // threshold -- luz suave también brilla (no solo LEDs pura)
+    new THREE.Vector2(vw,vh),
+    BLOOM_STRENGTH, // strength -- halo sutil
+    0.4,            // radius   -- halo corto y suave, no "niebla" de luz
+    0.88            // threshold (luminancia lineal tras ACES). Medido: con 0.85 la
+                    // pared blanca al sol también brillaba (~15% de la imagen)
   );
   composer.addPass(bloomPass);
+
+  // 3) Lineal → sRGB. Sin esta pasada la imagen sale oscura y lavada, y la
+  //    pasada final del bloom de r128 volvía a aplicar ACES por segunda vez.
+  if(THREE.GammaCorrectionShader){
+    composer.addPass(new THREE.ShaderPass(THREE.GammaCorrectionShader));
+  }
   // Resize handler del composer -- el de camera/renderer está en setupEvents
 }
 
@@ -569,7 +604,9 @@ function buildCeiling(){
     const beam=new THREE.Mesh(mkBox(1.4,0.22,138),beamMat);
     beam.position.set(px,12.9,-5); beam.receiveShadow=true; scene.add(beam);
     // LED strip en cada viga
-    const ledMat=mkStd(0xfff8e8,0.1,0,{emissive:0xfff5cc,emissiveIntensity:0.95});
+    // 2.5 (era 0.95): una fuente de luz es mucho más intensa que una pared iluminada;
+    // así supera el umbral del bloom y la pared al sol no.
+    const ledMat=mkStd(0xfff8e8,0.1,0,{emissive:0xfff5cc,emissiveIntensity:2.5});
     const led=new THREE.Mesh(mkBox(0.55,0.06,135),ledMat);
     led.position.set(px,12.78,-5); scene.add(led);
   });

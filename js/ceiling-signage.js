@@ -26,10 +26,11 @@ const CEILING_Y = 13;
 
 // Intensidad emisiva por momento del día.
 // De día la pantalla compite con el sol → más alta; de noche se baja para
-// evitar deslumbramiento y halo excesivo del bloom.
+// evitar deslumbramiento y halo excesivo del bloom. Valores > 1 hacen que el
+// texto blanco supere el umbral del bloom (0.88 tras ACES) y tenga halo suave.
 const EMISSIVE_PRESETS = {
-  day:   { sign: 0.85, fids: 1.00 },
-  night: { sign: 0.55, fids: 0.70 },
+  day:   { sign: 1.2, fids: 1.6 },
+  night: { sign: 0.8, fids: 1.1 },
 };
 const CALM_FACTOR = 0.7; // Modo Calma: menos brillo, misma legibilidad
 
