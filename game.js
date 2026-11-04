@@ -310,11 +310,7 @@ function setupLighting(){
     l.position.set(z.position.x,2,z.position.z); scene.add(l);
   });
 
-  // Luces especiales de la cabina del avión
-  [-38,-42,-46,-50,-54].forEach(z=>{
-    const l=new THREE.PointLight(0xfff5cc,0.5,8);
-    l.position.set(0,5.5,z); scene.add(l);
-  });
+  // Luces de la cabina del avión: ver _cabinLighting() (dentro del fuselaje)
 
   // Sky atmosférico
   if(typeof THREE.Sky !== 'undefined'){
@@ -1100,317 +1096,463 @@ function buildBoarding(){
 }
 
 // ─── PLANE ── Cabina realista con cockpit ─────────
+// ══════════════════════════════════════════════════
+// F34 -- CABINA DE PASAJEROS (Fase 2: "El Vuelo")
+// ══════════════════════════════════════════════════
+// Interior tubular realista y amplio (pensado para fobia a volar: se siente
+// espacioso, luminoso y con cielo tranquilo en las ventanillas).
+//  - Fuselaje: sección circular extruida (techo curvo real, piso plano).
+//  - Portaequipajes continuos a ambos lados con puertas, cierres y luz cálida.
+//  - Asientos 3+3 con respaldo ergonómico (lumbar + espalda + cabecera con
+//    "alas"), apoyabrazos compartidos, bandeja y pantalla en el respaldo.
+//  - Ventanillas con marco redondeado; el cielo es un canvas procedural que
+//    se desplaza (las nubes pasan de una ventanilla a la siguiente).
+// Todo lo repetido usa InstancedMesh: ~150 asientos en pocas llamadas de dibujo.
+// La nariz del avión apunta a +Z (cockpit en z≈-28.5): los asientos miran a +Z.
+const CABIN={
+  x:0,
+  zFront:-32.25,     // mamparo delantero (detrás de la pared del cockpit en z=-32)
+  zRear:-61,         // mamparo trasero (salida hacia Llegadas)
+  floorY:0.15,
+  R:2.5,             // radio interior del fuselaje
+  cy:0.65,           // centro del círculo: piso 0.5 m por debajo → piso de 4.9 m
+  shell:0.14,        // espesor del fuselaje
+  firstRowZ:-35.4,   // zona de entrada / galley delante de la fila 1
+  seatPitch:0.92,
+  exitRow:12,        // fila de salida de emergencia (más espacio para piernas)
+  exitExtra:0.45,
+  seatW:0.5,
+  aisleHalf:0.56,    // pasillo de 1.12 m
+  binZ0:-32.9, binZ1:-60.3,
+  winY:1.35,         // centro de ventanilla (≈ altura de ojos sentado)
+};
+let cabinSky=null;   // {left:Texture, right:Texture} -- se anima en animate()
+
+// Semiancho interior del fuselaje a la altura y
+function _cabinHalf(y){ const d=y-CABIN.cy; return Math.sqrt(Math.max(0,CABIN.R*CABIN.R-d*d)); }
+
+const _m4=(px,py,pz,rx=0,ry=0,rz=0,sx=1,sy=1,sz=1)=>new THREE.Matrix4().compose(
+  new THREE.Vector3(px,py,pz),
+  new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),
+  new THREE.Vector3(sx,sy,sz));
+
+// InstancedMesh con frustumCulled=false: el bounding sphere de la geometría
+// está en el origen y no cubre las instancias (se ocultarían al mirar de lado).
+function _cabinInstanced(geo,mat,matrices,recv=true){
+  const im=new THREE.InstancedMesh(geo,mat,matrices.length);
+  matrices.forEach((m,i)=>im.setMatrixAt(i,m));
+  im.instanceMatrix.needsUpdate=true;
+  im.frustumCulled=false;
+  im.castShadow=false;          // el fuselaje ya tapa el sol: sombras inútiles adentro
+  im.receiveShadow=recv;
+  scene.add(im);
+  return im;
+}
+
 function buildPlane(){
-  const x=0, z=-46;
-  const BW=20, BH=8.5, BD=30; // ancho, alto, largo cabina pasajeros
+  const x=CABIN.x, z=-46;
   zoneHeader(x,z+16,'🛫  INTERIOR DEL AVIÓN  ·  ON BOARD',0x6366f1);
+  const rows=_cabinRowsZ();
+  _cabinShell();
+  _cabinFloor();
+  _cabinSeats(rows);
+  _cabinBins(rows);
+  _cabinWindows(rows);
+  _cabinBulkheads();
+  _cabinLighting();
+  buildCockpit(x,z);
+}
 
-  // ── MATERIALES DE CABINA ──────────────────────────
-  const fuselageMat  = mkStd(0xf0ece4, 0.65, 0.0);           // paredes blanco marfil
-  const seatFabric   = mkStd(0x2a3d6b, 0.90, 0.0);           // tela asiento azul oscuro
-  const seatPlastic  = mkStd(0x1e2d50, 0.55, 0.05);          // plástico asiento
-  const armrestMat   = mkStd(0x3a3a3a, 0.45, 0.05);          // apoyabrazos gris
-  const binMat       = mkStd(0xe8e4dc, 0.6, 0.02);           // portaequipajes
-  const binEdgeMat   = mkStd(0xd0ccc2, 0.5, 0.05);           // bordes portaequipajes
-  const carpetMat    = mkStd(0x2a2244, 0.95, 0.0);            // moqueta pasillo
-  const windowFrameM = mkStd(0xd0ccc0, 0.5, 0.05);           // marcos ventana
-  const cockpitWallM = mkStd(0x1a1e28, 0.6, 0.05);           // paredes cockpit
-  const panelMat     = mkStd(0x1a1a22, 0.4, 0.1);            // panel instrumentos
-
-  // ══════════════════════════════════════════════════
-  // FUSELAJE -- cuerpo principal
-  // ══════════════════════════════════════════════════
-  const fuse = new THREE.Mesh(mkBox(BW,BH,BD), fuselageMat);
-  fuse.position.set(x, BH/2, z); fuse.receiveShadow=true; scene.add(fuse);
-
-  // Bóveda del techo (interior curvado -- cilindro cortado)
-  const vaultGeo = new THREE.CylinderGeometry(BW*0.52, BW*0.52, BD, 20, 1, true, Math.PI*0.02, Math.PI*0.96);
-  const vault = new THREE.Mesh(vaultGeo, fuselageMat);
-  vault.rotation.z = Math.PI/2; vault.position.set(x, BH+0.1, z); scene.add(vault);
-
-  // Forro interior lateral (paneles de pared)
-  [-BW/2+0.15, BW/2-0.15].forEach(px=>{
-    const panel = new THREE.Mesh(mkBox(0.18, BH*0.72, BD-1), mkStd(0xece8e0,0.7,0.0));
-    panel.position.set(px, BH*0.45, z); scene.add(panel);
-    // Zócalo inferior oscuro
-    const base = new THREE.Mesh(mkBox(0.2, 0.35, BD-1), mkStd(0xb8b4ac,0.6,0.0));
-    base.position.set(px, 0.3, z); scene.add(base);
-  });
-
-  // ══════════════════════════════════════════════════
-  // SUELO -- moqueta + pasillo duro
-  // ══════════════════════════════════════════════════
-  // Moqueta lateral (azul marino con patrón)
-  const carpetT = tex(256,256,(ctx)=>{
-    ctx.fillStyle='#1e1a38'; ctx.fillRect(0,0,256,256);
-    ctx.strokeStyle='#2a2650'; ctx.lineWidth=2;
-    for(let i=0;i<256;i+=12){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,256); ctx.stroke(); }
-    ctx.strokeStyle='#22205a'; ctx.lineWidth=1;
-    for(let j=0;j<256;j+=8){ ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(256,j); ctx.stroke(); }
-    // Motivo geométrico sutil
-    ctx.fillStyle='rgba(91,164,212,0.08)';
-    for(let i=0;i<8;i++) for(let j=0;j<8;j++) ctx.fillRect(i*32+8,j*32+8,16,16);
-  });
-  carpetT.wrapS=carpetT.wrapT=THREE.RepeatWrapping; carpetT.repeat.set(4,8);
-  [-7.5,7.5].forEach(cx=>{
-    const cm=new THREE.Mesh(new THREE.PlaneGeometry(7,BD-1),new THREE.MeshStandardMaterial({map:carpetT,roughness:0.95}));
-    cm.rotation.x=-Math.PI/2; cm.position.set(x+cx,0.16,z); cm.receiveShadow=true; scene.add(cm);
-  });
-  // Pasillo central -- vinilo gris oscuro con línea amarilla
-  const aisleT=tex(128,512,(ctx)=>{
-    ctx.fillStyle='#3a3840'; ctx.fillRect(0,0,128,512);
-    ctx.strokeStyle='#888840'; ctx.lineWidth=3; ctx.setLineDash([20,15]);
-    ctx.beginPath(); ctx.moveTo(64,0); ctx.lineTo(64,512); ctx.stroke();
-    ctx.setLineDash([]); ctx.strokeStyle='rgba(255,255,180,0.15)'; ctx.lineWidth=1;
-    for(let j=0;j<512;j+=24){ ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(128,j); ctx.stroke(); }
-  });
-  aisleT.wrapS=aisleT.wrapT=THREE.RepeatWrapping; aisleT.repeat.set(1,3);
-  const aisle=new THREE.Mesh(new THREE.PlaneGeometry(3.5,BD-1),new THREE.MeshStandardMaterial({map:aisleT,roughness:0.7}));
-  aisle.rotation.x=-Math.PI/2; aisle.position.set(x,0.165,z); scene.add(aisle);
-
-  // ══════════════════════════════════════════════════
-  // ASIENTOS DE PASAJEROS -- economy class detallados
-  // ══════════════════════════════════════════════════
-  // Textura de tela del asiento (tejido con trama)
-  const seatT=tex(128,128,(ctx)=>{
-    ctx.fillStyle='#233460'; ctx.fillRect(0,0,128,128);
-    ctx.strokeStyle='#1a2850'; ctx.lineWidth=1;
-    for(let i=0;i<128;i+=4){ ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,128); ctx.stroke(); }
-    for(let j=0;j<128;j+=4){ ctx.beginPath(); ctx.moveTo(0,j); ctx.lineTo(128,j); ctx.stroke(); }
-    // Stripes de diseño
-    [16,48,80,112].forEach(s=>{ ctx.fillStyle='rgba(91,164,212,0.25)'; ctx.fillRect(s,0,4,128); });
-  });
-  seatT.wrapS=seatT.wrapT=THREE.RepeatWrapping;
-  const seatFabricT=new THREE.MeshStandardMaterial({map:seatT,roughness:0.88,metalness:0.0});
-
-  const buildSeat=(sx,sz)=>{
-    const sg=new THREE.Group(); sg.position.set(sx,0,sz);
-    // Base del asiento
-    const base=new THREE.Mesh(mkBox(0.98,0.12,0.95),armrestMat); base.position.set(0,0.36,0); sg.add(base);
-    // Cojín del asiento con tela
-    const cushion=new THREE.Mesh(mkBox(0.92,0.13,0.88),seatFabricT);
-    cushion.position.set(0,0.43,-0.02); sg.add(cushion);
-    // Respaldo con curvatura insinuada
-    const back=new THREE.Mesh(mkBox(0.92,1.0,0.11),seatFabricT);
-    back.position.set(0,0.98,0.46); back.rotation.x=0.08; sg.add(back);
-    // Cabecera acolchada
-    const headrest=new THREE.Mesh(mkBox(0.88,0.28,0.10),seatFabricT);
-    headrest.position.set(0,1.55,0.44); sg.add(headrest);
-    // Almohadillas cabecera
-    [-0.28,0.28].forEach(hx=>{
-      const hpad=new THREE.Mesh(mkBox(0.25,0.22,0.05),seatFabricT);
-      hpad.position.set(hx,1.56,0.47); sg.add(hpad);
-    });
-    // Apoyabrazos (tubulares)
-    [-0.50,0.50].forEach(ax=>{
-      const arm=new THREE.Mesh(mkBox(0.07,0.06,0.82),armrestMat);
-      arm.position.set(ax,0.57,-0.02); sg.add(arm);
-      // Pad de apoyabrazos
-      const pad=new THREE.Mesh(mkBox(0.072,0.04,0.50),mkStd(0x2a2a2a,0.6,0.0));
-      pad.position.set(ax,0.605,0.10); sg.add(pad);
-    });
-    // Pata frontal y trasera
-    [[0.42,-0.42],[0.42,0.42],[-0.42,-0.42],[-0.42,0.42]].forEach(([lx,lz])=>{
-      const leg=new THREE.Mesh(mkBox(0.055,0.38,0.055),mkStd(0xaaaaaa,0.3,0.4));
-      leg.position.set(lx,0.19,lz); sg.add(leg);
-    });
-    // Bolsillo trasero
-    const pocket=new THREE.Mesh(mkBox(0.88,0.28,0.04),mkStd(0x1e2a42,0.9,0));
-    pocket.position.set(0,0.82,-0.47); sg.add(pocket);
-    // Bandeja plegable (plana, cerrada)
-    const tray=new THREE.Mesh(mkBox(0.72,0.025,0.52),mkStd(0xd8d4cc,0.5,0.02));
-    tray.position.set(0,0.82,-0.44); sg.add(tray);
-    // Pantalla de entretenimiento (en la bandeja del asiento de enfrente)
-    const screenT=tex(128,96,(ctx)=>{
-      ctx.fillStyle='#001830'; ctx.fillRect(0,0,128,96);
-      // Mapa de vuelo simplificado
-      ctx.strokeStyle='#4a9eff'; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(20,50); ctx.bezierCurveTo(50,20,80,70,110,40); ctx.stroke();
-      // Avión en ruta
-      ctx.fillStyle='#fff'; ctx.font='14px Arial'; ctx.textAlign='center';
-      ctx.fillText('✈',68,46);
-      ctx.fillStyle='#4ecdc4'; ctx.font='8px Arial';
-      ctx.fillText('Madrid → Nueva York',64,85);
-      ctx.fillText('Alt: 10.668m | 8h 24min',64,75);
-    });
-    const screen=new THREE.Mesh(mkBox(0.5,0.36,0.015),new THREE.MeshStandardMaterial({
-      map:screenT,emissive:0x001020,emissiveIntensity:0.6,roughness:0.1
-    }));
-    screen.position.set(0,1.05,-0.52); sg.add(screen);
-    sg.traverse(c=>{if(c.isMesh){c.castShadow=true; c.receiveShadow=true;}});
-    scene.add(sg);
-  };
-
-  // Distribución 3-3 (tipo Boeing 737: izq/pasillo/der)
-  const rowsZ=[-11,-7.5,-4,-0.5,3,6.5,10];
-  rowsZ.forEach(dz=>{
-    // Izquierda: 3 asientos
-    [-8.5,-7.3,-6.1].forEach(dx=> buildSeat(x+dx, z+dz));
-    // Derecha: 3 asientos
-    [6.1,7.3,8.5].forEach(dx=>  buildSeat(x+dx, z+dz));
-  });
-
-  // ══════════════════════════════════════════════════
-  // PORTAEQUIPAJES SUPERIORES -- más realistas
-  // ══════════════════════════════════════════════════
-  [-8.5,8.5].forEach(bx=>{
-    const side=bx<0?-1:1;
-    // Cuerpo del portaequipajes
-    const bin=new THREE.Mesh(mkBox(3.8,1.35,BD-2),binMat);
-    bin.position.set(x+bx,6.5,z); scene.add(bin);
-    // Panel frontal inferior (abre hacia abajo)
-    const door=new THREE.Mesh(mkBox(3.7,0.1,BD-2.2),binEdgeMat);
-    door.position.set(x+bx,5.85,z); scene.add(door);
-    // Franja de luz interior del bin (LED)
-    const binLight=new THREE.Mesh(mkBox(3.6,0.04,BD-2.4),mkStd(0xfff5e0,0.1,0,{emissive:0xfff8cc,emissiveIntensity:0.5}));
-    binLight.position.set(x+bx,5.82,z); scene.add(binLight);
-    // Manijas
-    for(let mz=z-11;mz<=z+11;mz+=5){
-      const handle=new THREE.Mesh(mkBox(0.3,0.06,0.06),mkStd(0x888890,0.3,0.3));
-      handle.position.set(x+bx,5.85,mz); scene.add(handle);
-    }
-    // Maletas visibles en algunos bins abiertos
-    [z-9,z-3,z+5].forEach(mz=>{
-      const lugColor=[0xcc3333,0x2244aa,0x228833,0xcc8822][Math.floor(Math.random()*4)];
-      const suitcase=new THREE.Mesh(mkBox(0.55,0.38,0.28),mkStd(lugColor,0.7,0));
-      suitcase.position.set(x+bx*0.7,6.1,mz); scene.add(suitcase);
-      // Ruedas insinuadas
-      const w1=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.06,8),mkStd(0x111111,0.5,0.1));
-      w1.rotation.z=Math.PI/2; w1.position.set(x+bx*0.7,5.95,mz+0.08); scene.add(w1);
-    });
-  });
-
-  // Centro del techo -- compartimentos de PSU (Passenger Service Unit)
-  const psuMat=mkStd(0xe0dcd2,0.55,0.02);
-  const psu=new THREE.Mesh(mkBox(3.5,0.45,BD-2),psuMat);
-  psu.position.set(x,7.4,z); scene.add(psu);
-  // Botones de PSU (llamada, luz, ventilación)
-  for(let pz=z-11;pz<=z+11;pz+=3.8){
-    [0x00aaff,0xffcc00,0x44dd44].forEach((c,ci)=>{
-      const btn=new THREE.Mesh(mkBox(0.08,0.04,0.08),mkStd(c,0.3,0.1,{emissive:c,emissiveIntensity:0.3}));
-      btn.position.set(x-0.5+ci*0.4,7.19,pz); scene.add(btn);
-    });
-    // Boquilla de ventilación
-    const vent=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.065,0.06,8),mkStd(0x888898,0.3,0.2));
-    vent.position.set(x+0.8,7.18,pz); scene.add(vent);
-    // Luz de lectura
-    const readLight=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,0.05,8),mkStd(0xffffcc,0.1,0.1,{emissive:0xffffaa,emissiveIntensity:0.8}));
-    readLight.position.set(x-0.8,7.18,pz); scene.add(readLight);
-    const rl=new THREE.PointLight(0xfff8cc,0.25,2.5); rl.position.set(x-0.8,7,pz); scene.add(rl);
+function _cabinRowsZ(){
+  const out=[]; let zr=CABIN.firstRowZ;
+  for(let i=0; zr>CABIN.zRear+1.4; i++){
+    out.push(zr);
+    zr-=CABIN.seatPitch+(i===CABIN.exitRow-1?CABIN.exitExtra:0);
   }
+  return out;
+}
 
-  // ══════════════════════════════════════════════════
-  // VENTANAS OVALADAS -- más realistas
-  // ══════════════════════════════════════════════════
-  const makeWindow=(wx,wy,wz)=>{
-    // Vista exterior (cielo + nubes procedural)
-    const skyT=tex(128,128,(ctx)=>{
-      const g=ctx.createLinearGradient(0,0,0,128);
-      g.addColorStop(0,'#4488cc'); g.addColorStop(0.6,'#88bfee'); g.addColorStop(1,'#c8e4f8');
-      ctx.fillStyle=g; ctx.fillRect(0,0,128,128);
-      // Nubes procedurales
-      ctx.fillStyle='rgba(255,255,255,0.85)';
-      [[20,30,35,18],[55,20,45,14],[85,40,40,16],[30,70,50,20],[70,60,38,15]].forEach(
-        ([cx,cy,rx,ry])=>{ ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.fill(); }
-      );
-      // Borde de la ventana (doble panel)
-      ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.lineWidth=4;
-      ctx.beginPath(); ctx.ellipse(64,64,40,50,0,0,Math.PI*2); ctx.stroke();
+// ── 1. FUSELAJE: anillo (exterior + interior) extruido a lo largo de Z ──
+function _cabinShell(){
+  const {R,cy,shell,floorY,zFront,zRear,x}=CABIN, Ro=R+shell;
+  const a0=Math.asin((floorY-cy)/R),  a1=Math.PI-a0;   // interior: corta en el piso
+  const b0=Math.asin((floorY-cy)/Ro), b1=Math.PI-b0;   // exterior
+  const s=new THREE.Shape();
+  s.moveTo(Ro*Math.cos(b0), cy+Ro*Math.sin(b0));
+  s.absarc(0,cy,Ro,b0,b1,false);                       // exterior por arriba
+  s.lineTo(R*Math.cos(a1), cy+R*Math.sin(a1));
+  s.absarc(0,cy,R,a1,a0,true);                         // interior de vuelta
+  s.closePath();
+  const geo=new THREE.ExtrudeGeometry(s,{depth:zFront-zRear,bevelEnabled:false,curveSegments:72});
+  // Forro interior marfil cálido (mate) -- mismo tono por fuera
+  const lining=mkStd(0xf1ece3,0.6,0.0);
+  const m=new THREE.Mesh(geo,lining);
+  m.position.set(x,0,zRear); m.castShadow=true; m.receiveShadow=true;
+  scene.add(m);
+
+  // Zócalo inferior (panel de pared bajo las ventanillas, tono más cálido)
+  const dadoH=0.55;
+  const dado=new THREE.Shape();
+  const ya=floorY, yb=floorY+dadoH;
+  dado.moveTo(_cabinHalf(ya)-0.005,ya); dado.lineTo(_cabinHalf(yb)-0.005,yb);
+  dado.lineTo(_cabinHalf(yb)-0.035,yb); dado.lineTo(_cabinHalf(ya)-0.035,ya); dado.closePath();
+  const dg=new THREE.ExtrudeGeometry(dado,{depth:zFront-zRear-0.2,bevelEnabled:false});
+  const dm=mkStd(0xd9d0c2,0.75,0.0);
+  [1,-1].forEach(sd=>{
+    // Escala negativa = espejo: Three.js invierte el orden de caras solo
+    const d=new THREE.Mesh(dg,dm); d.scale.x=sd; d.position.set(x,0,zRear+0.1);
+    d.receiveShadow=true; scene.add(d);
+  });
+}
+
+// ── 2. PISO: moqueta + alfombra de pasillo + luces guía de pasillo ──
+function _cabinFloor(){
+  const {floorY,zFront,zRear,x}=CABIN, L=zFront-zRear, zm=(zFront+zRear)/2;
+  const carpetT=tex(256,256,(ctx)=>{
+    ctx.fillStyle='#2f3a4f'; ctx.fillRect(0,0,256,256);          // azul pizarra suave
+    ctx.fillStyle='rgba(255,255,255,0.035)';
+    for(let i=0;i<256;i+=8) for(let j=(i/8)%2*4;j<256;j+=8) ctx.fillRect(i,j,4,4); // trama
+    ctx.fillStyle='rgba(140,170,200,0.10)';
+    for(let i=0;i<4;i++) for(let j=0;j<4;j++){ ctx.beginPath(); ctx.arc(32+i*64,32+j*64,7,0,Math.PI*2); ctx.fill(); }
+  });
+  carpetT.wrapS=carpetT.wrapT=THREE.RepeatWrapping; carpetT.repeat.set(5,L/1.6);
+  const fw=_cabinHalf(floorY)*2-0.04;
+  const carpet=new THREE.Mesh(new THREE.PlaneGeometry(fw,L),new THREE.MeshStandardMaterial({map:carpetT,roughness:0.95}));
+  carpet.rotation.x=-Math.PI/2; carpet.position.set(x,floorY,zm); carpet.receiveShadow=true; scene.add(carpet);
+
+  const runT=tex(128,256,(ctx)=>{
+    ctx.fillStyle='#3d4a63'; ctx.fillRect(0,0,128,256);
+    ctx.fillStyle='#55627c'; ctx.fillRect(0,0,8,256); ctx.fillRect(120,0,8,256);   // ribete
+    ctx.fillStyle='rgba(255,255,255,0.05)'; for(let j=0;j<256;j+=16) ctx.fillRect(12,j,104,6);
+  });
+  runT.wrapS=runT.wrapT=THREE.RepeatWrapping; runT.repeat.set(1,L/1.2);
+  const run=new THREE.Mesh(new THREE.PlaneGeometry(CABIN.aisleHalf*2-0.04,L),
+    new THREE.MeshStandardMaterial({map:runT,roughness:0.92,polygonOffset:true,polygonOffsetFactor:-1}));
+  run.rotation.x=-Math.PI/2; run.position.set(x,floorY+0.004,zm); run.receiveShadow=true; scene.add(run);
+
+  // Luces guía de pasillo: puntos cálidos tenues (no la franja verde intensa)
+  const dotM=new THREE.MeshBasicMaterial({color:new THREE.Color(1.0,0.82,0.55)});
+  const mats=[];
+  for(let zz=zFront-0.8; zz>zRear+0.5; zz-=0.9) [-1,1].forEach(sd=>mats.push(_m4(x+sd*(CABIN.aisleHalf-0.02),floorY+0.012,zz)));
+  _cabinInstanced(new THREE.BoxGeometry(0.035,0.012,0.09),dotM,mats,false);
+}
+
+// ── 3. ASIENTOS 3+3 ergonómicos (InstancedMesh por pieza) ──
+function _cabinSeats(rows){
+  const {x,floorY,seatW,aisleHalf}=CABIN;
+  // Tela: azul petróleo suave (calma) con trama fina
+  const fabT=tex(128,128,(ctx)=>{
+    ctx.fillStyle='#35566e'; ctx.fillRect(0,0,128,128);
+    ctx.fillStyle='rgba(255,255,255,0.05)';
+    for(let i=0;i<128;i+=4) ctx.fillRect(i,0,2,128);
+    ctx.fillStyle='rgba(0,0,0,0.06)';
+    for(let j=0;j<128;j+=4) ctx.fillRect(0,j,128,2);
+  });
+  fabT.wrapS=fabT.wrapT=THREE.RepeatWrapping;
+  const fabric=new THREE.MeshStandardMaterial({map:fabT,roughness:0.92});
+  const shellM=mkStd(0x8f949b,0.45,0.15);        // carcasa trasera gris cálido
+  const darkM =mkStd(0x2c3036,0.55,0.1);          // estructura / apoyabrazos
+  const padM  =mkStd(0x40454d,0.8,0.0);           // almohadilla apoyabrazos
+  const trayM =mkStd(0xd9d6d0,0.5,0.02);
+  const whiteM=mkStd(0xf6f4ef,0.85,0.0);          // funda de cabecera
+  const metalM=mkStd(0xb4b8be,0.3,0.7);
+  const scrT=tex(256,160,(ctx)=>{                 // mapa de vuelo tranquilo
+    ctx.fillStyle='#0b1f33'; ctx.fillRect(0,0,256,160);
+    ctx.fillStyle='#14324f'; ctx.beginPath(); ctx.ellipse(70,95,60,40,0.3,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(200,70,50,35,-0.2,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='#6fb3e8'; ctx.lineWidth=3; ctx.setLineDash([8,6]);
+    ctx.beginPath(); ctx.moveTo(40,110); ctx.bezierCurveTo(100,30,160,40,220,70); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle='#ffffff'; ctx.font='22px Arial'; ctx.textAlign='center';
+    ctx.fillText('✈',128,55);
+    ctx.fillStyle='#a8d4f5'; ctx.font='15px Arial'; ctx.fillText('Vuelo tranquilo · 2 h 10 min',128,148);
+  });
+  const scrM=new THREE.MeshBasicMaterial({map:scrT});
+
+  // Piezas locales (asiento en el origen, mirando a +Z, respaldo hacia -Z)
+  const seatParts=[
+    {geo:new THREE.BoxGeometry(0.48,0.07,0.44), mat:darkM,  loc:[_m4(0,0.36,0.01)]},                 // bastidor
+    {geo:new THREE.BoxGeometry(0.46,0.12,0.47), mat:fabric, loc:[_m4(0,0.465,0.03,-0.07)]},          // cojín (borde delantero elevado)
+    {geo:new THREE.BoxGeometry(0.46,0.42,0.14), mat:fabric, loc:[_m4(0,0.75,-0.20,-0.16)]},          // apoyo lumbar
+    {geo:new THREE.BoxGeometry(0.45,0.38,0.11), mat:fabric, loc:[_m4(0,1.11,-0.265,-0.2)]},          // espalda alta
+    {geo:new THREE.BoxGeometry(0.40,0.21,0.13), mat:fabric, loc:[_m4(0,1.39,-0.30,-0.2)]},           // cabecera
+    {geo:new THREE.BoxGeometry(0.06,0.19,0.11), mat:fabric, loc:[_m4(-0.2,1.39,-0.27,-0.2,-0.4),_m4(0.2,1.39,-0.27,-0.2,0.4)]}, // alas de cabecera
+    {geo:new THREE.BoxGeometry(0.34,0.14,0.006),mat:whiteM, loc:[_m4(0,1.40,-0.232,-0.2)]},          // funda
+    {geo:new THREE.BoxGeometry(0.48,0.95,0.035),mat:shellM, loc:[_m4(0,0.93,-0.34,-0.18)]},          // carcasa trasera
+    {geo:new THREE.BoxGeometry(0.36,0.27,0.015),mat:trayM,  loc:[_m4(0,0.99,-0.362,-0.18)]},         // bandeja plegada
+    {geo:new THREE.BoxGeometry(0.21,0.13,0.006),mat:scrM,   loc:[_m4(0,1.21,-0.333,-0.18,Math.PI)]}, // pantalla (mira a -Z)
+    {geo:new THREE.BoxGeometry(0.04,0.33,0.04), mat:metalM, loc:[_m4(-0.17,0.17,0.05),_m4(0.17,0.17,0.05)]}, // patas
+  ];
+  // Apoyabrazos compartidos: 4 por bloque de 3 asientos
+  const armParts=[
+    {geo:new THREE.BoxGeometry(0.05,0.05,0.42), mat:darkM, loc:_m4(0,0.64,-0.02)},
+    {geo:new THREE.BoxGeometry(0.055,0.02,0.32),mat:padM,  loc:_m4(0,0.672,0.0)},
+    {geo:new THREE.BoxGeometry(0.04,0.22,0.05), mat:darkM, loc:_m4(0,0.52,-0.17)},
+  ];
+
+  const seatM=[], armM=[];
+  rows.forEach(zr=>{
+    [-1,1].forEach(sd=>{
+      const cx=k=>sd*(aisleHalf+seatW*(k+0.5));
+      for(let k=0;k<3;k++) seatM.push(_m4(x+cx(k),floorY,zr));
+      [aisleHalf, aisleHalf+seatW, aisleHalf+2*seatW, aisleHalf+3*seatW]
+        .forEach(ax=>armM.push(_m4(x+sd*ax,floorY,zr)));
     });
-    // Marco exterior
-    const outerFrame=new THREE.Mesh(mkBox(0.25,1.25,1.5),windowFrameM);
-    outerFrame.position.set(wx,wy,wz); scene.add(outerFrame);
-    // Recorte oval simulado con vidrio
-    const glassMat=new THREE.MeshStandardMaterial({
-      map:skyT, transparent:true, opacity:0.82,
-      roughness:0.05, metalness:0.0, envMapIntensity:0.4
-    });
-    const glass=new THREE.Mesh(mkBox(0.12,1.05,1.28),glassMat);
-    glass.position.set(wx,wy,wz); scene.add(glass);
-    // Repisa de ventana
-    const sill=new THREE.Mesh(mkBox(0.22,0.06,1.45),mkStd(0xe8e4dc,0.6,0.0));
-    sill.position.set(wx,wy-0.6,wz); scene.add(sill);
-    // Persiana (enrollada, visible arriba)
-    const shade=new THREE.Mesh(mkBox(0.05,0.18,1.32),mkStd(0xf0ece4,0.8,0.0));
-    shade.position.set(wx,wy+0.55,wz); scene.add(shade);
+  });
+  seatParts.forEach(p=>{
+    const mats=[];
+    seatM.forEach(sm=>p.loc.forEach(l=>mats.push(sm.clone().multiply(l))));
+    _cabinInstanced(p.geo,p.mat,mats);
+  });
+  armParts.forEach(p=>_cabinInstanced(p.geo,p.mat,armM.map(am=>am.clone().multiply(p.loc))));
+}
+
+// ── 4. PORTAEQUIPAJES superiores continuos + PSU (luces de lectura) ──
+function _cabinBins(rows){
+  const {x,binZ0,binZ1}=CABIN, L=binZ0-binZ1;
+  // Perfil (lado derecho): fondo plano, frente curvo, techo pegado al fuselaje.
+  // Los puntos traseros quedan dentro del espesor del fuselaje (no se ven de afuera).
+  const profile=sd=>{
+    const pts=[[2.2,2.02],[1.22,2.02],[1.15,2.06],[1.12,2.2],[1.15,2.52],[1.2,2.62],[1.32,2.67],[1.55,2.67]];
+    const s=new THREE.Shape();
+    const P=sd>0?pts:pts.slice().reverse();
+    P.forEach(([px,py],i)=>i?s.lineTo(sd*px,py):s.moveTo(sd*px,py));
+    s.closePath(); return s;
   };
-  const winRowsZ=[z-10,z-6,z-2,z+2,z+6,z+10];
-  winRowsZ.forEach(wz=>{ makeWindow(x-BW/2+0.14,3.2,wz); makeWindow(x+BW/2-0.14,3.2,wz); });
-
-  // ══════════════════════════════════════════════════
-  // FRANJA DE LUCES DE SUELO (emergency floor path)
-  // ══════════════════════════════════════════════════
-  const floorStripMat=mkStd(0x44ff88,0.1,0,{emissive:0x22ee66,emissiveIntensity:0.7,transparent:true,opacity:0.85});
-  [-1.75,1.75].forEach(sx=>{
-    const strip=new THREE.Mesh(mkBox(0.08,0.04,BD-3),floorStripMat);
-    strip.position.set(x+sx,0.19,z); scene.add(strip);
+  const binM=mkStd(0xe9e5dd,0.45,0.03);
+  [1,-1].forEach(sd=>{
+    const g=new THREE.ExtrudeGeometry(profile(sd),{depth:L,bevelEnabled:false,curveSegments:8});
+    const b=new THREE.Mesh(g,binM); b.position.set(x,0,binZ1); b.receiveShadow=true; scene.add(b);
   });
 
-  // Luces de techo del pasillo (LED strip)
-  const aisleLight=new THREE.Mesh(mkBox(0.55,0.06,BD-2),mkStd(0xfff9f0,0.1,0,{emissive:0xfff5e0,emissiveIntensity:0.85}));
-  aisleLight.position.set(x,BH-0.3,z); scene.add(aisleLight);
+  // Uniones de puertas (cada 2 filas), cierres y luz de cortesía cálida (cove)
+  const seamM=mkStd(0x9c978e,0.6,0.0), latchM=mkStd(0x6d7178,0.35,0.4);
+  const seams=[], latches=[];
+  for(let zz=binZ0; zz>binZ1; zz-=1.84) [-1,1].forEach(sd=>{
+    seams.push(_m4(x+sd*1.128,2.37,zz));
+    latches.push(_m4(x+sd*1.135,2.12,zz-0.92));
+  });
+  _cabinInstanced(new THREE.BoxGeometry(0.012,0.5,0.014),seamM,seams);
+  _cabinInstanced(new THREE.BoxGeometry(0.02,0.045,0.2),latchM,latches);
+  const coveM=new THREE.MeshBasicMaterial({color:new THREE.Color(1.15,1.0,0.82)});
+  [-1,1].forEach(sd=>{
+    const c=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.02,L-0.2),coveM);
+    c.position.set(x+sd*1.36,2.685,(binZ0+binZ1)/2); scene.add(c);
+  });
 
-  // ══════════════════════════════════════════════════
-  // PANTALLA SAFETY MEJORADA
-  // ══════════════════════════════════════════════════
+  // PSU bajo el portaequipajes: panel + luz de lectura por asiento + aviso de cinturón
+  const psuM=mkStd(0xdcd7ce,0.55,0.02);
+  [-1,1].forEach(sd=>{
+    const p=new THREE.Mesh(new THREE.BoxGeometry(0.86,0.03,L),psuM);
+    p.position.set(x+sd*1.64,2.0,(binZ0+binZ1)/2); p.receiveShadow=true; scene.add(p);
+  });
+  const readM=new THREE.MeshBasicMaterial({color:new THREE.Color(1.1,1.0,0.85)});
+  const signM=new THREE.MeshBasicMaterial({color:new THREE.Color(0.35,0.55,0.85)});
+  const reads=[], signs=[];
+  rows.forEach(zr=>[-1,1].forEach(sd=>{
+    for(let k=0;k<3;k++) reads.push(_m4(x+sd*(CABIN.aisleHalf+CABIN.seatW*(k+0.5)),1.98,zr+0.12));
+    signs.push(_m4(x+sd*1.3,1.98,zr+0.3));
+  }));
+  _cabinInstanced(new THREE.CylinderGeometry(0.03,0.03,0.012,12),readM,reads,false);
+  _cabinInstanced(new THREE.BoxGeometry(0.08,0.012,0.05),signM,signs,false);
+}
+
+// ── 5. VENTANILLAS con marco redondeado + cielo dinámico ──
+function _roundedRect(w,h,r){
+  const s=new THREE.Shape(), x0=-w/2, y0=-h/2;
+  s.moveTo(x0+r,y0); s.lineTo(x0+w-r,y0); s.quadraticCurveTo(x0+w,y0,x0+w,y0+r);
+  s.lineTo(x0+w,y0+h-r); s.quadraticCurveTo(x0+w,y0+h,x0+w-r,y0+h);
+  s.lineTo(x0+r,y0+h); s.quadraticCurveTo(x0,y0+h,x0,y0+h-r);
+  s.lineTo(x0,y0+r); s.quadraticCurveTo(x0,y0,x0+r,y0);
+  return s;
+}
+
+// Cielo de crucero tileable: degradé, horizonte con bruma y "mar de nubes"
+function _cabinSkyTexture(seed){
+  let a=seed; const rnd=()=>{ a=(a*16807)%2147483647; return a/2147483647; };
+  const t=tex(1024,256,(ctx,c)=>{
+    const W=c.width,H=c.height;
+    const g=ctx.createLinearGradient(0,0,0,H);
+    // Arriba azul profundo → bruma clara en el horizonte → abajo azul grisáceo
+    // (debajo del avión): así el "mar de nubes" blanco contrasta y se lo ve pasar.
+    g.addColorStop(0,'#2f6fb6'); g.addColorStop(0.40,'#79b0e3');
+    g.addColorStop(0.56,'#e1edf8'); g.addColorStop(0.66,'#b9d0e6'); g.addColorStop(1,'#93b2d2');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    const puff=(cx,cy,rx,ry,col,alpha)=>{
+      [-W,0,W].forEach(off=>{                       // dibujar envuelto: textura continua
+        const rg=ctx.createRadialGradient(cx+off,cy,0,cx+off,cy,rx);
+        rg.addColorStop(0,`rgba(${col},${alpha})`); rg.addColorStop(0.6,`rgba(${col},${alpha*0.7})`); rg.addColorStop(1,`rgba(${col},0)`);
+        ctx.save(); ctx.translate(cx+off,cy); ctx.scale(1,ry/rx); ctx.translate(-(cx+off),-cy);
+        ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(cx+off,cy,rx,0,Math.PI*2); ctx.fill(); ctx.restore();
+      });
+    };
+    // Mar de nubes: base sombreada gris-azul + cuerpo blanco un poco más arriba
+    for(let i=0;i<60;i++){
+      const cx=rnd()*W, cy=H*(0.70+rnd()*0.28), rx=36+rnd()*60, ry=12+rnd()*14, a=0.7+rnd()*0.25;
+      puff(cx,cy+ry*0.45,rx,ry,'150,170,195',a*0.6);
+      puff(cx,cy,rx*0.92,ry,'255,255,255',a);
+    }
+    for(let i=0;i<9;i++) puff(rnd()*W, H*(0.28+rnd()*0.2), 30+rnd()*45, 9+rnd()*9, '255,255,255', 0.35+rnd()*0.3); // nubes altas sueltas
+  });
+  t.wrapS=THREE.RepeatWrapping; t.wrapT=THREE.ClampToEdgeWrapping;
+  t.repeat.set(0.16,1);
+  return t;
+}
+
+function _cabinWindows(rows){
+  const {x,winY}=CABIN;
+  const OW=0.6, OH=0.8, IW=0.42, IH=0.6;                 // marco exterior / vidrio
+  const frameShape=_roundedRect(OW,OH,0.2);
+  frameShape.holes.push(_roundedRect(IW,IH,0.15));
+  // Profundidad 0.09: la pared es curva (cóncava) y un plano tangente queda detrás
+  // de ella arriba y abajo (~2 cm a 30 cm del centro). El marco nace dentro de la
+  // pared y el vidrio va adelantado, como un hueco empotrado real.
+  const frameGeo=new THREE.ExtrudeGeometry(frameShape,{depth:0.09,bevelEnabled:true,bevelThickness:0.012,bevelSize:0.012,bevelSegments:2,curveSegments:10});
+  const glassGeo=new THREE.ShapeGeometry(_roundedRect(IW,IH,0.15),10);
+  // UV 0..1 sobre el vidrio (ShapeGeometry deja UV = coordenadas del contorno)
+  const uv=glassGeo.attributes.uv, pos=glassGeo.attributes.position;
+  for(let i=0;i<uv.count;i++) uv.setXY(i,(pos.getX(i)+IW/2)/IW,(pos.getY(i)+IH/2)/IH);
+  const shadeGeo=new THREE.PlaneGeometry(IW-0.02,IH-0.02);
+
+  const frameM=mkStd(0xf3efe8,0.4,0.0);
+  const shadeM=mkStd(0xe8e2d6,0.9,0.0);
+  cabinSky={ left:_cabinSkyTexture(12345), right:_cabinSkyTexture(67890) };
+
+  // Material del vidrio: cada ventanilla muestra otro tramo del cielo según su Z,
+  // así las nubes "pasan" de una ventanilla a la siguiente.
+  const glassMat=(texture,k)=>{
+    // color 0.88: el mar de nubes blanco saturaba con el bloom
+    const m=new THREE.MeshBasicMaterial({map:texture,color:new THREE.Color(0.88,0.88,0.88)});
+    // Clave propia: sin esto ambos lados compartirían el mismo programa (mismo k)
+    m.customProgramCacheKey=()=>'cabinGlass'+k.toFixed(4);
+    m.onBeforeCompile=sh=>{
+      sh.vertexShader=sh.vertexShader.replace('#include <uv_vertex>',
+        '#include <uv_vertex>\n#ifdef USE_INSTANCING\n  vUv.x += instanceMatrix[3].z * '+k.toFixed(4)+';\n#endif');
+    };
+    return m;
+  };
+
+  const phi=Math.asin((winY-CABIN.cy)/CABIN.R);           // inclinación de la pared
+  const half=_cabinHalf(winY);
+  const frames=[], shades=[], glassL=[], glassR=[];
+  let seed=7; const rnd=()=>{ seed=(seed*16807)%2147483647; return seed/2147483647; };
+  rows.forEach((zr,i)=>{
+    if(i===CABIN.exitRow-1) return;                      // la fila de salida tiene la puerta
+    const wz=zr-0.05;
+    [-1,1].forEach(sd=>{
+      // Base: X a lo largo del fuselaje, Y tangente a la pared (hacia arriba), Z normal hacia adentro
+      const X=new THREE.Vector3(0,0,sd>0?1:-1);
+      const Y=new THREE.Vector3(-sd*Math.sin(phi),Math.cos(phi),0);
+      const Z=new THREE.Vector3(-sd*Math.cos(phi),-Math.sin(phi),0);
+      const base=new THREE.Matrix4().makeBasis(X,Y,Z);
+      const p=new THREE.Vector3(x+sd*half,winY,wz);
+      const at=(off)=>base.clone().setPosition(p.clone().addScaledVector(Z,off));
+      frames.push(at(-0.005));
+      (sd<0?glassL:glassR).push(at(0.025));
+      // Persianas: casi todas abiertas (ver el cielo tranquiliza); algunas a medio bajar
+      const f=[0,0,0,0,0,0.35,0.55][Math.floor(rnd()*7)];
+      if(f>0){
+        const m=at(0.045).multiply(new THREE.Matrix4().makeTranslation(0,(IH-0.02)*(1-f)/2,0))
+                        .multiply(new THREE.Matrix4().makeScale(1,f,1));
+        shades.push(m);
+      }
+    });
+  });
+  _cabinInstanced(frameGeo,frameM,frames);
+  _cabinInstanced(glassGeo,glassMat(cabinSky.left,-0.38),glassL,false);
+  _cabinInstanced(glassGeo,glassMat(cabinSky.right,0.38),glassR,false);
+  if(shades.length) _cabinInstanced(shadeGeo,shadeM,shades);
+}
+
+// Desplazamiento continuo de las nubes (el avión avanza hacia +Z:
+// las nubes se mueven hacia la cola en ambos lados). Más lento en Modo Calma.
+function updateCabinSky(delta){
+  if(!cabinSky) return;
+  const v=(calmMode?0.006:0.015)*delta;
+  cabinSky.right.offset.x+=v;
+  cabinSky.left.offset.x-=v;
+}
+
+// ── 6. MAMPAROS delantero y trasero con puertas, galley y pantallas ──
+function _cabinBulkheads(){
+  const {x,floorY,R,cy,zFront,zRear}=CABIN;
+  const a0=Math.asin((floorY-cy)/R), a1=Math.PI-a0;
+  const make=()=>{
+    const s=new THREE.Shape();
+    s.moveTo(R*Math.cos(a0),floorY); s.absarc(0,cy,R,a0,a1,false); s.closePath();
+    const door=new THREE.Path();                       // vano de puerta 0.95 × 2.0 m
+    // El vano no toca el borde del piso (la triangulación falla si el hueco comparte arista)
+    door.moveTo(-0.475,floorY+0.003); door.lineTo(0.475,floorY+0.003); door.lineTo(0.475,floorY+2.0);
+    door.lineTo(-0.475,floorY+2.0); door.closePath();
+    s.holes.push(door);
+    return new THREE.ExtrudeGeometry(s,{depth:0.08,bevelEnabled:false,curveSegments:48});
+  };
+  const bhM=mkStd(0xe4ddd1,0.65,0.0);
+  const front=new THREE.Mesh(make(),bhM); front.position.set(x,0,zFront-0.08); front.receiveShadow=true; scene.add(front);
+  const rear =new THREE.Mesh(make(),bhM); rear.position.set(x,0,zRear);         rear.receiveShadow=true;  scene.add(rear);
+
+  // Marcos de puerta + cartel SALIDA (verde suave, reglamentario y tranquilizador)
+  const frameM=mkStd(0x8d9299,0.4,0.3);
+  const exitT=tex(256,64,(ctx)=>{
+    ctx.fillStyle='#0f5132'; ctx.fillRect(0,0,256,64);
+    ctx.fillStyle='#d8ffe8'; ctx.font='bold 30px Arial'; ctx.textAlign='center';
+    ctx.fillText('SALIDA · EXIT',128,43);
+  });
+  const exitM=new THREE.MeshBasicMaterial({map:exitT,color:new THREE.Color(1.1,1.1,1.1)});
+  [[zFront-0.12,1],[zRear+0.12,-1]].forEach(([zz,dir])=>{
+    [-0.5,0.5].forEach(dx=>{ const f=new THREE.Mesh(new THREE.BoxGeometry(0.06,2.02,0.1),frameM); f.position.set(x+dx,floorY+1.01,zz); scene.add(f); });
+    const top=new THREE.Mesh(new THREE.BoxGeometry(1.06,0.06,0.1),frameM); top.position.set(x,floorY+2.03,zz); scene.add(top);
+    const ex=new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.16),exitM);
+    ex.position.set(x,floorY+2.25,zz-dir*0.06); ex.rotation.y=dir>0?Math.PI:0; scene.add(ex);
+  });
+
+  // Galley delantero: dos módulos bajos a los lados de la puerta
+  const galM=mkStd(0xcfc9bf,0.5,0.1), topM=mkStd(0x9aa3ad,0.35,0.4);
+  [-1,1].forEach(sd=>{
+    const g=new THREE.Mesh(new THREE.BoxGeometry(1.1,1.05,0.5),galM);
+    g.position.set(x+sd*1.42,floorY+0.525,zFront-0.33); g.receiveShadow=true; scene.add(g);
+    const t=new THREE.Mesh(new THREE.BoxGeometry(1.14,0.04,0.54),topM);
+    t.position.set(x+sd*1.42,floorY+1.07,zFront-0.33); scene.add(t);
+  });
+
+  // Pantallas en el mamparo delantero: seguridad (izq) e info de vuelo (der)
   const safetyT=tex(512,300,(ctx)=>{
-    const g=ctx.createLinearGradient(0,0,0,300);
-    g.addColorStop(0,'#001428'); g.addColorStop(1,'#001e3c');
-    ctx.fillStyle=g; ctx.fillRect(0,0,512,300);
-    // Borde superior
-    ctx.fillStyle='#4a9eff'; ctx.fillRect(0,0,512,5);
+    ctx.fillStyle='#0d2238'; ctx.fillRect(0,0,512,300);
+    ctx.fillStyle='#6fb3e8'; ctx.fillRect(0,0,512,6);
     ctx.fillStyle='#fff'; ctx.font='bold 30px Arial'; ctx.textAlign='center';
-    ctx.fillText('🛡 SEGURIDAD · SAFETY',256,48);
-    ctx.strokeStyle='rgba(74,158,255,0.5)'; ctx.lineWidth=1.5;
-    ctx.beginPath(); ctx.moveTo(40,60); ctx.lineTo(472,60); ctx.stroke();
-    const items=[['🚪','Localiza las salidas de emergencia'],['💺','Abroche su cinturón de seguridad'],
-                 ['📱','Active el modo avión ahora'],['😮','Máscara primero en ti, luego en menores']];
-    items.forEach(([ic,tx],i)=>{
-      ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fillRect(30,75+i*52,452,46);
-      ctx.fillStyle='#fff'; ctx.font='24px Arial'; ctx.textAlign='left';
-      ctx.fillText(`${ic}  ${tx}`,45,105+i*52);
-    });
+    ctx.fillText('SEGURIDAD · SAFETY',256,52);
+    [['🚪','Salidas: adelante y atrás'],['💺','Cinturón abrochado'],['📱','Modo avión activado'],['🫁','Respirá lento: 4 · 7 · 8']]
+      .forEach(([ic,tx],i)=>{ ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(28,74+i*54,456,46);
+        ctx.fillStyle='#e8f2fb'; ctx.font='24px Arial'; ctx.textAlign='left'; ctx.fillText(ic+'  '+tx,44,105+i*54); });
   });
-  sign(x,5.8,z-12,7,3,0.08,safetyT,0,0x001428);
-  const safteyLight=new THREE.PointLight(0x3355ff,0.4,5); safteyLight.position.set(x,5.5,z-12); scene.add(safteyLight);
+  const infoT=tex(512,300,(ctx)=>{
+    ctx.fillStyle='#0d2238'; ctx.fillRect(0,0,512,300);
+    ctx.fillStyle='#6fb3e8'; ctx.fillRect(0,0,512,6);
+    ctx.fillStyle='#fff'; ctx.font='bold 30px Arial'; ctx.textAlign='center';
+    ctx.fillText('BIENVENIDO A BORDO',256,52);
+    ctx.fillStyle='#a8d4f5'; ctx.font='24px Arial';
+    ['Altitud de crucero  10.600 m','Velocidad  850 km/h','Cielo despejado · turbulencia leve','Tripulación disponible ante cualquier duda']
+      .forEach((l,i)=>ctx.fillText(l,256,110+i*46));
+  });
+  [[-1,safetyT],[1,infoT]].forEach(([sd,t])=>{
+    const bez=new THREE.Mesh(new THREE.BoxGeometry(1.08,0.66,0.04),mkStd(0x1d2128,0.4,0.2));
+    bez.position.set(x+sd*1.3,1.85,zFront-0.1); scene.add(bez);
+    const sc=new THREE.Mesh(new THREE.PlaneGeometry(1.0,0.585),new THREE.MeshBasicMaterial({map:t}));
+    sc.position.set(x+sd*1.3,1.85,zFront-0.123); sc.rotation.y=Math.PI; scene.add(sc);
+  });
+}
 
-  // ══════════════════════════════════════════════════
-  // ESTACIÓN DE TRIPULACIÓN -- más elaborada
-  // ══════════════════════════════════════════════════
-  const crewZ=z+14.5;
-  box(x,0,crewZ,7,1.25,2.0,0x2a3545);
-  box(x,1.25,crewZ,7,0.1,2.0,0x9aafcc);
-  // Jump seats (asientos plegados)
-  [-2.5,2.5].forEach(cx=>{
-    box(x+cx,0.2,crewZ+0.8,0.7,0.35,0.06,0x1a2535);
-    box(x+cx,0.55,crewZ+0.85,0.7,0.7,0.06,0x1a2535);
-  });
-  // Panel de comunicación de tripulación
-  const crewT=tex(256,192,(ctx)=>{
-    ctx.fillStyle='#0d1a28'; ctx.fillRect(0,0,256,192);
-    ctx.fillStyle='#4a9eff'; ctx.font='bold 16px Arial'; ctx.textAlign='center';
-    ctx.fillText('CREW PANEL',128,25);
-    [[0x22cc44,'CINTURONES'],[0x2288ff,'ELECTRÓNICA'],[0xff8822,'GALLEY']].forEach(([c,l],i)=>{
-      ctx.fillStyle=`#${c.toString(16).padStart(6,'0')}`; ctx.fillRect(20+i*76,45,60,24);
-      ctx.fillStyle='#fff'; ctx.font='10px Arial'; ctx.fillText(l,50+i*76,61);
-    });
-    ctx.fillStyle='#2244aa'; ctx.fillRect(20,85,216,80);
-    ctx.fillStyle='#88aaff'; ctx.font='12px Arial'; ctx.textAlign='left';
-    ['IB 3421 · MADRID','Alt: 10,668 m','Vel: 872 km/h','Temp. ext: -54°C'].forEach((l,i)=>ctx.fillText(l,30,105+i*16));
-  });
-  sign(x,1.8,crewZ-1.02,2.5,1.6,0.04,crewT,0,0x001122);
-
-  // Separador de zona de tripulación (cortina)
-  const curtainMat=mkStd(0x1a2e42,0.9,0,{transparent:true,opacity:0.85});
-  [-3.5,-1.2,1.2,3.5].forEach(cx=>{
-    const curtain=new THREE.Mesh(mkBox(2.0,5,0.05),curtainMat);
-    curtain.position.set(x+cx,3,crewZ-0.8); scene.add(curtain);
-  });
-
-  // ══════════════════════════════════════════════════
-  // COCKPIT -- zona del piloto completa
-  // ══════════════════════════════════════════════════
-  buildCockpit(x, z);
+// ── 7. ILUMINACIÓN de cabina: cálida y pareja, techo bañado desde las bins ──
+function _cabinLighting(){
+  const {x,floorY,zFront,zRear,R,cy}=CABIN, L=zFront-zRear, zm=(zFront+zRear)/2;
+  // Franja de luz central en el techo
+  const stripM=new THREE.MeshBasicMaterial({color:new THREE.Color(1.1,1.02,0.9)});
+  const strip=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.015,L-1.0),stripM);
+  strip.position.set(x,cy+R-0.02,zm); scene.add(strip);
+  // Luces puntuales dentro del tubo (antes estaban en y=5.5, fuera del fuselaje nuevo)
+  for(let zz=zFront-2.2; zz>zRear+1; zz-=4.6){
+    const l=new THREE.PointLight(0xffe7c8,0.55,6.5);
+    l.position.set(x,2.75,zz); scene.add(l);
+  }
 }
 
 // ─── COCKPIT ─────────────────────────────────────
@@ -3556,7 +3698,7 @@ function loadCabinCrew(){
   // Intentar cargar pilot.glb; en error -> fallback completo
   tryLoad('assets/pilot.glb', (model)=>{
     model.position.set(-3.8,0,-28.8); model.rotation.y=Math.PI;
-    tryLoad('assets/attendant.glb', (m2)=>{ m2.position.set(1.2,0,-38); m2.rotation.y=-0.25; });
+    tryLoad('assets/attendant.glb', (m2)=>{ m2.position.set(0.55,0,-33.9); m2.rotation.y=-0.25; });
   });
   // Si ningún archivo existe, spawnCabinCrewFallback se llama automáticamente
 }
@@ -3586,7 +3728,7 @@ function spawnCabinCrewFallback(){
 
   // ── AUXILIAR 1 (femenina) -- al inicio del pasillo con carrito
   const att1=buildAttendantDetailed(SKINS[3], HAIRS[1], 'female');
-  att1.position.set(1.2, 0, -38);
+  att1.position.set(0.55, 0, -33.9);  // zona de entrada, delante de la fila 1
   att1.rotation.y=-Math.PI*0.08; // ligeramente girada hacia el pasillo
   att1.userData.isNPC=true; att1.userData.isStaff=true;
   att1.userData.role='attendant'; att1.userData.baseRotY=att1.rotation.y;
@@ -3596,7 +3738,7 @@ function spawnCabinCrewFallback(){
 
   // Carrito de servicio junto a auxiliar 1
   const cart1=buildServiceCart();
-  cart1.position.set(2.5, 0, -37.8);
+  cart1.position.set(-1.15, 0, -33.6); // junto al galley delantero
   cart1.rotation.y=-Math.PI*0.08;
   scene.add(cart1);
 
@@ -5087,6 +5229,7 @@ function animate(){
   // Flight board refresh every 30s
   boardTimer+=delta;
   if(window.AeroSignage) AeroSignage.update(delta); // reloj de las pantallas FIDS
+  updateCabinSky(delta); // nubes que pasan por las ventanillas del avión
   // Tablero de salidas: redibujar cuando cambia algún vuelo o cada 30 s (reloj)
   if(window.AeroFlights && flightBoardTexture && AeroFlights.version()!==_boardVersion){ _boardVersion=AeroFlights.version(); boardTimer=31; }
   if(boardTimer>30&&flightBoardTexture){ boardTimer=0; drawFlightBoard(); flightBoardTexture.needsUpdate=true; }
