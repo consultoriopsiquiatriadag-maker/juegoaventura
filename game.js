@@ -18,8 +18,11 @@ let breathInterval=null, breathPhaseTimer=null, breathCycles=0;
 const movement={forward:false,backward:false,left:false,right:false};
 const velocity=new THREE.Vector3();
 const clock=new THREE.Clock();
-const PLAYER_SPEED=9, PLAYER_HEIGHT=1.68;
-const PLAYER_SPEED_CALM=4.5; // Modo calma: velocidad reducida para menor estimulacion
+// Velocidad de caminata en m/s. Antes la fórmula daba ~50 m/s en computadora y
+// ~12,6 m/s en celular: desplazamientos tan rápidos favorecen el mareo.
+// 3,5 m/s = paso ágil (una persona camina a ~1,4 m/s); cruza el hall en ~40 s.
+const PLAYER_SPEED=3.5, PLAYER_HEIGHT=1.68;
+const PLAYER_SPEED_CALM=2.2; // Modo calma: velocidad reducida para menor estimulacion
 let npcs=[], ringMeshes=[], luggageBelt=null;
 let flightBoardCanvas, flightBoardCtx, flightBoardTexture;
 let boardTimer=0;
@@ -62,9 +65,13 @@ function applySunShadowSize(size){
   sunLight.shadow.mapSize.set(size,size);
   if(sunLight.shadow.map){ sunLight.shadow.map.dispose(); sunLight.shadow.map=null; } // se recrea al próximo render
 }
-function setQuality(level){
+function setQuality(level,silent){
   if(!QUALITY_LEVELS[level]) return;
   currentQuality=level;
+  // En celular se llama antes de init(): sin renderer todavía. Antes esto
+  // cortaba todo el script y el simulador no arrancaba en móviles.
+  // Se guarda el nivel y init() lo aplica al crear el renderer.
+  if(!renderer) return;
   var q=QUALITY_LEVELS[level];
   renderer.setPixelRatio(q.pixelRatio);
   renderer.shadowMap.enabled=q.shadowEnabled;
@@ -76,7 +83,7 @@ function setQuality(level){
     var bloomPass=composer.passes.find(function(p){return p instanceof THREE.UnrealBloomPass;});
     if(bloomPass) bloomPass.strength=q.bloomStrength;
   }
-  showToast('Calidad: '+level+(isMobile?' (movil)':''));
+  if(!silent) showToast('Calidad: '+level+(isMobile?' (movil)':''));
 }
 // Auto-detect quality on mobile
 if(isMobile) setQuality('low');
@@ -128,11 +135,11 @@ function mkBox(w,h,d){ return new THREE.BoxGeometry(w,h,d); }
 function box(x,y,z,w,h,d,col,cast=true,recv=true,matOpts={}){
   const m=new THREE.Mesh(mkBox(w,h,d), matOpts.mat||mkMat(col,matOpts));
   m.position.set(x,y+h/2,z); m.castShadow=cast; m.receiveShadow=recv;
-  scene.add(m); return m;
+  scene.add(m); _staticProps.add(m); return m;
 }
 function cyl(x,y,z,rt,rb,h,seg,col,cast=true){
   const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg),mkMat(col));
-  m.position.set(x,y+h/2,z); m.castShadow=cast; scene.add(m); return m;
+  m.position.set(x,y+h/2,z); m.castShadow=cast; scene.add(m); _staticProps.add(m); return m;
 }
 function tex(w,h,fn){
   const c=document.createElement('canvas'); c.width=w; c.height=h;
@@ -192,6 +199,7 @@ function init(){
   renderer.outputEncoding=THREE.sRGBEncoding;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure=1.1;
+  if(currentQuality!=='normal') setQuality(currentQuality,true); // p. ej. 'low' en celular
   document.body.insertBefore(renderer.domElement,document.getElementById('ui-root'));
 
   controls=new THREE.PointerLockControls(camera,renderer.domElement);
@@ -209,6 +217,7 @@ function init(){
   if(!isMobile) spawnNPCs(); // NPCs civiles solo en desktop -- mejora performance móvil
   spawnStaffNPCs();
   loadCabinCrew();
+  optimizeSceneResources(); // FASE 36: comparte materiales/geometrías y fusiona props fijos
   setupPostProcessing();
   setupEvents();
   animate();
@@ -588,6 +597,210 @@ function captureFloorReflections(){
     m.envMapIntensity=1.0; // físicamente correcto: el Fresnel ya limita el reflejo
     m.needsUpdate=true;
   });
+}
+
+// ─── FASE 36: OPTIMIZACIÓN DE GEOMETRÍA Y MATERIALES ───────
+// Objetivo: menos llamadas de dibujo y menos memoria de GPU, sin cambiar
+// nada de lo que se ve. Caídas de FPS = tirones de cámara = mareo.
+//  · Personajes: cada uno tenía ~75 mallas sueltas. Se fusionan las piezas
+//    fijas de cada parte (torso, cada pierna, cada brazo, cabeza) por material.
+//    Los grupos animados (isLeg/isArm/isHead) quedan intactos.
+//  · Props hechos con box()/cyl(): nadie guarda la referencia → son fijos.
+//    Se fusionan por material en franjas de 16 m (sigue habiendo frustum culling).
+//  · Materiales y geometrías idénticos se comparten en toda la escena.
+//  · Piezas < 5 cm no proyectan sombra (el texel de la sombra mide ~8 cm).
+const _staticProps=new WeakSet();
+const OPT_TINY_SHADOW=0.05;
+const _baseOnBeforeCompile=THREE.Material.prototype.onBeforeCompile;
+
+function _matKey(m){
+  if(!m || Array.isArray(m)) return null;
+  if(!(m.isMeshStandardMaterial||m.isMeshLambertMaterial||m.isMeshBasicMaterial)) return null;
+  if(m.isMeshPhysicalMaterial||m.transparent||m.onBeforeCompile!==_baseOnBeforeCompile) return null;
+  if(Object.keys(m.userData).length) return null;
+  // Con brillo propio: los módulos de carteles los atenúan en modo calma → no tocar
+  if(m.emissive && (m.emissive.r+m.emissive.g+m.emissive.b)>0 && m.emissiveIntensity>0) return null;
+  const id=t=>t?t.uuid:'-';
+  return [m.type,m.color.getHexString(),m.roughness,m.metalness,m.emissive?m.emissive.getHexString():'',
+    id(m.map),id(m.normalMap),id(m.roughnessMap),id(m.envMap),m.envMapIntensity,m.side,m.flatShading,
+    m.vertexColors,m.polygonOffset,m.polygonOffsetFactor,m.polygonOffsetUnits,m.depthWrite,m.depthTest,
+    m.alphaTest,m.fog,m.toneMapped,m.visible,m.opacity].join('|');
+}
+
+// Une geometrías (posición/normal/uv) ya transformadas a un mismo espacio.
+function _mergeParts(parts){
+  const hasUV=parts.every(p=>p.geo.attributes.uv);
+  let nv=0, ni=0;
+  parts.forEach(p=>{ const g=p.geo; nv+=g.attributes.position.count; ni+=g.index?g.index.count:g.attributes.position.count; });
+  const pos=new Float32Array(nv*3), nor=new Float32Array(nv*3), uv=hasUV?new Float32Array(nv*2):null;
+  const col=parts[0].color?new Float32Array(nv*3):null;
+  const idx=nv>65535?new Uint32Array(ni):new Uint16Array(ni);
+  const v=new THREE.Vector3(), nm=new THREE.Matrix3();
+  let vo=0, io=0;
+  parts.forEach(({geo,matrix,color})=>{
+    const P=geo.attributes.position, N=geo.attributes.normal, U=geo.attributes.uv;
+    nm.getNormalMatrix(matrix);
+    for(let i=0;i<P.count;i++){
+      const j=(vo+i)*3;
+      v.fromBufferAttribute(P,i).applyMatrix4(matrix); pos[j]=v.x; pos[j+1]=v.y; pos[j+2]=v.z;
+      v.fromBufferAttribute(N,i).applyMatrix3(nm).normalize(); nor[j]=v.x; nor[j+1]=v.y; nor[j+2]=v.z;
+      if(uv){ uv[(vo+i)*2]=U.getX(i); uv[(vo+i)*2+1]=U.getY(i); }
+      if(col){ col[j]=color.r; col[j+1]=color.g; col[j+2]=color.b; }
+    }
+    if(geo.index){ const I=geo.index.array; for(let i=0;i<I.length;i++) idx[io+i]=I[i]+vo; io+=I.length; }
+    else { for(let i=0;i<P.count;i++) idx[io+i]=vo+i; io+=P.count; }
+    vo+=P.count;
+  });
+  const out=new THREE.BufferGeometry();
+  out.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  out.setAttribute('normal',new THREE.BufferAttribute(nor,3));
+  if(uv) out.setAttribute('uv',new THREE.BufferAttribute(uv,2));
+  if(col) out.setAttribute('color',new THREE.BufferAttribute(col,3));
+  out.setIndex(new THREE.BufferAttribute(idx,1));
+  out.computeBoundingSphere();
+  return out;
+}
+
+function _canMerge(o){
+  if(!o.isMesh||o.isInstancedMesh||o.isSkinnedMesh||o.children.length) return false;
+  if(Object.keys(o.userData).length||o.name||!o.visible||o.morphTargetInfluences) return false;
+  const g=o.geometry;
+  // Los grupos (caras de Box/Cylinder) solo importan con material múltiple, que acá se excluye
+  if(!g||!g.isBufferGeometry||Array.isArray(o.material)||!g.attributes.position||!g.attributes.normal) return false;
+  if(g.attributes.position.isInterleavedBufferAttribute||g.attributes.normal.isInterleavedBufferAttribute) return false;
+  if(g.morphAttributes.position) return false;
+  o.updateMatrix();
+  return o.matrix.determinant()>0 && _matKey(o.material)!==null;
+}
+
+// Fusiona los hijos directos fusionables de `parent`, agrupados por clave.
+function _mergeChildren(parent,keyOf){
+  const buckets=new Map();
+  parent.children.slice().forEach(o=>{
+    if(!_canMerge(o)) return;
+    const k=keyOf(o); if(k==null) return;
+    if(!buckets.has(k)) buckets.set(k,[]);
+    buckets.get(k).push(o);
+  });
+  let removed=0;
+  buckets.forEach(list=>{
+    if(list.length<2) return;
+    const geo=_mergeParts(list.map(o=>({geo:o.geometry,matrix:o.matrix})));
+    const m=new THREE.Mesh(geo,list[0].material);
+    m.castShadow=list.some(o=>o.castShadow); m.receiveShadow=list.some(o=>o.receiveShadow);
+    list.forEach(o=>{ parent.remove(o); o.geometry.dispose(); });
+    parent.add(m); removed+=list.length-1;
+  });
+  return removed;
+}
+
+function _meshRadius(o){
+  const g=o.geometry; if(!g.boundingSphere) g.computeBoundingSphere();
+  const s=o.scale; return g.boundingSphere.radius*Math.max(Math.abs(s.x),Math.abs(s.y),Math.abs(s.z));
+}
+
+// Personajes: casi todas las piezas tienen un color propio (piel, pelo, ojos,
+// ropa), así que se fusionan con el color guardado en cada vértice y un
+// material blanco compartido por nivel de terminación: brillante / satinado /
+// mate / muy mate, y metal sí o no. A esta escala la diferencia no se percibe.
+const _ROUGH_LEVELS=[0.15,0.45,0.7,0.9];
+const _nearestRough=r=>_ROUGH_LEVELS.reduce((a,b)=>Math.abs(b-r)<Math.abs(a-r)?b:a);
+const _vcMats=new Map();
+function _vcMaterial(type,rough,metal){
+  const k=type+rough+'|'+metal;
+  if(!_vcMats.has(k)){
+    const m=type==='MeshLambertMaterial'
+      ? new THREE.MeshLambertMaterial({color:0xffffff,vertexColors:true})
+      : new THREE.MeshStandardMaterial({color:0xffffff,vertexColors:true,roughness:rough,metalness:metal});
+    m.userData.vcShared=true; // no entra en la deduplicación general
+    _vcMats.set(k,m);
+  }
+  return _vcMats.get(k);
+}
+function _optimizeCharacter(g){
+  const containers=[]; g.traverse(o=>{ if(!o.isMesh) containers.push(o); });
+  containers.forEach(c=>{
+    const buckets=new Map();
+    c.children.slice().forEach(o=>{
+      if(!_canMerge(o)) return;
+      const m=o.material;
+      if(m.map||m.isMeshBasicMaterial||m.side!==THREE.FrontSide||m.vertexColors) return;
+      const r=m.isMeshStandardMaterial?_nearestRough(m.roughness):0;
+      const mt=m.isMeshStandardMaterial&&m.metalness>=0.3?0.5:0;
+      const k=m.type+'|'+r+'|'+mt+'|'+o.receiveShadow;
+      if(!buckets.has(k)) buckets.set(k,{type:m.type,r,mt,list:[]});
+      buckets.get(k).list.push(o);
+    });
+    buckets.forEach(({type,r,mt,list})=>{
+      if(list.length<2) return;
+      const geo=_mergeParts(list.map(o=>({geo:o.geometry,matrix:o.matrix,color:o.material.color})));
+      const mesh=new THREE.Mesh(geo,_vcMaterial(type,r,mt));
+      mesh.castShadow=list.some(o=>o.castShadow); mesh.receiveShadow=list[0].receiveShadow;
+      list.forEach(o=>{ c.remove(o); o.geometry.dispose(); o.material.dispose(); });
+      c.add(mesh);
+    });
+  });
+}
+
+// Huella de contenido para detectar geometrías idénticas.
+function _geoKey(g){
+  if(!g||!g.isBufferGeometry||g.morphAttributes.position) return null;
+  let h=2166136261>>>0;
+  const mix=a=>{
+    const arr=a.array, step=Math.max(1,Math.floor(arr.length/512));
+    for(let i=0;i<arr.length;i+=step){ h^=Math.round(arr[i]*1e4); h=Math.imul(h,16777619)>>>0; }
+    h^=arr.length; h=Math.imul(h,16777619)>>>0;
+  };
+  const names=Object.keys(g.attributes).sort();
+  for(const n of names){ const a=g.attributes[n]; if(a.isInterleavedBufferAttribute) return null; mix(a); }
+  if(g.index) mix(g.index);
+  return names.join(',')+':'+(g.index?g.index.count:0)+':'+g.attributes.position.count+':'+h;
+}
+
+function _sceneStats(){
+  const g=new Set(), m=new Set(); let meshes=0, casters=0;
+  scene.traverse(o=>{ if(!o.isMesh) return; meshes++; if(o.castShadow) casters++; g.add(o.geometry); [].concat(o.material).forEach(x=>m.add(x)); });
+  return {meshes,casters,geometries:g.size,materials:m.size};
+}
+
+function optimizeSceneResources(){
+  const t0=performance.now();
+  const before=_sceneStats();
+
+  // 1) Props fijos de box()/cyl(): fusionar por material en franjas de 16 m
+  const mergedProps=_mergeChildren(scene,o=>{
+    if(!_staticProps.has(o)) return null;
+    return _matKey(o.material)+'|'+o.castShadow+'|'+o.receiveShadow+'|'+Math.floor(o.position.z/16)+'|'+Math.sign(o.position.x);
+  });
+
+  // 2) Compartir materiales idénticos
+  const matPool=new Map(), deadMats=new Set();
+  scene.traverse(o=>{
+    if(!o.isMesh||Array.isArray(o.material)) return;
+    const k=_matKey(o.material); if(k==null) return;
+    const shared=matPool.get(k);
+    if(!shared){ matPool.set(k,o.material); return; }
+    if(shared!==o.material){ deadMats.add(o.material); o.material=shared; }
+  });
+  deadMats.forEach(m=>m.dispose());
+
+  // 3) Compartir geometrías idénticas
+  const geoPool=new Map(), deadGeos=new Set();
+  scene.traverse(o=>{
+    if(!o.isMesh||o.isInstancedMesh||o.isSkinnedMesh||Array.isArray(o.material)) return;
+    const k=_geoKey(o.geometry); if(k==null) return;
+    const shared=geoPool.get(k);
+    if(!shared){ geoPool.set(k,o.geometry); return; }
+    if(shared!==o.geometry){ deadGeos.add(o.geometry); o.geometry=shared; }
+  });
+  deadGeos.forEach(g=>g.dispose());
+
+  // 4) Sombras: las piezas mínimas no se ven en el mapa de sombras
+  scene.traverse(o=>{ if(o.isMesh&&o.castShadow&&!o.isInstancedMesh&&_meshRadius(o)<OPT_TINY_SHADOW) o.castShadow=false; });
+
+  const after=_sceneStats();
+  window._optReport={ms:Math.round(performance.now()-t0),mergedProps,sharedMats:deadMats.size,sharedGeos:deadGeos.size,before,after};
+  console.info('[AeroCalma] optimización',window._optReport);
 }
 
 // ─── FASE 33: SENDERO DE TRÁNSITO Y DELIMITADORES ──────────
@@ -3010,6 +3223,7 @@ function buildCharacter(opts){
 
   g.userData.headGroup=hg;
   g.userData.role=role;
+  _optimizeCharacter(g); // ~75 piezas -> pocas mallas (piernas/brazos/cabeza siguen animándose)
   return g;
 }
 // Alias para compatibilidad con llamadas existentes
@@ -4227,6 +4441,10 @@ function setupEvents(){
   // Boton de mapa en pausa
   document.getElementById('btn-to-menu').addEventListener('click',returnToMenu);
   document.addEventListener('keyup',onKeyUp);
+  // Si la ventana pierde el foco con una tecla apretada nunca llega el keyup:
+  // sin esto, al volver el personaje seguía caminando solo.
+  window.addEventListener('blur',releaseMovementKeys);
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden) releaseMovementKeys(); });
   window.addEventListener('resize',()=>{
     camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix();
     renderer.setSize(innerWidth,innerHeight);
@@ -4241,7 +4459,7 @@ function setupEvents(){
       startAtZone=-1;
     }
   });
-  controls.addEventListener('unlock',()=>{ if(!isMobile&&isGameActive&&!isPaused){ isPaused=true; document.getElementById('pause-menu').classList.remove('hidden'); } });
+  controls.addEventListener('unlock',()=>{ releaseMovementKeys(); if(!isMobile&&isGameActive&&!isPaused){ isPaused=true; document.getElementById('pause-menu').classList.remove('hidden'); } });
   if(isMobile) setupMobileControls();
 }
 
@@ -4258,6 +4476,11 @@ function onKeyDown(e){
     case 'KeyE': openCurrentZonePanel(); break;
     case 'Tab': e.preventDefault(); isThirdPerson=!isThirdPerson; showToast(isThirdPerson?'Cámara tercera persona':'Cámara primera persona'); break;
   }
+}
+function releaseMovementKeys(){
+  movement.forward=movement.backward=movement.left=movement.right=false;
+  velocity.set(0,0,0);
+  rotateLeft=rotateRight=false;
 }
 function onKeyUp(e){ switch(e.code){ case 'KeyW': case 'ArrowUp': movement.forward=false; break; case 'KeyS': case 'ArrowDown': movement.backward=false; break; case 'KeyA': case 'ArrowLeft': movement.left=false; break; case 'KeyD': case 'ArrowRight': movement.right=false; break; } }
 
@@ -5198,17 +5421,19 @@ function animate(){
       if(Math.abs(joystick.nx)>0.06 || Math.abs(joystick.ny)>0.06){
         const sinY=Math.sin(mobileYaw), cosY=Math.cos(mobileYaw);
         const fwd=-joystick.ny, right=joystick.nx; // ny<0 = thumb up = forward
-        const spd=PLAYER_SPEED*delta*1.4;
+        const spd=(calmMode?PLAYER_SPEED_CALM:PLAYER_SPEED)*delta; // igual que en computadora
         camera.position.x+=(-sinY*fwd + cosY*right)*spd;
         camera.position.z+=(-cosY*fwd - sinY*right)*spd;
       }
     } else {
       velocity.x-=velocity.x*10*delta; velocity.z-=velocity.z*10*delta;
-      const spd=(calmMode?PLAYER_SPEED_CALM:PLAYER_SPEED)*delta*55;
+      // Aceleración = 10×velocidad con freno 10/s → velocidad final = PLAYER_SPEED (arranque y frenado suaves, ~0,3 s)
+      const spd=(calmMode?PLAYER_SPEED_CALM:PLAYER_SPEED)*delta*10;
       if(movement.forward)  velocity.z-=spd;
       if(movement.backward) velocity.z+=spd;
-      if(movement.left)     velocity.x-=spd;
-      if(movement.right)    velocity.x+=spd;
+      // moveRight(-velocity.x): velocidad x negativa = a la derecha (antes A/D estaban invertidas)
+      if(movement.left)     velocity.x+=spd;
+      if(movement.right)    velocity.x-=spd;
       controls.moveRight(-velocity.x*delta); controls.moveForward(-velocity.z*delta);
     }
     const pos=camera.position;
