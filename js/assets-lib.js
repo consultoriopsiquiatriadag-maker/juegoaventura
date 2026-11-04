@@ -159,6 +159,77 @@ function makeAd(texto, colores){
   return m;
 }
 
-window.AeroAssets={makeSign,makeStorefront,makeAd};
+/* ── F33: SENDERO DE TRÁNSITO Y DELIMITADORES ─────────────
+ * makeGuideStripTexture()  → textura del sendero central del piso
+ * makeStanchion()          → poste separador de filas (tensabarrier)
+ * makeBarrierBelt(len)     → cinta entre dos postes (a lo largo de Z)
+ * makePlanter()            → jardinera baja rectangular con plantas
+ * Materiales compartidos: muchas instancias, pocos materiales.
+ * ─────────────────────────────────────────────────────── */
+
+// Textura de 1.6 m × 4 m (se repite a lo largo del recorrido).
+// Arriba del canvas = hacia adelante (-Z) cuando el plano se acuesta en el piso.
+// Contraste bajo a propósito: orienta sin gritar (baja estimulación).
+function makeGuideStripTexture(){
+  const t=_tex(256,640,(ctx,c)=>{
+    const W=c.width,H=c.height;
+    // Base apenas más oscura que el granito del piso (#e8ecf0)
+    ctx.fillStyle='#cfd6de'; ctx.fillRect(0,0,W,H);
+    // Bordes: banda gris-azulada + filete claro (marca el límite del sendero)
+    ctx.fillStyle='#aeb8c4'; ctx.fillRect(0,0,14,H); ctx.fillRect(W-14,0,14,H);
+    ctx.fillStyle='#e6eaef'; ctx.fillRect(14,0,3,H); ctx.fillRect(W-17,0,3,H);
+    // Baldosa direccional: barras longitudinales (como la guía táctil)
+    ctx.fillStyle='#c0c8d2';
+    [64,104,144,184].forEach(x=>{ ctx.fillRect(x-6,24,12,H-48); });
+    // Chevron indicando el sentido de avance
+    ctx.fillStyle='rgba(110,132,156,0.75)';
+    ctx.beginPath();
+    ctx.moveTo(128,250); ctx.lineTo(206,330); ctx.lineTo(176,330); ctx.lineTo(128,282);
+    ctx.lineTo(80,330); ctx.lineTo(50,330); ctx.closePath(); ctx.fill();
+  });
+  t.wrapS=THREE.ClampToEdgeWrapping; t.wrapT=THREE.RepeatWrapping;
+  return t;
+}
+
+const _guideMats={};
+function _gm(key,make){ return _guideMats[key]||(_guideMats[key]=make()); }
+
+// Poste de acero con base pesada, ~0.98 m (altura estándar de tensabarrier)
+function makeStanchion(){
+  const steel=_gm('steel',()=>new THREE.MeshStandardMaterial({color:0xb8bcc2,roughness:0.28,metalness:0.75}));
+  const base =_gm('base', ()=>new THREE.MeshStandardMaterial({color:0x2a2d33,roughness:0.5,metalness:0.4}));
+  const g=new THREE.Group();
+  const b=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.19,0.04,18),base); b.position.y=0.02; g.add(b);
+  const p=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.92,10),steel); p.position.y=0.5; g.add(p);
+  const cap=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.04,0.06,12),steel); cap.position.y=0.98; g.add(cap);
+  g.traverse(c=>{ if(c.isMesh){ c.castShadow=true; c.receiveShadow=true; } });
+  return g;
+}
+
+// Cinta textil retráctil entre postes, a 0.92 m de altura, orientada en Z
+function makeBarrierBelt(len){
+  const belt=_gm('belt',()=>new THREE.MeshStandardMaterial({color:0x2c4a6e,roughness:0.8,metalness:0.0}));
+  const m=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.05,len),belt);
+  m.position.y=0.92; m.castShadow=true;
+  return m;
+}
+
+// Jardinera baja (1.2 × 0.5 m) con arbustos redondeados: borde "blando" del pasillo
+function makePlanter(){
+  const box=_gm('planter',()=>new THREE.MeshStandardMaterial({color:0xd8d2c8,roughness:0.7,metalness:0.0}));
+  const soil=_gm('soil',  ()=>new THREE.MeshStandardMaterial({color:0x3b2e24,roughness:1.0}));
+  const leaf=_gm('leaf',  ()=>new THREE.MeshStandardMaterial({color:0x4a7d45,roughness:0.85}));
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.45,1.2),box); body.position.y=0.225; g.add(body);
+  const s=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.04,1.14),soil); s.position.y=0.44; g.add(s);
+  [-0.38,0,0.38].forEach((dz,i)=>{
+    const l=new THREE.Mesh(new THREE.SphereGeometry(0.26,8,6),leaf);
+    l.position.set(0,0.6+(i%2)*0.05,dz); l.scale.set(0.9,0.75,1); g.add(l);
+  });
+  g.traverse(c=>{ if(c.isMesh){ c.castShadow=true; c.receiveShadow=true; } });
+  return g;
+}
+
+window.AeroAssets={makeSign,makeStorefront,makeAd,makeGuideStripTexture,makeStanchion,makeBarrierBelt,makePlanter};
 
 })();

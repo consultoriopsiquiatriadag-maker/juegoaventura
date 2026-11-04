@@ -379,6 +379,8 @@ function buildWorld(){
   buildHallQuality();
   // ── FASE 29: Señalética suspendida (puertas, baños, FIDS) ──
   if(window.AeroSignage){ AeroSignage.build(scene); AeroSignage.setCalm(calmMode); }
+  // ── FASE 33: Sendero de tránsito + delimitadores (al final: ve todo lo construido) ──
+  buildTransitGuide();
 }
 
 // ─── GROUND ──────────────────────────────────────
@@ -534,6 +536,7 @@ function createTileFloorTexture(){
 }
 
 let hallFloorMat=null; // recibe el envMap en captureFloorReflections()
+const reflectiveFloorMats=[]; // otros pisos pulidos que comparten el mismo envMap (sendero)
 
 function buildFloorTile(){
   // Muy pulido para que refleje el entorno del hall (ver captureFloorReflections)
@@ -574,9 +577,121 @@ function captureFloorReflections(){
   const env=pmrem.fromCubemap(cubeRT.texture).texture; // mips prefiltrados por rugosidad
   pmrem.dispose(); cubeRT.dispose();
 
-  hallFloorMat.envMap=env;
-  hallFloorMat.envMapIntensity=1.0; // físicamente correcto: el Fresnel ya limita el reflejo
-  hallFloorMat.needsUpdate=true;
+  [hallFloorMat,...reflectiveFloorMats].forEach(m=>{
+    m.envMap=env;
+    m.envMapIntensity=1.0; // físicamente correcto: el Fresnel ya limita el reflejo
+    m.needsUpdate=true;
+  });
+}
+
+// ─── FASE 33: SENDERO DE TRÁNSITO Y DELIMITADORES ──────────
+// Orienta al usuario de zona en zona sin carteles extra:
+//  1) Franja central en el piso (x=0) desde la entrada hasta la puerta de
+//     embarque, apenas más oscura que el granito, con barras direccionales y
+//     un chevron cada 4 m que apunta hacia la zona siguiente (-Z).
+//  2) En los tramos ENTRE zonas: postes separadores con cinta a ambos lados
+//     y jardineras bajas en los extremos, para que el pasillo tenga bordes
+//     físicos y no se sienta "flotar en el vacío".
+// Todo es decorativo (el juego no tiene colisiones). Postes y jardineras solo
+// se colocan si el lugar está libre (raycast) y fuera de los anillos de zona,
+// así no se superponen con mostradores ni alteran la lógica de zonas.
+const TRANSIT={
+  stripWidth:1.6,
+  stripFromZ:50,        // frente a la entrada
+  stripToZ:-31,         // puerta de embarque (antes del avión)
+  corridorHalfWidth:2.4,// postes a ±2.4 m del eje → pasillo de 4.8 m
+  postSpacing:2.2,
+  ringClearance:5.4,    // sin postes dentro del radio de las zonas (anillo r=4.8)
+  zonesInOrder:['entrance','checkin','security','lounge','boarding'],
+};
+
+// ¿Hay un objeto (entre 0.25 y 3.5 m de alto) en (x,z) o a radio r?
+function _floorIsFree(x,z,r){
+  const rc=new THREE.Raycaster();
+  const down=new THREE.Vector3(0,-1,0);
+  const pts=[[0,0],[r,0],[-r,0],[0,r],[0,-r]];
+  for(const [dx,dz] of pts){
+    rc.set(new THREE.Vector3(x+dx,4,z+dz),down); rc.far=3.9;
+    const hits=rc.intersectObjects(scene.children,true);
+    for(const h of hits){
+      const o=h.object, m=o.material;
+      if(!o.visible || h.point.y<0.25 || h.point.y>3.5) continue;
+      if(o.userData&&o.userData.isRing) continue;
+      if(m&&m.transparent&&m.opacity<0.6) continue;
+      let p=o, skip=false; while(p){ if(p.name==='lightShafts'){skip=true;break;} p=p.parent; }
+      if(skip) continue;
+      return false;
+    }
+  }
+  return true;
+}
+
+function _nearZone(z){
+  // -0.05: tolerancia para que los extremos del tramo (justo en el borde) cuenten como fuera
+  return ZONE_DATA.some(zd=>Math.hypot(zd.position.x,zd.position.z-z)<TRANSIT.ringClearance-0.05);
+}
+
+function buildTransitGuide(){
+  const A=window.AeroAssets;
+  if(!A||!A.makeGuideStripTexture) return;
+  // Las posiciones finales de los objetos (matrixWorld) recién se calculan al
+  // primer render: sin esto el raycast ve todo amontonado en el origen.
+  scene.updateMatrixWorld(true);
+  const root=new THREE.Group(); root.name='transitGuide';
+
+  // 1) Franja guía en el piso
+  const len=TRANSIT.stripFromZ-TRANSIT.stripToZ;
+  const tex=A.makeGuideStripTexture();
+  tex.repeat.set(1,len/4);                        // un módulo cada 4 m
+  tex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  const stripMat=new THREE.MeshStandardMaterial({
+    map:tex, roughness:0.28, metalness:0.05,       // pulido como el resto del piso
+    // Oscurece la textura ~35%: bajo el sol el piso claro satura y con el tono
+    // original la franja se perdía (medido: mismo brillo que el piso).
+    color:new THREE.Color(0.62,0.66,0.72),
+    polygonOffset:true, polygonOffsetFactor:-1, polygonOffsetUnits:-1
+  });
+  reflectiveFloorMats.push(stripMat);
+  const strip=new THREE.Mesh(new THREE.PlaneGeometry(TRANSIT.stripWidth,len),stripMat);
+  strip.rotation.x=-Math.PI/2;
+  strip.position.set(0,0.095,(TRANSIT.stripFromZ+TRANSIT.stripToZ)/2);
+  strip.receiveShadow=true;
+  root.add(strip);
+
+  // 2) Delimitadores en los tramos entre zonas consecutivas
+  const zs=TRANSIT.zonesInOrder.map(id=>ZONE_DATA.find(z=>z.id===id)).filter(Boolean);
+  for(let i=0;i<zs.length-1;i++){
+    const from=zs[i].position.z-TRANSIT.ringClearance;
+    const to=zs[i+1].position.z+TRANSIT.ringClearance;
+    if(from-to<3) continue;                       // tramo demasiado corto
+    const n=Math.max(2,Math.round((from-to)/TRANSIT.postSpacing)+1);
+    const step=(from-to)/(n-1);
+    [-1,1].forEach(side=>{
+      const x=side*TRANSIT.corridorHalfWidth;
+      const ok=[];
+      for(let k=0;k<n;k++){
+        const z=from-k*step;
+        ok[k]=!_nearZone(z)&&_floorIsFree(x,z,0.25);
+        if(ok[k]){ const p=A.makeStanchion(); p.position.set(x,0.09,z); root.add(p); }
+      }
+      // Cinta solo entre postes consecutivos presentes
+      for(let k=0;k<n-1;k++){
+        if(!ok[k]||!ok[k+1]) continue;
+        const b=A.makeBarrierBelt(step-0.08);
+        b.position.set(x,0.09+b.position.y,from-(k+0.5)*step);
+        root.add(b);
+      }
+      // Jardineras en los extremos del tramo, por fuera de la línea de postes
+      [from,to].forEach(z=>{
+        const px=x+side*0.55;
+        if(!_nearZone(z)&&_floorIsFree(px,z,0.5)){
+          const pl=A.makePlanter(); pl.position.set(px,0.09,z); root.add(pl);
+        }
+      });
+    });
+  }
+  scene.add(root);
+  return root;
 }
 
 // ─── CEILING ── Techo moderno con luminarias ───────
