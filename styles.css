@@ -1713,3 +1713,14 @@ body.calm-mode .steam i { animation-duration: 5s; }
   .office-photo { width: 78px; height: 117px; }
   .office-id h2 { font-size: 1.25rem; }
 }
+
+/* FASE 43 -- Tótem de embarque: tarjeta con línea de escaneo */
+.gate-bp { margin: 0 auto; position: relative; }
+.gate-bp .bp-grid { grid-template-columns: repeat(3, 1fr); }
+.bp-card.scanning::after {
+  content: ''; position: absolute; left: 6px; right: 6px; height: 3px; top: 40px;
+  background: #4ecdc4; box-shadow: 0 0 14px 3px rgba(78,205,196,0.75); border-radius: 3px;
+  animation: bpScan 0.8s ease-in-out infinite alternate;
+}
+@keyframes bpScan { from { top: 40px; } to { top: calc(100% - 10px); } }
+@media (prefers-reduced-motion: reduce) { .bp-card.scanning::after { animation: none; top: 50%; } }

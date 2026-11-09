@@ -602,6 +602,230 @@ function captureFloorReflections(){
   });
 }
 
+// ─── FASE 43: PUERTA DE EMBARQUE, MANGA Y NARIZ DEL AVIÓN ──
+// Recorrido real de embarque:
+//  sala de espera → GATE A7 (frente vidriado, 2 puertas automáticas y un
+//  tótem para escanear la tarjeta) → manga cerrada con ventanales →
+//  puerta delantera izquierda del avión → cabina.
+// El cockpit gigante (18 m) se reemplazó por la nariz real del fuselaje con
+// un cockpit compacto: los pilotos se ven por la puerta abierta del mamparo.
+const GATE={ z:-21.6, half:8, open:1.15 };       // línea del gate y medio ancho del frente vidriado
+const PLANE_DOOR={ z0:-33.05, z1:-34.15, top:2.1 }; // puerta delantera izquierda (en la cabina)
+// Recorrido de la manga (centro del pasillo), del gate a la puerta del avión
+const JETWAY=[[0,-21.75],[0,-24.6],[-4.3,-24.6],[-4.3,-33.6],[-2.72,-33.6]];
+let gateFlaps=[], gateFlapTarget=0, gateLed=null, _autoWalk=null;
+
+function buildBoarding(){
+  const Z=GATE.z;
+  zoneHeader(0,Z+1.6,'✈  PUERTA A7  ·  GATE A7  ·  EMBARQUE',0xef4444);
+  // ── Frente vidriado con marco metálico (deja ver la manga y el avión)
+  const glass=new THREE.MeshStandardMaterial({color:0xcfe8f6,transparent:true,opacity:0.22,roughness:0.06,metalness:0.1,depthWrite:false});
+  [[-GATE.half,-GATE.open-0.45],[GATE.open+0.45,GATE.half]].forEach(([a,b])=>{
+    const gp=new THREE.Mesh(new THREE.BoxGeometry(b-a,2.9,0.05),glass); gp.position.set((a+b)/2,1.6,Z); scene.add(gp);
+    for(let px=a;px<=b+0.01;px+=(b-a)/5) box(px,0.09,Z,0.08,3.0,0.12,0x5b6670);
+  });
+  box(0,3.09,Z,GATE.half*2+0.1,0.16,0.18,0x5b6670);           // riel superior
+  box(0,0.09,Z,GATE.half*2+0.1,0.1,0.16,0x5b6670,false);       // zócalo
+  // Dintel del acceso con cartel
+  const dt=tex(512,96,(ctx)=>{ ctx.fillStyle='#0a1628'; ctx.fillRect(0,0,512,96); ctx.fillStyle='#ffd166'; ctx.font='bold 52px Arial'; ctx.textAlign='center'; ctx.fillText('A7',90,66); ctx.fillStyle='#fff'; ctx.font='bold 34px Arial'; ctx.fillText('ACCESO AL AVIÓN →',310,62); });
+  sign(0,2.75,Z+0.1,2.9,0.55,0.08,dt,0,0x221a00);
+  // ── Puertas automáticas (e-gates): 2 pedestales + hojas de vidrio
+  const pedM=mkStd(0xe9edf1,0.35,0.15), topM=mkStd(0x22282f,0.3,0.3);
+  [-1,1].forEach(sd=>{
+    const px=sd*(GATE.open-0.2);
+    const ped=new THREE.Mesh(new THREE.BoxGeometry(0.34,1.05,1.5),pedM); ped.position.set(px,0.09+0.525,Z); ped.castShadow=true; scene.add(ped);
+    const top=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.05,1.52),topM); top.position.set(px,0.09+1.075,Z); scene.add(top);
+    // Hoja de vidrio con bisagra en el pedestal
+    const hinge=new THREE.Group(); hinge.position.set(px-sd*0.17,0.09,Z+0.2); scene.add(hinge);
+    const flap=new THREE.Mesh(new THREE.BoxGeometry(GATE.open-0.4,0.75,0.03),new THREE.MeshStandardMaterial({color:0xbfe3f5,transparent:true,opacity:0.5,roughness:0.08,depthWrite:false}));
+    flap.position.set(-sd*(GATE.open-0.4)/2,0.75,0); hinge.add(flap);
+    hinge.userData.side=sd; gateFlaps.push(hinge);
+  });
+  // Luz de estado sobre el pedestal derecho (roja: cerrado · verde: adelante)
+  gateLed=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.04,0.3),new THREE.MeshStandardMaterial({color:0x222222,emissive:0xff4d4d,emissiveIntensity:1.2}));
+  gateLed.position.set(GATE.open-0.2,0.09+1.12,Z+0.45); scene.add(gateLed);
+  // ── Tótem de escaneo (frente al acceso)
+  const tg=new THREE.Group(); tg.name='boardingTotem'; tg.position.set(2.05,0.09,Z+1.15); tg.rotation.y=-0.35;
+  const tp=new THREE.Group(); tg.add(tp);
+  const TB=(w,h,d,col,py,pz,r,m)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mkStd(col,r,m||0)); o.position.set(0,py+h/2,pz||0); o.castShadow=true; tp.add(o); };
+  TB(0.62,0.05,0.42,0x5c6368,0,0,0.5,0.3); TB(0.48,1.62,0.26,0xf2f5f8,0.05,0,0.35,0.05); TB(0.5,0.08,0.28,0xef4444,1.67,0,0.4,0.1);
+  _optimizeCharacter(tp);
+  const ts=tex(256,512,(ctx)=>{ ctx.fillStyle='#0a1628'; ctx.fillRect(0,0,256,512); ctx.fillStyle='#ef4444'; ctx.fillRect(0,0,256,70);
+    ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='bold 30px Arial'; ctx.fillText('GATE A7',128,46);
+    ctx.font='bold 26px Arial'; ctx.fillText('Escaneá tu',128,130); ctx.fillText('tarjeta de',128,164); ctx.fillText('embarque',128,198);
+    ctx.strokeStyle='#4ecdc4'; ctx.lineWidth=6; ctx.strokeRect(58,240,140,140);
+    ctx.fillStyle='#4ecdc4'; for(let i=0;i<7;i++) ctx.fillRect(74+i*17,262,8+((i*5)%3)*4,96);
+    ctx.fillStyle='#9fb3c8'; ctx.font='22px Arial'; ctx.fillText('Acercá el código',128,430); ctx.fillText('al lector',128,460); });
+  ts.encoding=THREE.sRGBEncoding;
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(0.4,0.8),new THREE.MeshStandardMaterial({map:ts,emissive:0xffffff,emissiveMap:ts,emissiveIntensity:0.5}));
+  scr.position.set(0,1.18,0.135); tg.add(scr);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(0.8,1.9,0.6),new THREE.MeshBasicMaterial({visible:false})); hit.position.set(0,0.95,0); tg.add(hit);
+  scene.add(tg);
+  // ── Mostrador de la puerta con agente y pantalla del vuelo
+  box(-4.4,0.09,Z+1.3,2.6,1.05,0.75,0x2d4a63); box(-4.4,1.14,Z+1.3,2.7,0.06,0.85,0xdfe5ea);
+  addMonitor(-4.9,1.2,Z+1.05);
+  const agent=buildCharacter({skin:SKINS[1],hair:HAIRS[2],top:0x8a1c1c,pants:0x1a2240,shoes:0x111111,role:'agent',tieCol:0xffd166});
+  agent.position.set(-4.2,0,Z+0.55); agent.userData.isNPC=true; agent.userData.isStaff=true; agent.userData.role='agent';
+  agent.userData.idlePhase=0.7; agent.userData.baseRotY=0; npcs.push(agent); scene.add(agent);
+  const gt=tex(512,256,(ctx)=>{ ctx.fillStyle='#0a1628'; ctx.fillRect(0,0,512,256); ctx.fillStyle='#4a9eff'; ctx.font='bold 34px Arial'; ctx.textAlign='center'; ctx.fillText('A7 · IB 3421 · MADRID',256,52); ctx.strokeStyle='#4a9eff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(40,70); ctx.lineTo(472,70); ctx.stroke(); ctx.fillStyle='#fff'; ctx.font='24px Arial'; ctx.fillText('Salida 08:15  ·  Embarque 07:45',256,118); ctx.fillStyle='#4ecdc4'; ctx.font='bold 38px Arial'; ctx.fillText('✓ EMBARQUE EN CURSO',256,190); ctx.fillStyle='#9fb3c8'; ctx.font='22px Arial'; ctx.fillText('Escaneá tu tarjeta en el tótem',256,232); });
+  sign(-4.4,4.0,Z+0.15,3.8,1.9,0.1,gt,0,0x001122);
+  addInteractable({id:'gate',x:1.1,z:Z+2.3,radius:2.6,icon:'🎫',label:'Escanear tarjeta de embarque',
+    root:tg,onTrigger:openGateModal});
+  buildJetway();
+}
+
+// ── Manga: pasillo cerrado con ventanales, sigue JETWAY ─────
+function buildJetway(){
+  const W=2.3, H=2.55, y0=0.09, n=JETWAY.length;
+  const wallM=mkStd(0xd9dee3,0.55,0.15), glassM=new THREE.MeshStandardMaterial({color:0xa9d6ef,transparent:true,opacity:0.3,roughness:0.05,metalness:0.1,depthWrite:false});
+  const floorM=mkStd(0x3d4a5c,0.9,0), ceilM=mkStd(0xf1f1ee,0.7,0);
+  const lightM=new THREE.MeshStandardMaterial({color:0xfff6e6,emissive:0xfff1dc,emissiveIntensity:0.9});
+  const P=JETWAY.map(([x,z])=>new THREE.Vector2(x,z));
+  // Vértices desplazados a cada lado (inglete en las esquinas)
+  const off=(side)=>P.map((p,i)=>{
+    const dIn=i>0?p.clone().sub(P[i-1]).normalize():null, dOut=i<n-1?P[i+1].clone().sub(p).normalize():null;
+    const nrm=d=>new THREE.Vector2(-d.y,d.x).multiplyScalar(side*W/2);
+    if(!dIn) return p.clone().add(nrm(dOut));
+    if(!dOut) return p.clone().add(nrm(dIn));
+    const a=nrm(dIn), b=nrm(dOut); return p.clone().add(a).add(b);   // giros de 90°
+  });
+  const g=new THREE.Group(); g.name='jetway'; scene.add(g);
+  const seg=(a,b,yA,h,mat,t)=>{ const L=a.distanceTo(b); if(L<0.01) return; const m=new THREE.Mesh(new THREE.BoxGeometry(t||0.1,h,L+(t||0.1)),mat);
+    m.position.set((a.x+b.x)/2,yA+h/2,(a.y+b.y)/2); m.rotation.y=Math.atan2(b.x-a.x,b.y-a.y); m.castShadow=true; m.receiveShadow=true; g.add(m); };
+  [-1,1].forEach(sd=>{
+    const o=off(sd);
+    for(let i=0;i<n-1;i++){
+      seg(o[i],o[i+1],y0,0.95,wallM);              // antepecho
+      seg(o[i],o[i+1],y0+0.95,1.05,glassM,0.04);  // ventanal
+      seg(o[i],o[i+1],y0+2.0,H-2.0,wallM);         // dintel
+    }
+  });
+  // Piso, techo y luz central por tramo
+  for(let i=0;i<n-1;i++){
+    const a=P[i], b=P[i+1], L=a.distanceTo(b)+W, ang=Math.atan2(b.x-a.x,b.y-a.y), cx=(a.x+b.x)/2, cz=(a.y+b.y)/2;
+    const f=new THREE.Mesh(new THREE.BoxGeometry(W,0.06,L),floorM); f.position.set(cx,0.12,cz); f.rotation.y=ang; f.receiveShadow=true; g.add(f);
+    const c=new THREE.Mesh(new THREE.BoxGeometry(W+0.1,0.1,L),ceilM); c.position.set(cx,y0+H+0.05,cz); c.rotation.y=ang; g.add(c);
+    const l=new THREE.Mesh(new THREE.BoxGeometry(0.35,0.02,Math.max(0.5,L-W-0.4)),lightM); l.position.set(cx,y0+H-0.01,cz); l.rotation.y=ang; g.add(l);
+  }
+  // Fuelle de unión con el avión (alrededor de la puerta)
+  const bel=mkStd(0x2f3640,0.8,0.1), dz=(PLANE_DOOR.z0+PLANE_DOOR.z1)/2, dw=PLANE_DOOR.z0-PLANE_DOOR.z1;
+  [-1,1].forEach(s=>{ const b=new THREE.Mesh(new THREE.BoxGeometry(0.62,PLANE_DOOR.top+0.2,0.16),bel); b.position.set(-2.45,0.09+(PLANE_DOOR.top+0.2)/2,dz+s*(dw/2+0.1)); g.add(b); });
+  const bt=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.22,dw+0.36),bel); bt.position.set(-2.45,0.09+PLANE_DOOR.top+0.2,dz); g.add(bt);
+  const bf=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.06,dw+0.2),floorM); bf.position.set(-2.45,0.13,dz); g.add(bf);
+  // Cartel dentro de la manga
+  const mt=tex(512,96,(ctx)=>{ ctx.fillStyle='#0a1628'; ctx.fillRect(0,0,512,96); ctx.fillStyle='#fff'; ctx.font='bold 36px Arial'; ctx.textAlign='center'; ctx.fillText('✈  Avión  ·  Aircraft  →',256,62); });
+  const ms=new THREE.Mesh(new THREE.PlaneGeometry(1.6,0.3),new THREE.MeshStandardMaterial({map:mt,emissive:0xffffff,emissiveMap:mt,emissiveIntensity:0.5}));
+  ms.position.set(-4.3,2.35,-25.75); g.add(ms);
+}
+
+// ── Nariz del avión con cockpit compacto ─────────────────────
+function buildAircraftNose(){
+  const {R,cy,shell,floorY,zFront,x}=CABIN, Ro=R+shell;
+  const zN=-29.4, tipLen=2.9;                     // tramo recto hasta zN y luego el cono
+  const skin=new THREE.MeshStandardMaterial({color:0xf3f1ec,roughness:0.45,metalness:0.1,side:THREE.DoubleSide});
+  // Tramo recto (anillo completo, el piso del hall tapa lo de abajo)
+  const ring=new THREE.Mesh(new THREE.CylinderGeometry(Ro,Ro,Math.abs(zN-zFront),64,1,true),skin);
+  ring.rotation.x=Math.PI/2; ring.position.set(x,cy,(zFront+zN)/2); ring.castShadow=true; scene.add(ring);
+  // Cono de la nariz (perfil elíptico) con franja oscura del parabrisas
+  const prof=[]; for(let i=0;i<=16;i++){ const t=i/16; prof.push(new THREE.Vector2(Math.max(0.001,Ro*Math.sqrt(1-t*t*0.985)),t*tipLen)); }
+  const wt=tex(512,256,(ctx)=>{ ctx.fillStyle='#f3f1ec'; ctx.fillRect(0,0,512,256);
+    ctx.fillStyle='#1b2430'; ctx.beginPath(); ctx.moveTo(150,70); ctx.lineTo(362,70); ctx.lineTo(340,118); ctx.lineTo(172,118); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#c62828'; ctx.fillRect(0,200,512,8); });
+  wt.encoding=THREE.sRGBEncoding;
+  const cone=new THREE.Mesh(new THREE.LatheGeometry(prof,64),new THREE.MeshStandardMaterial({map:wt,roughness:0.45,metalness:0.1,side:THREE.DoubleSide}));
+  cone.rotation.x=Math.PI/2; cone.rotation.y=Math.PI;   // eje del torno → +z; la franja queda arriba-adelante
+  cone.position.set(x,cy,zN); cone.castShadow=true; scene.add(cone);
+  // Piso del cockpit
+  const flLen=(zN+0.8)-zFront;
+  const fl=new THREE.Mesh(new THREE.BoxGeometry(_cabinHalf(floorY)*2-0.1,0.06,flLen),mkStd(0x2a2d35,0.8,0));
+  fl.position.set(x,floorY-0.02,zFront+flLen/2); scene.add(fl);
+  // Panel de instrumentos con pantallas
+  const pm=mkStd(0x15191f,0.5,0.1);
+  const panel=new THREE.Mesh(new THREE.BoxGeometry(3.0,0.85,0.5),pm); panel.position.set(x,floorY+1.05,zN+0.95); scene.add(panel);
+  const glare=new THREE.Mesh(new THREE.BoxGeometry(3.0,0.08,0.7),pm); glare.position.set(x,floorY+1.5,zN+1.0); scene.add(glare);
+  const sc=tex(512,128,(ctx)=>{ ctx.fillStyle='#05080c'; ctx.fillRect(0,0,512,128);
+    [[10,'#0f3d6e'],[130,'#103a1f'],[260,'#0f3d6e'],[380,'#103a1f']].forEach(([px,c])=>{ ctx.fillStyle=c; ctx.fillRect(px,10,118,108); ctx.strokeStyle='#4ecdc4'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(px+10,64); ctx.lineTo(px+108,60); ctx.stroke(); }); });
+  sc.encoding=THREE.sRGBEncoding;
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(2.6,0.62),new THREE.MeshStandardMaterial({map:sc,emissive:0xffffff,emissiveMap:sc,emissiveIntensity:0.8}));
+  scr.position.set(x,floorY+1.07,zN+0.69); scr.rotation.y=Math.PI; scene.add(scr);
+  // Vista del cielo por el parabrisas (solo visible desde adentro)
+  const sk=tex(512,160,(ctx)=>{ const gr=ctx.createLinearGradient(0,0,0,160); gr.addColorStop(0,'#3d7cc0'); gr.addColorStop(1,'#cfe6f6'); ctx.fillStyle=gr; ctx.fillRect(0,0,512,160);
+    ctx.fillStyle='rgba(255,255,255,0.85)'; [[90,120,70,14],[260,130,90,12],[420,118,60,12]].forEach(([a,b,c,d])=>{ ctx.beginPath(); ctx.ellipse(a,b,c,d,0,0,Math.PI*2); ctx.fill(); }); });
+  sk.encoding=THREE.sRGBEncoding;
+  const sky=new THREE.Mesh(new THREE.PlaneGeometry(2.4,0.6),new THREE.MeshBasicMaterial({map:sk}));
+  sky.position.set(x,floorY+1.95,zN+1.35); sky.rotation.y=Math.PI; scene.add(sky);
+  // Asientos de los pilotos
+  [-0.62,0.62].forEach(px=>{
+    const b=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.1,0.55),mkStd(0x1a1a22,0.6,0.05)); b.position.set(x+px,floorY+0.45,zN-0.6); scene.add(b);
+    const bk=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.95,0.1),mkStd(0x1a1a22,0.6,0.05)); bk.position.set(x+px,floorY+0.95,zN-0.92); scene.add(bk);
+  });
+}
+
+// Puerta delantera izquierda: marco interior en la cabina
+function _cabinDoorFrame(){
+  const {floorY,x}=CABIN, fm=mkStd(0xbfc6cc,0.35,0.5);
+  const xin=-_cabinHalf(floorY+1.0)+0.06;
+  [PLANE_DOOR.z0,PLANE_DOOR.z1].forEach(zz=>{ const p=new THREE.Mesh(new THREE.BoxGeometry(0.16,PLANE_DOOR.top-floorY,0.08),fm); p.position.set(x+xin,(PLANE_DOOR.top+floorY)/2,zz); scene.add(p); });
+  const h=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.08,PLANE_DOOR.z0-PLANE_DOOR.z1+0.08),fm); h.position.set(x+xin+0.05,PLANE_DOOR.top,(PLANE_DOOR.z0+PLANE_DOOR.z1)/2); scene.add(h);
+  const st=tex(256,64,(ctx)=>{ ctx.fillStyle='#16324a'; ctx.fillRect(0,0,256,64); ctx.fillStyle='#fff'; ctx.font='bold 28px Arial'; ctx.textAlign='center'; ctx.fillText('L1 · Bienvenida',128,42); });
+  const s=new THREE.Mesh(new THREE.PlaneGeometry(0.7,0.18),new THREE.MeshBasicMaterial({map:st})); s.position.set(x+xin+0.12,PLANE_DOOR.top+0.18,(PLANE_DOOR.z0+PLANE_DOOR.z1)/2); s.rotation.y=Math.PI/2; scene.add(s);
+}
+
+// ── Escaneo de la tarjeta y caminata guiada hasta la puerta del avión ──
+let _gateTimer=null;
+function openGateModal(){
+  const f=_pickFlight();
+  ['gate-bp-flight','gate-bp-dest'].forEach((id,i)=>{ const e=document.getElementById(id); if(e) e.textContent=i?f.dest:f.code; });
+  const st=document.getElementById('gate-status'); st.className='ib-status'; st.textContent='';
+  document.getElementById('btn-gate-scan').classList.remove('hidden'); document.getElementById('btn-gate-scan').disabled=false;
+  document.getElementById('btn-gate-walk').classList.add('hidden');
+  document.querySelector('#gate-modal .bp-card').classList.remove('scanning');
+  openUiModal('gate-modal');
+}
+function scanBoardingPass(){
+  const b=document.getElementById('btn-gate-scan'); b.disabled=true;
+  document.querySelector('#gate-modal .bp-card').classList.add('scanning');
+  const st=document.getElementById('gate-status'); st.className='ib-status pending'; st.innerHTML='<span class="ib-spinner" aria-hidden="true"></span> Leyendo tu tarjeta de embarque…';
+  clearTimeout(_gateTimer);
+  _gateTimer=setTimeout(()=>{
+    st.className='ib-status ok'; st.innerHTML='<span class="ib-check" aria-hidden="true">✓</span> Embarque confirmado. Asiento 14C. ¡Buen viaje!';
+    b.classList.add('hidden'); document.getElementById('btn-gate-walk').classList.remove('hidden');
+    gateFlapTarget=1; if(gateLed) gateLed.material.emissive.setHex(0x22c55e);
+    playUiTone('success'); logInteraction('embarque','tarjeta');
+  },1600);
+}
+// Camina sola por la manga hasta la puerta del avión (cualquier tecla o el
+// joystick la interrumpen). Ritmo de paso tranquilo.
+function walkToAircraft(){
+  closeUiModal('gate-modal');
+  const pts=[[0,-20.4],...JETWAY,[-1.3,-33.6],[-0.15,-34.3],[0,-35.0]].map(([x,z])=>new THREE.Vector3(x,PLAYER_HEIGHT,z));
+  const curve=new THREE.CatmullRomCurve3(pts,false,'centripetal',0.2);
+  camera.position.copy(pts[0]);
+  _autoWalk={curve,t:0,len:curve.getLength(),speed:calmMode?1.3:1.8};
+  showToast('🚶 Caminando por la manga hacia el avión…');
+}
+function updateAutoWalk(delta){
+  if(!_autoWalk) return;
+  const moving=movement.forward||movement.backward||movement.left||movement.right||Math.abs(joystick.nx)>0.1||Math.abs(joystick.ny)>0.1;
+  if(moving||!isGameActive){ _autoWalk=null; return; }
+  if(isPaused||uiModalOpen) return;
+  const a=_autoWalk; a.t=Math.min(1,a.t+delta*a.speed/a.len);
+  const p=a.curve.getPointAt(a.t), ahead=a.curve.getPointAt(Math.min(1,a.t+0.04));
+  camera.position.set(p.x,PLAYER_HEIGHT,p.z);
+  if(a.t<0.995){
+    const yaw=Math.atan2(-(ahead.x-p.x),-(ahead.z-p.z));
+    const cur=isMobile?mobileYaw:camera.rotation.y;
+    const ny=_lerpAngle(cur,yaw,Math.min(1,delta*3));
+    if(isMobile){ mobileYaw=ny; } else { camera.rotation.order='YXZ'; camera.rotation.set(camera.rotation.x*0.95,ny,0); }
+  }
+  if(a.t>=1){ _autoWalk=null; showToast('✈ ¡Bienvenido a bordo! Tu asiento es el 14C.'); }
+}
+function updateGate(delta){
+  gateFlaps.forEach(h=>{ const target=-gateFlapTarget*h.userData.side*1.45; /* se abren hacia el lado del avión */ h.rotation.y+=(target-h.rotation.y)*Math.min(1,delta*3); });
+  // Las hojas se cierran solas cuando la persona ya cruzó (o se alejó)
+  if(gateFlapTarget&&!_autoWalk&&!uiModalOpen&&camera.position.z<GATE.z-6) { gateFlapTarget=0; if(gateLed) gateLed.material.emissive.setHex(0xff4d4d); }
+}
+
 // ─── FASE 37: PUNTOS DE INTERACCIÓN (check-in y kiosko) ─────
 // Exposición guiada a micro-situaciones reales: entregar documentos en el
 // mostrador y elegir algo para tomar en la sala de espera. Al acercarse
@@ -776,10 +1000,9 @@ function _setCheckinLamp(state){
   else if(state==='verifying'){ m.emissive.setHex(0xf2c14e); }
   else { m.emissive.setHex(0x5ba4d4); m.emissiveIntensity=0.9; }
 }
-function _pickFlight(){
-  const list=(window.AeroFlights&&AeroFlights.departures())||[];
-  return list.find(f=>f.status==='A TIEMPO')||list[0]||{code:'AC 0101',dest:'MADRID',time:'10:40',gate:'A12'};
-}
+// El viaje del recorrido: el mismo vuelo en el check-in, en el gate A7 y a bordo
+const TRIP_FLIGHT={code:'IB 3421',dest:'MADRID',time:'08:15',gate:'A7'};
+function _pickFlight(){ return TRIP_FLIGHT; }
 function openCheckinModal(){
   const f=_pickFlight();
   const set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
@@ -859,6 +1082,9 @@ function setupInteractionUI(){
   on('btn-close-checkin',()=>{ clearTimeout(_checkinTimer); if(checkinState==='verifying') _setCheckinLamp('idle'); closeUiModal('checkin-modal'); });
   on('btn-close-kiosk',()=>closeUiModal('kiosk-modal'));
   on('btn-close-office',()=>closeUiModal('office-modal'));
+  on('btn-gate-scan',scanBoardingPass);
+  on('btn-gate-walk',walkToAircraft);
+  on('btn-close-gate',()=>{ clearTimeout(_gateTimer); closeUiModal('gate-modal'); });
   on('btn-close-reviews',()=>closeUiModal('reviews-modal'));
   on('btn-close-donation',()=>closeUiModal('donation-modal'));
   on('btn-donation-copy',copyDonationAlias);
@@ -885,6 +1111,7 @@ function setupInteractionUI(){
     if(!document.getElementById('checkin-modal').classList.contains('hidden')) document.getElementById('btn-close-checkin').click();
     else if(!document.getElementById('kiosk-modal').classList.contains('hidden')) closeUiModal('kiosk-modal');
     else if(!document.getElementById('office-modal').classList.contains('hidden')) closeUiModal('office-modal');
+    else if(!document.getElementById('gate-modal').classList.contains('hidden')){ clearTimeout(_gateTimer); closeUiModal('gate-modal'); }
     else if(!document.getElementById('reviews-modal').classList.contains('hidden')) closeUiModal('reviews-modal');
     else if(!document.getElementById('donation-modal').classList.contains('hidden')) closeUiModal('donation-modal');
     else if(!document.getElementById('cafe-modal').classList.contains('hidden')){ clearTimeout(_cafeTimer); closeUiModal('cafe-modal'); }
@@ -895,7 +1122,7 @@ function setupInteractionUI(){
   document.addEventListener('click',e=>{
     const b=e.target.closest&&e.target.closest('button');
     if(!b||b.disabled) return;
-    if(['btn-checkin-hand','btn-cafe-sip','btn-mate-fill'].includes(b.id)||b.classList.contains('kiosk-item')) return; // tienen su propio sonido
+    if(['btn-checkin-hand','btn-cafe-sip','btn-mate-fill','btn-gate-scan'].includes(b.id)||b.classList.contains('kiosk-item')) return; // tienen su propio sonido
     playUiTone(b.classList.contains('btn-primary')?'confirm':'tap');
   },true);
 }
@@ -1597,7 +1824,7 @@ function optimizeSceneResources(){
 const TRANSIT={
   stripWidth:1.6,
   stripFromZ:50,        // frente a la entrada
-  stripToZ:-31,         // puerta de embarque (antes del avión)
+  stripToZ:-21.4,       // hasta el gate A7 (desde ahí sigue la manga)
   corridorHalfWidth:2.4,// postes a ±2.4 m del eje → pasillo de 4.8 m
   postSpacing:2.2,
   ringClearance:5.4,    // sin postes dentro del radio de las zonas (anillo r=4.8)
@@ -2042,7 +2269,8 @@ function buildLounge(){
   const x=0,z=-10;
   zoneHeader(x,z+7,'🛋  SALA DE EMBARQUE  ·  DEPARTURE LOUNGE',0x10b981);
   // Seating
-  [[-10,-13],[0,-13],[10,-13],[-10,-9],[10,-9]].forEach(([dx,dz])=>{
+  // (el grupo central se quitó: tapaba el paso hacia la puerta de embarque)
+  [[-10,-6],[10,-6],[-10,-9],[10,-9]].forEach(([dx,dz])=>{
     for(let i=0;i<4;i++){
       const sx=x+dx+i*1.45,sz=z+dz;
       box(sx,0,sz,1.25,0.45,1.1,0x374151);
@@ -2076,28 +2304,6 @@ function buildLounge(){
 }
 
 // ─── BOARDING ────────────────────────────────────
-function buildBoarding(){
-  const x=0,z=-28;
-  zoneHeader(x,z+8,'✈  EMBARQUE  ·  BOARDING  ·  GATE A7',0xef4444);
-  // Gate frame
-  box(x,0,z+5,12,6.5,0.4,0x2d4a63);
-  const gm=mkMat(0x88c8e8,{transparent:true,opacity:0.4});
-  const gd=new THREE.Mesh(mkBox(5,5.8,0.1),gm); gd.position.set(x-2.5,3,z+4.9); scene.add(gd);
-  const gd2=new THREE.Mesh(mkBox(5,5.8,0.1),gm.clone()); gd2.position.set(x+2.5,3,z+4.9); scene.add(gd2);
-  // Scanner kiosk
-  box(x,0,z+3,0.9,1.6,0.55,0x374151);
-  const st=tex(128,192,(ctx)=>{ ctx.fillStyle='#0a1628'; ctx.fillRect(0,0,128,192); ctx.fillStyle='#00cc44'; ctx.fillRect(8,8,112,80); ctx.fillStyle='#fff'; ctx.font='bold 14px Arial'; ctx.textAlign='center'; ctx.fillText('BOARDING PASS',64,35); ctx.fillText('SCAN HERE',64,58); ctx.fillStyle='#1a4032'; ctx.fillRect(8,95,112,60); ctx.fillStyle='#4ecdc4'; ctx.font='bold 20px Arial'; ctx.fillText('✓ GATE A7',64,130); ctx.font='14px Arial'; ctx.fillStyle='#888'; ctx.fillText('Madrid · IB3421',64,165); });
-  sign(x,1.2,z+2.73,0.75,1.2,0.05,st,0,0x002200);
-  // Queue barriers
-  for(let i=-4;i<=4;i+=2){ box(x+i,0,z+1,0.12,1.1,0.12,0xcc9933); if(i<4) box(x+i+1,0.55,z+1,2,0.06,0.06,0xcc9933,false); }
-  // Gate info screen
-  const gt=tex(512,256,(ctx)=>{ ctx.fillStyle='#0a1628'; ctx.fillRect(0,0,512,256); ctx.fillStyle='#4a9eff'; ctx.font='bold 28px Arial'; ctx.textAlign='center'; ctx.fillText('IB 3421 · MADRID',256,48); ctx.strokeStyle='#4a9eff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(40,62); ctx.lineTo(472,62); ctx.stroke(); ctx.fillStyle='#fff'; ctx.font='22px Arial'; ctx.fillText('Salida · 08:15',256,100); ctx.fillText('Embarque · 07:45',256,135); ctx.fillStyle='#4ecdc4'; ctx.font='bold 36px Arial'; ctx.fillText('✓ EMBARQUE EN CURSO',256,200); });
-  sign(x+9,6,z+5,5.5,2.5,0.1,gt,0,0x001122);
-  // Finger/jetway
-  box(x-8,0,z+8,5.5,3.8,7,0x607d8b,false,false);
-  box(x-14,0,z+11,5.5,3.8,13,0x607d8b,false,false);
-}
-
 // ─── PLANE ── Cabina realista con cockpit ─────────
 // ══════════════════════════════════════════════════
 // F34 -- CABINA DE PASAJEROS (Fase 2: "El Vuelo")
@@ -2126,7 +2332,7 @@ const CABIN={
   exitExtra:0.45,
   seatW:0.5,
   aisleHalf:0.56,    // pasillo de 1.12 m
-  binZ0:-32.9, binZ1:-60.3,
+  binZ0:-34.45, binZ1:-60.3,   // empiezan detrás de la puerta delantera
   winY:1.35,         // centro de ventanilla (≈ altura de ojos sentado)
 };
 let cabinSky=null;   // {left:Texture, right:Texture} -- se anima en animate()
@@ -2154,7 +2360,7 @@ function _cabinInstanced(geo,mat,matrices,recv=true){
 
 function buildPlane(){
   const x=CABIN.x, z=-46;
-  zoneHeader(x,z+16,'🛫  INTERIOR DEL AVIÓN  ·  ON BOARD',0x6366f1);
+  zoneHeader(x,z+9,'🛫  INTERIOR DEL AVIÓN  ·  ON BOARD',0x6366f1); // sobre la cabina, no sobre el gate
   const rows=_cabinRowsZ();
   _cabinShell();
   _cabinFloor();
@@ -2163,7 +2369,8 @@ function buildPlane(){
   _cabinWindows(rows);
   _cabinBulkheads();
   _cabinLighting();
-  buildCockpit(x,z);
+  _cabinDoorFrame();     // FASE 43: puerta delantera izquierda
+  buildAircraftNose();   // FASE 43: nariz real con cockpit compacto
 }
 
 function _cabinRowsZ(){
@@ -2186,12 +2393,24 @@ function _cabinShell(){
   s.lineTo(R*Math.cos(a1), cy+R*Math.sin(a1));
   s.absarc(0,cy,R,a1,a0,true);                         // interior de vuelta
   s.closePath();
-  const geo=new THREE.ExtrudeGeometry(s,{depth:zFront-zRear,bevelEnabled:false,curveSegments:72});
+  // Tramo con la puerta delantera izquierda: el anillo se corta desde el piso
+  // hasta la altura del vano (del lado x<0)
+  const top=PLANE_DOOR.top;
+  const bo=Math.PI-Math.asin((top-cy)/Ro), bi=Math.PI-Math.asin((top-cy)/R);
+  const sd=new THREE.Shape();
+  sd.moveTo(Ro*Math.cos(b0), cy+Ro*Math.sin(b0));
+  sd.absarc(0,cy,Ro,b0,bo,false);
+  sd.lineTo(R*Math.cos(bi), cy+R*Math.sin(bi));
+  sd.absarc(0,cy,R,bi,a0,true);
+  sd.closePath();
   // Forro interior marfil cálido (mate) -- mismo tono por fuera
   const lining=mkStd(0xf1ece3,0.6,0.0);
-  const m=new THREE.Mesh(geo,lining);
-  m.position.set(x,0,zRear); m.castShadow=true; m.receiveShadow=true;
-  scene.add(m);
+  [[s,zRear,PLANE_DOOR.z1],[sd,PLANE_DOOR.z1,PLANE_DOOR.z0],[s,PLANE_DOOR.z0,zFront]].forEach(([shape,za,zb])=>{
+    const geo=new THREE.ExtrudeGeometry(shape,{depth:zb-za,bevelEnabled:false,curveSegments:72});
+    const m=new THREE.Mesh(geo,lining);
+    m.position.set(x,0,za); m.castShadow=true; m.receiveShadow=true;
+    scene.add(m);
+  });
 
   // Zócalo inferior (panel de pared bajo las ventanillas, tono más cálido)
   const dadoH=0.55;
@@ -2199,11 +2418,12 @@ function _cabinShell(){
   const ya=floorY, yb=floorY+dadoH;
   dado.moveTo(_cabinHalf(ya)-0.005,ya); dado.lineTo(_cabinHalf(yb)-0.005,yb);
   dado.lineTo(_cabinHalf(yb)-0.035,yb); dado.lineTo(_cabinHalf(ya)-0.035,ya); dado.closePath();
-  const dg=new THREE.ExtrudeGeometry(dado,{depth:zFront-zRear-0.2,bevelEnabled:false});
   const dm=mkStd(0xd9d0c2,0.75,0.0);
-  [1,-1].forEach(sd=>{
+  // Lado derecho entero; el izquierdo se corta en el vano de la puerta
+  [[1,zRear+0.1,zFront-0.1],[-1,zRear+0.1,PLANE_DOOR.z1],[-1,PLANE_DOOR.z0,zFront-0.1]].forEach(([sd,za,zb])=>{
+    const dg=new THREE.ExtrudeGeometry(dado,{depth:zb-za,bevelEnabled:false});
     // Escala negativa = espejo: Three.js invierte el orden de caras solo
-    const d=new THREE.Mesh(dg,dm); d.scale.x=sd; d.position.set(x,0,zRear+0.1);
+    const d=new THREE.Mesh(dg,dm); d.scale.x=sd; d.position.set(x,0,za);
     d.receiveShadow=true; scene.add(d);
   });
 }
@@ -2559,226 +2779,6 @@ function _cabinLighting(){
 }
 
 // ─── COCKPIT ─────────────────────────────────────
-function buildCockpit(x, passengerZ){
-  const cz=passengerZ+17.5; // delante de la cabina
-
-  // Fuselaje del cockpit
-  const ckFuse=new THREE.Mesh(mkBox(18,8,7),mkStd(0x1a1e28,0.6,0.0));
-  ckFuse.position.set(x,4,cz); scene.add(ckFuse);
-
-  // Techo del cockpit
-  const ckCeil=new THREE.Mesh(mkBox(17.5,0.2,6.8),mkStd(0xe0dcd0,0.7,0.0));
-  ckCeil.position.set(x,8.1,cz); scene.add(ckCeil);
-
-  // Suelo del cockpit
-  const ckFloor=new THREE.Mesh(mkBox(17.5,0.15,6.8),mkStd(0x2a2830,0.8,0.0));
-  ckFloor.position.set(x,0.08,cz); scene.add(ckFloor);
-
-  // Pared divisoria (puerta de cockpit)
-  box(x,0,passengerZ+14,18,8,0.35,0x2a3040);
-  // Puerta -- más pequeña y oscura
-  const doorMat=mkStd(0x1a2235,0.5,0.1);
-  const door=new THREE.Mesh(mkBox(1.1,5.5,0.38),doorMat);
-  door.position.set(x+1.5,2.85,passengerZ+14.1); scene.add(door);
-  // Marco de puerta
-  const dFrame=new THREE.Mesh(mkBox(1.25,5.7,0.32),mkStd(0x333844,0.4,0.1));
-  dFrame.position.set(x+1.5,2.95,passengerZ+14.05); scene.add(dFrame);
-  // Mirilla
-  const peephole=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,0.5,8),mkStd(0x888890,0.2,0.5));
-  peephole.rotation.z=Math.PI/2; peephole.position.set(x+2.1,4.2,passengerZ+14.1); scene.add(peephole);
-
-  // ── WINDSHIELD (parabrisas)
-  const windshieldMat=new THREE.MeshStandardMaterial({
-    color:0x88bfe8, transparent:true, opacity:0.38,
-    roughness:0.05, metalness:0.05
-  });
-  // Vista exterior desde parabrisas (cielo de día)
-  const wsViewT=tex(512,256,(ctx)=>{
-    const g=ctx.createLinearGradient(0,0,0,256);
-    g.addColorStop(0,'#1a4a88'); g.addColorStop(0.5,'#4488cc');
-    g.addColorStop(0.85,'#88bbee'); g.addColorStop(1,'#d8eef8');
-    ctx.fillStyle=g; ctx.fillRect(0,0,512,256);
-    // Nubes desde la altura de crucero
-    ctx.fillStyle='rgba(255,255,255,0.9)';
-    [[80,180,90,22],[220,195,110,18],[380,185,80,20],[120,200,60,15],[300,205,70,14]].forEach(
-      ([cx,cy,rx,ry])=>{ ctx.beginPath(); ctx.ellipse(cx,cy,rx,ry,0,0,Math.PI*2); ctx.fill(); }
-    );
-    // Horizonte
-    ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(0,175); ctx.lineTo(512,172); ctx.stroke();
-  });
-  const wsView=new THREE.Mesh(mkBox(14,3.5,0.1),new THREE.MeshStandardMaterial({map:wsViewT,roughness:0.05}));
-  wsView.position.set(x,5.8,cz+3.4); scene.add(wsView);
-  // Panel de parabrisas (2 secciones)
-  [-4.5,4.5].forEach(px=>{
-    const ws=new THREE.Mesh(mkBox(6.5,3.2,0.12),windshieldMat);
-    ws.position.set(x+px,5.5,cz+3.3); ws.rotation.x=0.12; scene.add(ws);
-    // Marcos del parabrisas
-    box(x+px,3.9,cz+3.25,6.7,0.2,0.15,0x1a1e28,false,false);
-    box(x+px,7.15,cz+3.2,6.7,0.2,0.15,0x1a1e28,false,false);
-  });
-  // División central del parabrisas
-  box(x,3.9,cz+3.2,0.35,3.5,0.15,0x1a1e28,false,false);
-
-  // ── PANEL DE INSTRUMENTOS (MIP)
-  const cockpitPanelMat=mkStd(0x14181e,0.4,0.1);
-  // Panel principal
-  const mip=new THREE.Mesh(mkBox(16,3.5,1.5),cockpitPanelMat);
-  mip.position.set(x,3.5,cz+2.5); mip.rotation.x=-0.15; scene.add(mip);
-
-  // Pantallas de navegación (EFIS)
-  const navT=tex(256,256,(ctx)=>{
-    ctx.fillStyle='#000a0f'; ctx.fillRect(0,0,256,256);
-    // Artificial horizon
-    ctx.fillStyle='#1a5599'; ctx.fillRect(0,0,256,128);
-    ctx.fillStyle='#5a3a1a'; ctx.fillRect(0,128,256,128);
-    // Línea de horizonte
-    ctx.strokeStyle='#fff'; ctx.lineWidth=3;
-    ctx.beginPath(); ctx.moveTo(30,128); ctx.lineTo(226,128); ctx.stroke();
-    // Marcas de altitud
-    ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.font='bold 11px monospace'; ctx.textAlign='right';
-    ['10.668m','10.642m','10.616m'].forEach((h,i)=>ctx.fillText(h,248,50+i*28));
-    // Cruz central
-    ctx.strokeStyle='#ff8800'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(103,128); ctx.lineTo(153,128); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(128,113); ctx.lineTo(128,143); ctx.stroke();
-    // Velocidad
-    ctx.fillStyle='#22ff44'; ctx.font='bold 20px monospace'; ctx.textAlign='center';
-    ctx.fillText('872 km/h',128,220);
-    ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='9px monospace';
-    ctx.fillText('AIRSPEED',128,235);
-  });
-  [[-5.5,3.8,cz+1.9],[5.5,3.8,cz+1.9],[0,3.8,cz+1.85]].forEach(([px,py,pz])=>{
-    const scr=new THREE.Mesh(mkBox(2.8,2.0,0.08),new THREE.MeshStandardMaterial({
-      map:navT,emissive:0x001a10,emissiveIntensity:0.5,roughness:0.1
-    }));
-    scr.position.set(px,py,pz); scr.rotation.x=-0.2; scene.add(scr);
-    const scrLight=new THREE.PointLight(0x22ff88,0.2,1.5); scrLight.position.set(px,py-0.4,pz-0.2); scene.add(scrLight);
-  });
-
-  // Panel central (FCU -- Flight Control Unit)
-  const fcuT=tex(256,128,(ctx)=>{
-    ctx.fillStyle='#0d1118'; ctx.fillRect(0,0,256,128);
-    ctx.fillStyle='#1a8822'; ctx.font='bold 14px monospace'; ctx.textAlign='center';
-    ctx.fillText('FCU · AUTOPILOT',128,22);
-    [['HDG','280'],['ALT','10668'],['SPD','870'],['V/S','0']].forEach(([l,v],i)=>{
-      const bx=20+i*58;
-      ctx.fillStyle='#0a1a10'; ctx.fillRect(bx,35,52,55);
-      ctx.fillStyle='#22ff44'; ctx.font='bold 13px monospace'; ctx.textAlign='center';
-      ctx.fillText(v,bx+26,62);
-      ctx.fillStyle='rgba(255,255,255,0.5)'; ctx.font='8px Arial';
-      ctx.fillText(l,bx+26,78);
-    });
-  });
-  const fcu=new THREE.Mesh(mkBox(10,1.2,0.8),new THREE.MeshStandardMaterial({
-    map:fcuT,emissive:0x001a08,emissiveIntensity:0.4,roughness:0.2
-  }));
-  fcu.position.set(x,5.5,cz+1.2); scene.add(fcu);
-
-  // Overhead panel (arriba -- interruptores)
-  const overheadT=tex(512,256,(ctx)=>{
-    ctx.fillStyle='#0f1218'; ctx.fillRect(0,0,512,256);
-    const systems=['FUEL','ELEC','HYD','PRESS','FIRE','APU','LIGHTS','AC'];
-    systems.forEach((s,i)=>{
-      const bx=10+i*62; const active=i!==4;
-      ctx.fillStyle=active?'#1a2a18':'#2a1010'; ctx.fillRect(bx,20,54,80);
-      ctx.fillStyle=active?'#22dd44':'#dd2222'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
-      ctx.fillText(active?'ON':'OFF',bx+27,54);
-      ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.font='7px Arial'; ctx.fillText(s,bx+27,95);
-      // Luz indicadora
-      ctx.fillStyle=active?'#00ff44':'#ff3300';
-      ctx.beginPath(); ctx.arc(bx+27,32,5,0,Math.PI*2); ctx.fill();
-    });
-    ctx.fillStyle='rgba(255,255,255,0.15)'; ctx.font='9px monospace'; ctx.textAlign='left';
-    ctx.fillText('BOEING 737-800 · IB3421 · OVERHEAD PANEL',10,240);
-  });
-  const overhead=new THREE.Mesh(mkBox(16,2.0,1.5),new THREE.MeshStandardMaterial({
-    map:overheadT,emissive:0x001808,emissiveIntensity:0.3,roughness:0.3
-  }));
-  overhead.position.set(x,7.7,cz); overhead.rotation.x=Math.PI/2; scene.add(overhead);
-  // Luz ambiental del overhead
-  const oLight=new THREE.PointLight(0x22ff44,0.3,4); oLight.position.set(x,7.2,cz); scene.add(oLight);
-
-  // ── ASIENTOS DEL PILOTO
-  const pilotSeatMat=mkStd(0x1a1a22,0.6,0.05);
-  [-3.5,3.5].forEach(px=>{
-    // Base del asiento
-    const seatBase=new THREE.Mesh(mkBox(0.85,0.15,0.9),pilotSeatMat);
-    seatBase.position.set(x+px,0.5,cz+0.5); scene.add(seatBase);
-    // Cojín
-    const cushion=new THREE.Mesh(mkBox(0.82,0.15,0.88),mkStd(0x0a0a14,0.7,0));
-    cushion.position.set(x+px,0.6,cz+0.5); scene.add(cushion);
-    // Respaldo
-    const back=new THREE.Mesh(mkBox(0.85,1.15,0.14),pilotSeatMat);
-    back.position.set(x+px,1.25,cz+0.95); scene.add(back);
-    // Cabecera
-    const hrest=new THREE.Mesh(mkBox(0.82,0.3,0.12),pilotSeatMat);
-    hrest.position.set(x+px,1.95,cz+0.92); scene.add(hrest);
-    // Apoyabrazos
-    [-0.44,0.44].forEach(ax=>{
-      const arm=new THREE.Mesh(mkBox(0.08,0.06,0.65),mkStd(0x222226,0.4,0.1));
-      arm.position.set(x+px+ax,0.73,cz+0.5); scene.add(arm);
-    });
-    // Pedales
-    [-0.2,0.2].forEach(fx=>{
-      const pedal=new THREE.Mesh(mkBox(0.18,0.04,0.22),mkStd(0x333338,0.5,0.1));
-      pedal.position.set(x+px+fx,0.22,cz+2.8); scene.add(pedal);
-    });
-  });
-
-  // ── YOKES (columnas de control) -- izquierda y derecha
-  [-3.5,3.5].forEach(px=>{
-    // Columna
-    cyl(x+px,0,cz+1.8,0.07,0.07,0.8,8,0x333338);
-    // Semicírculo del yoke (forma de U)
-    const yokeMat=mkStd(0x2a2a32,0.4,0.1);
-    const yokeMain=new THREE.Mesh(mkBox(0.7,0.12,0.06),yokeMat);
-    yokeMain.position.set(x+px,0.88,cz+1.8); scene.add(yokeMain);
-    [-0.35,0.35].forEach(yx=>{
-      const ykArm=new THREE.Mesh(mkBox(0.08,0.28,0.06),yokeMat);
-      ykArm.position.set(x+px+yx,0.98,cz+1.8); scene.add(ykArm);
-    });
-    // Botones en el yoke
-    [[0,0x0055ff],[0.3,0x00aa22],[-0.3,0xff4400]].forEach(([bx,c])=>{
-      const btn=new THREE.Mesh(mkBox(0.06,0.05,0.04),mkStd(c,0.3,0.1,{emissive:c,emissiveIntensity:0.4}));
-      btn.position.set(x+px+bx,0.93,cz+1.77); scene.add(btn);
-    });
-  });
-
-  // Consola central (throttle quadrant)
-  const consoleMat=mkStd(0x111318,0.4,0.1);
-  const console_=new THREE.Mesh(mkBox(1.4,1.0,2.5),consoleMat);
-  console_.position.set(x,0.8,cz+1.5); scene.add(console_);
-  // Palancas de gas (throttle)
-  [-0.3,0.3].forEach(tx=>{
-    const throttle=new THREE.Mesh(mkBox(0.18,0.6,0.12),mkStd(0x222226,0.3,0.2));
-    throttle.position.set(x+tx,1.55,cz+1.2); scene.add(throttle);
-    // Grip de la palanca
-    const grip=new THREE.Mesh(mkBox(0.22,0.22,0.16),mkStd(0x1a1a22,0.4,0.1));
-    grip.position.set(x+tx,1.88,cz+1.22); scene.add(grip);
-  });
-  // Indicadores de la consola central
-  const consoleT=tex(128,256,(ctx)=>{
-    ctx.fillStyle='#090c10'; ctx.fillRect(0,0,128,256);
-    [['FLAPS','0'],['SPEED BRK','ARM'],['PARK BRK','OFF'],['ENG 1','87%'],['ENG 2','87%']].forEach(([l,v],i)=>{
-      ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(8,12+i*46,112,40);
-      ctx.fillStyle='#22dd44'; ctx.font='bold 12px monospace'; ctx.textAlign='center'; ctx.fillText(v,64,36+i*46);
-      ctx.fillStyle='rgba(255,255,255,0.45)'; ctx.font='8px Arial'; ctx.fillText(l,64,48+i*46);
-    });
-  });
-  sign(x,1.35,cz+1.5,1.2,0.9,0.06,consoleT,0,0x001008);
-
-  // ── ILUMINACIÓN del cockpit
-  const ckLight1=new THREE.PointLight(0xfff5e8,0.7,6); ckLight1.position.set(x,6.5,cz); scene.add(ckLight1);
-  const ckLight2=new THREE.PointLight(0x8855ff,0.2,4); ckLight2.position.set(x,7,cz+2); scene.add(ckLight2);
-  // Luces rojas de emergencia
-  [-6,6].forEach(px=>{
-    const el=new THREE.PointLight(0xff1100,0.15,2.5); el.position.set(x+px,7.5,cz); scene.add(el);
-    const elv=new THREE.Mesh(mkBox(0.12,0.12,0.12),mkStd(0xff1100,0.2,0.1,{emissive:0xff0000,emissiveIntensity:0.8}));
-    elv.position.set(x+px,7.7,cz); scene.add(elv);
-  });
-}
-
 // ─── ARRIVAL ─────────────────────────────────────
 function buildArrival(){
   const x=0,z=-62;
@@ -4717,7 +4717,7 @@ function loadCabinCrew(){
   // Intentar cargar pilot.glb; en error -> fallback completo
   tryLoad('assets/pilot.glb', (model)=>{
     model.position.set(-3.8,0,-28.8); model.rotation.y=Math.PI;
-    tryLoad('assets/attendant.glb', (m2)=>{ m2.position.set(0.55,0,-33.9); m2.rotation.y=-0.25; });
+    tryLoad('assets/attendant.glb', (m2)=>{ m2.position.set(-0.55,0,-32.85); m2.rotation.y=-Math.PI*0.42; });
   });
   // Si ningún archivo existe, spawnCabinCrewFallback se llama automáticamente
 }
@@ -4726,10 +4726,10 @@ function spawnCabinCrewFallback(){
   // ── COMANDANTE -- sentado en asiento izquierdo del cockpit
   // El cockpit está en z ≈ -46 + 17.5 = -28.5; piloto en asiento izquierdo
   const pilot1=buildPilotDetailed(SKINS[0], HAIRS[6]);
-  pilot1.position.set(-3.8, 0, -28.8);
-  pilot1.rotation.y=Math.PI;   // mirando hacia los instrumentos (hacia z-)
+  pilot1.position.set(-0.62, 0.05, -29.95);
+  pilot1.rotation.y=0;         // mirando a los instrumentos (hacia la nariz, +z)
   pilot1.userData.isNPC=true; pilot1.userData.isStaff=true;
-  pilot1.userData.role='pilot'; pilot1.userData.baseRotY=Math.PI;
+  pilot1.userData.role='pilot'; pilot1.userData.baseRotY=0;
   pilot1.userData.idlePhase=0; pilot1.userData.headGroup=pilot1.userData.headGroup;
   // Recuperar headGroup si existe
   pilot1.traverse(c=>{ if(c.userData&&c.userData.isHead) pilot1.userData.headGroup=c; });
@@ -4737,18 +4737,18 @@ function spawnCabinCrewFallback(){
 
   // ── COPILOTO -- asiento derecho del cockpit
   const pilot2=buildPilotDetailed(SKINS[2], HAIRS[3]);
-  pilot2.position.set(3.8, 0, -28.8);
-  pilot2.rotation.y=Math.PI;
+  pilot2.position.set(0.62, 0.05, -29.95);
+  pilot2.rotation.y=0;
   pilot2.userData.isNPC=true; pilot2.userData.isStaff=true;
-  pilot2.userData.role='pilot'; pilot2.userData.baseRotY=Math.PI;
+  pilot2.userData.role='pilot'; pilot2.userData.baseRotY=0;
   pilot2.userData.idlePhase=1.1;
   pilot2.traverse(c=>{ if(c.userData&&c.userData.isHead) pilot2.userData.headGroup=c; });
   npcs.push(pilot2); scene.add(pilot2);
 
   // ── AUXILIAR 1 (femenina) -- al inicio del pasillo con carrito
   const att1=buildAttendantDetailed(SKINS[3], HAIRS[1], 'female');
-  att1.position.set(0.55, 0, -33.9);  // zona de entrada, delante de la fila 1
-  att1.rotation.y=-Math.PI*0.08; // ligeramente girada hacia el pasillo
+  att1.position.set(-0.55, 0, -32.85); // recibe a los pasajeros en la puerta L1
+  att1.rotation.y=-Math.PI*0.42;      // mirando hacia la puerta (lado izquierdo)
   att1.userData.isNPC=true; att1.userData.isStaff=true;
   att1.userData.role='attendant'; att1.userData.baseRotY=att1.rotation.y;
   att1.userData.idlePhase=0.5;
@@ -4757,7 +4757,7 @@ function spawnCabinCrewFallback(){
 
   // Carrito de servicio junto a auxiliar 1
   const cart1=buildServiceCart();
-  cart1.position.set(-1.15, 0, -33.6); // junto al galley delantero
+  cart1.position.set(1.2, 0, -33.0);   // galley derecho, fuera del paso de la puerta
   cart1.rotation.y=-Math.PI*0.08;
   scene.add(cart1);
 
@@ -6374,6 +6374,8 @@ function animate(){
   updateCabinSky(delta); // nubes que pasan por las ventanillas del avión
   updateInteractables(delta,t); // FASE 37: avisos de interacción cercana
   updateConsultorio(delta,t);   // FASE 38: puerta y doctor del consultorio
+  updateGate(delta);            // FASE 43: hojas de las puertas automáticas
+  updateAutoWalk(delta);        // FASE 43: caminata guiada por la manga
   updateAmbientChimes(delta);   // avisos sonoros suaves (si el sonido está activo)
   // Tablero de salidas: redibujar cuando cambia algún vuelo o cada 30 s (reloj)
   if(window.AeroFlights && flightBoardTexture && AeroFlights.version()!==_boardVersion){ _boardVersion=AeroFlights.version(); boardTimer=31; }

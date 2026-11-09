@@ -443,6 +443,34 @@
         </div>
     </div>
 
+    <!-- FASE 43: Tótem de embarque (Gate A7) -->
+    <div id="gate-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="gate-title">
+        <div class="interact-box">
+            <button id="btn-close-gate" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">🎫 Puerta A7 · Embarque</p>
+            <h2 id="gate-title">Escaneá tu tarjeta de embarque</h2>
+            <p class="ib-agent">«Acercá el código de tu tarjeta al lector. Las puertas se abren solas.»</p>
+            <div class="bp-card gate-bp">
+                <div class="bp-head"><span>✈ TARJETA DE EMBARQUE</span><span>BOARDING PASS</span></div>
+                <div class="bp-grid">
+                    <div><small>Pasajero/a</small><b>VIAJERO/A AEROCALMA</b></div>
+                    <div><small>Vuelo</small><b id="gate-bp-flight">--</b></div>
+                    <div><small>Destino</small><b id="gate-bp-dest">--</b></div>
+                    <div><small>Puerta</small><b>A7</b></div>
+                    <div><small>Grupo</small><b>2</b></div>
+                    <div><small>Asiento</small><b>14C</b></div>
+                    <div><small>Embarque</small><b>Ahora</b></div>
+                </div>
+                <div class="bp-barcode" aria-hidden="true"></div>
+            </div>
+            <div id="gate-status" class="ib-status" aria-live="polite"></div>
+            <div class="ib-actions">
+                <button id="btn-gate-scan" class="btn-primary" type="button">Escanear tarjeta</button>
+                <button id="btn-gate-walk" class="btn-primary hidden" type="button">Caminar hacia el avión →</button>
+            </div>
+        </div>
+    </div>
+
     <div id="breathing-modal" class="overlay-dark hidden">
         <div class="breathing-box">
             <button id="btn-close-breath" class="close-btn">✕</button>
