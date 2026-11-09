@@ -13,3 +13,5 @@ dist/
 build/
 *.exe
 *.cache
+# Grabaciones originales (el juego usa las versiones procesadas en audios/voz y audios/altoparlantes)
+audios/*.m4a

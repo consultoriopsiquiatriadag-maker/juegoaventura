@@ -1013,8 +1013,9 @@ function coldWaterFace(){
   ov.classList.remove('hidden'); requestAnimationFrame(()=>ov.classList.add('show'));
   uiModalOpen=true; releaseMovementKeys();
   playWaterSplash();
+  setTimeout(()=>playVoice('agua-fria'),700);
   logInteraction('baño','agua-fria');
-  clearTimeout(ov._t); ov._t=setTimeout(()=>{ ov.classList.remove('show'); setTimeout(()=>{ ov.classList.add('hidden'); uiModalOpen=false; },900); },calmMode?9000:7500);
+  clearTimeout(ov._t); ov._t=setTimeout(()=>{ ov.classList.remove('show'); setTimeout(()=>{ ov.classList.add('hidden'); uiModalOpen=false; },900); },calmMode?11000:9800);
 }
 function playWaterSplash(){
   const out=_uiOut(); if(!out) return;
@@ -1443,6 +1444,7 @@ function buildConsultorio(){
 
 function openConsultorio(){
   officeDoorTarget=-1.55;                            // abre la puerta
+  setTimeout(()=>playVoice('consultorio'),500);       // FASE 45: saludo del doctor
   const a=document.getElementById('btn-office-whatsapp');
   if(a) a.href='https://wa.me/'+CONSULTORIO_WHATSAPP+'?text='+encodeURIComponent(CONSULTORIO_MSG);
   // Primero se ve la puerta abrirse y al doctor; después el panel
@@ -1506,6 +1508,7 @@ function openCafeModal(){
   const b=document.getElementById('btn-cafe-sip'); b.disabled=false; b.textContent='Tomar un sorbo'; b.classList.remove('hidden');
   document.getElementById('btn-cafe-done').classList.add('hidden');
   openUiModal('cafe-modal');
+  playVoice('cafe');
 }
 function cafeSip(){
   const b=document.getElementById('btn-cafe-sip');
@@ -5657,6 +5660,8 @@ function startGame(){
   document.getElementById('game-hud').classList.remove('hidden');
   isGameActive=true; isPaused=false; currentZoneIndex=-1;
   visitedZones.clear(); breathCount=0;
+  _unlockVoice();                                         // FASE 45: habilita la voz grabada (gesto del usuario)
+  _paNext=['AP01-bienvenida']; _paBag={}; _chimeTimer=12;  // primer anuncio: bienvenida
   document.getElementById('breath-count-stat').textContent='0';
   // Inicio: centro del pasillo, justo antes de la zona de check-in (entrega de
   // equipaje), mirando hacia los mostradores. La Entrada queda como etapa
@@ -5685,8 +5690,8 @@ function startGame(){
   applyCalmModeState(); // Fase 9: sincroniza visual/NPCs con calmMode al iniciar
   resumeAmbientAudioIfEnabled();
 }
-function pauseGame(){ isPaused=true; if(!isMobile)controls.unlock(); document.getElementById('pause-menu').classList.remove('hidden'); suspendAmbientAudio(); }
-function resumeGame(){ isPaused=false; document.getElementById('pause-menu').classList.add('hidden'); if(!isMobile)controls.lock(); resumeAmbientAudioIfEnabled(); }
+function pauseGame(){ isPaused=true; if(!isMobile)controls.unlock(); document.getElementById('pause-menu').classList.remove('hidden'); suspendAmbientAudio(); _voicePause(true); }
+function resumeGame(){ isPaused=false; document.getElementById('pause-menu').classList.add('hidden'); if(!isMobile)controls.lock(); resumeAmbientAudioIfEnabled(); _voicePause(false); }
 function returnToMenu(){ isGameActive=false; isPaused=false; stopSpeech(); stopAmbientAudio(); if(!isMobile)controls.unlock(); closeZonePanel(); closeGrounding(); closeBreathing(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('pause-menu').classList.add('hidden'); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); showScreen('main-menu'); startMenuAnimation(); updateDiaryDisplay(); }
 function restartGame(){ showScreen(null); startGame(); }
 function resetProgressUI(){
@@ -5715,6 +5720,11 @@ function enterZone(i){
   currentZoneIndex=i;
   const zone=ZONE_DATA[i];
   if(zone.id==='boarding') _jetTimer=2.5; // al llegar al gate se oye un avión despegando a lo lejos
+  if(!visitedZones.has(i)){                // FASE 45: anuncios que acompañan el recorrido
+    if(zone.id==='lounge') queueAnnouncement('AP05-preembarque',16);
+    else if(zone.id==='boarding') queueAnnouncement('AP06-embarque-grupo-2',14);
+    else if(zone.id==='arrival') queueAnnouncement('AP11-llegada',12);
+  }
   const first=!visitedZones.has(i);
   visitedZones.add(i);
   updateProgress(i);
@@ -5819,7 +5829,7 @@ function endGame(){
   }
 
   showScreen('end-screen');
-  speak('¡Felicitaciones! Completaste el recorrido completo del aeropuerto. Ahora estás más preparado para tu próximo vuelo.');
+  speak('¡Felicitaciones! Completaste todo el recorrido del aeropuerto. Cada paso que diste hoy te prepara para tu próximo vuelo.','felicitaciones');
 }
 
 function openZonePanel(i){
@@ -6112,10 +6122,12 @@ function playAirportChime(){
 function updateAmbientChimes(delta){
   if(!audioEnabled||!isGameActive||isPaused) return;
   _chimeTimer-=delta;
-  if(_chimeTimer<=0){
-    playAirportChime();
-    _chimeTimer=calmMode?150+Math.random()*60:85+Math.random()*35;
-  }
+  if(_chimeTimer>0) return;
+  if(_paBlocked()){ _chimeTimer=6; return; }      // espera a que termine la voz o el ejercicio
+  const ctx=_paContext();
+  if(!ctx){ _paNext=[]; _chimeTimer=20; return; }
+  playAnnouncement(_paPick(ctx));
+  _chimeTimer=calmMode?120+Math.random()*60:55+Math.random()*35;
 }
 
 // Sube/baja suavemente el volumen maestro (evita "clics" perceptibles)
@@ -6203,9 +6215,136 @@ function stopAmbientAudio(){
   }catch(e){}
 }
 
-function narrateZone(i){ if(i>=0&&i<ZONE_DATA.length) speak(ZONE_DATA[i].narration); }
-function narrateCurrentZone(){ if(currentZoneIndex>=0) narrateZone(currentZoneIndex); else speak('Avanza hacia la entrada del aeropuerto para comenzar tu recorrido.'); }
-function speak(text){
+// ─── FASE 45: VOZ GRABADA DEL DR. DAGNINO Y ALTOPARLANTES ───
+// Cada texto hablado tiene su grabación en audios/voz/. Si un archivo falta
+// o el navegador no lo puede reproducir, se usa la voz sintética de siempre.
+const VOICE_DIR='audios/voz/';
+const VOICE_CLIPS={
+  intro:'01-intro',
+  entrance:'02-zona-entrada', checkin:'03-zona-facturacion', security:'04-zona-seguridad',
+  lounge:'05-zona-sala-espera', boarding:'06-zona-embarque', plane:'07-zona-avion', arrival:'08-zona-llegada',
+  felicitaciones:'09-felicitaciones', 'sin-zona':'10-sin-zona', consultorio:'11-consultorio',
+  inhale:'12-respiracion-inhala', hold:'13-respiracion-reten', exhale:'14-respiracion-exhala',
+  'agua-fria':'15-agua-fria', cafe:'16-cafe'
+};
+// Un solo elemento de audio: se "desbloquea" con el clic de Iniciar
+// (iOS solo deja reproducir después de un gesto) y se reutiliza.
+const _voiceEl=(typeof Audio!=='undefined')?new Audio():null;
+if(_voiceEl){ _voiceEl.preload='auto'; }
+let _voiceToken=0;
+function _unlockVoice(){
+  if(!_voiceEl||_voiceEl._unlocked) return;
+  _voiceEl._unlocked=true;
+  try{
+    _voiceEl.src=VOICE_DIR+VOICE_CLIPS['sin-zona']+'.mp3'; _voiceEl.muted=true;
+    const p=_voiceEl.play(); if(p&&p.then) p.then(()=>{ if(_voiceEl.muted){ _voiceEl.pause(); _voiceEl.muted=false; } }).catch(()=>{ _voiceEl.muted=false; });
+  }catch(e){ _voiceEl.muted=false; }
+}
+// Reproduce la grabación `key`. Si falla, lee `fallbackText` con la voz sintética.
+function playVoice(key,fallbackText){
+  const clip=VOICE_CLIPS[key];
+  if(!_voiceEl||!clip){ if(fallbackText) _speakTTS(fallbackText); return; }
+  stopSpeech();
+  const token=++_voiceToken;
+  let failed=false;
+  const fail=()=>{ if(failed||token!==_voiceToken) return; failed=true; isSpeaking=false; _duckPA(false); if(fallbackText) _speakTTS(fallbackText); };
+  _voiceEl.onended=()=>{ if(token===_voiceToken){ isSpeaking=false; _duckPA(false); } };
+  _voiceEl.onerror=fail;
+  _voiceEl.muted=false; _voiceEl.volume=1;
+  _voiceEl.src=VOICE_DIR+clip+'.mp3';
+  isSpeaking=true; _duckPA(true);
+  try{ const p=_voiceEl.play(); if(p&&p.catch) p.catch(fail); }catch(e){ fail(); }
+}
+function _stopVoiceClip(){
+  _voiceToken++;
+  if(_voiceEl&&!_voiceEl.paused){ try{ _voiceEl.pause(); }catch(e){} }
+  _duckPA(false);
+}
+// En pausa la voz se detiene donde estaba y sigue al volver
+function _voicePause(on){
+  if(!_voiceEl||!isSpeaking||!_voiceEl.src) return;
+  try{ if(on) _voiceEl.pause(); else _voiceEl.play().catch(()=>{}); }catch(e){}
+}
+
+// ── Altoparlantes: anuncios tranquilos de fondo, precedidos por el "ding-dong" ──
+// Ya vienen con el efecto de parlante y eco; suenan por el mismo canal que el
+// ambiente (respetan el botón 🔊, la pausa y el Modo Calma).
+const PA_DIR='audios/altoparlantes/';
+const PA_LEVEL=0.32, PA_DUCK=0.07;  // muy por debajo de la voz del doctor
+const PA_SETS={
+  terminal:['AP01-bienvenida','AP02-facturacion-abierta','AP03-documentos','AP04-vuelo-en-horario','AP07-otros-vuelos','AP08-servicios','AP09-consultorio','AP10-calma'],
+  gate:['AP04-vuelo-en-horario','AP06-embarque-grupo-2','AP07-otros-vuelos','AP08-servicios','AP09-consultorio','AP10-calma'],
+  arrival:['AP11-llegada']
+};
+const _paBuffers={};
+let _paSrc=null, _paGain=null, _paNext=[], _paBag={}, _paLast='';
+function _paContext(){
+  const id=currentZoneIndex>=0?ZONE_DATA[currentZoneIndex].id:'entrance';
+  if(id==='plane') return null;                 // dentro del avión no se oyen los anuncios del aeropuerto
+  if(id==='arrival') return 'arrival';
+  if(id==='lounge'||id==='boarding') return 'gate';
+  return 'terminal';
+}
+function _paPick(ctx){
+  while(_paNext.length){ const n=_paNext.shift(); if(n) return n; }
+  if(!_paBag[ctx]||!_paBag[ctx].length){
+    _paBag[ctx]=PA_SETS[ctx].slice().sort(()=>Math.random()-0.5);
+    if(_paBag[ctx].length>1&&_paBag[ctx][0]===_paLast) _paBag[ctx].push(_paBag[ctx].shift());
+  }
+  return _paBag[ctx].shift();
+}
+function _loadPA(name){
+  if(!_paBuffers[name]){
+    _paBuffers[name]=fetch(PA_DIR+name+'.mp3')
+      .then(r=>{ if(!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+      .then(b=>new Promise((res,rej)=>audioCtx.decodeAudioData(b,res,rej)))
+      .catch(()=>null);
+  }
+  return _paBuffers[name];
+}
+function playAnnouncement(name){
+  if(!audioEnabled||!audioCtx||!ambientMaster||_paSrc) return;
+  playAirportChime();
+  const startAt=audioCtx.currentTime+2.5;      // después del "dong"
+  _paLast=name;
+  _paSrc='loading';
+  _loadPA(name).then(buf=>{
+    if(!buf||!audioEnabled||!audioCtx||!isGameActive){ _paSrc=null; return; }
+    const src=audioCtx.createBufferSource(); src.buffer=buf;
+    const g=audioCtx.createGain(); g.gain.value=isSpeaking?PA_DUCK:PA_LEVEL;
+    src.connect(g); g.connect(ambientMaster);
+    src.onended=()=>{ try{ src.disconnect(); g.disconnect(); }catch(e){} if(_paSrc===src){ _paSrc=null; _paGain=null; } };
+    _paSrc=src; _paGain=g;
+    src.start(Math.max(audioCtx.currentTime+0.05,startAt));
+  });
+}
+// Mientras habla el doctor, el anuncio baja casi del todo
+function _duckPA(on){
+  if(!_paGain||!audioCtx) return;
+  const now=audioCtx.currentTime;
+  _paGain.gain.cancelScheduledValues(now);
+  _paGain.gain.setValueAtTime(_paGain.gain.value,now);
+  _paGain.gain.linearRampToValueAtTime(on?PA_DUCK:PA_LEVEL,now+(on?0.4:1.2));
+}
+// Anuncio a pedido según la zona (preembarque, embarque, llegada)
+function queueAnnouncement(name,inSeconds){
+  _paNext=[name];
+  _chimeTimer=Math.min(_chimeTimer,inSeconds);
+}
+function _paBlocked(){
+  if(isSpeaking||_paSrc) return true;
+  const quiet=['breathing-modal','cold-water'];
+  return quiet.some(id=>{ const el=document.getElementById(id); return el&&!el.classList.contains('hidden'); });
+}
+
+function narrateZone(i){ if(i>=0&&i<ZONE_DATA.length) speak(ZONE_DATA[i].narration,ZONE_DATA[i].id); }
+function narrateCurrentZone(){ if(currentZoneIndex>=0) narrateZone(currentZoneIndex); else speak('Caminá hacia la entrada del aeropuerto para comenzar tu recorrido.','sin-zona'); }
+// Con `key` se usa la grabación del doctor; sin ella (o si falla), voz sintética
+function speak(text,key){
+  if(key&&VOICE_CLIPS[key]){ playVoice(key,text); return; }
+  _speakTTS(text);
+}
+function _speakTTS(text){
   if(!speechSynth) return;
   stopSpeech();
   const u=new SpeechSynthesisUtterance(text);
@@ -6215,10 +6354,10 @@ function speak(text){
   const voices=cachedVoices.length?cachedVoices:speechSynth.getVoices();
   const v=voices.find(v=>v.lang.startsWith('es')&&!v.name.includes('Google'))||voices.find(v=>v.lang.startsWith('es'));
   if(v) u.voice=v;
-  isSpeaking=true;
+  isSpeaking=true; _duckPA(true);
   // El texto hablado ya no se muestra en pantalla (tapaba el centro en celular);
   // la misma información está en el panel 💡 Consejos de cada zona.
-  u.onend=()=>{ isSpeaking=false; };
+  u.onend=()=>{ isSpeaking=false; _duckPA(false); };
   speechSynth.speak(u);
 }
 // ── Explicación hablada del menú (reemplaza los textos largos) ──
@@ -6232,10 +6371,10 @@ const INTRO_NARRATION='Bienvenido a AeroCalma. Vas a recorrer un aeropuerto virt
 function toggleIntroNarration(){
   const btn=document.getElementById('btn-listen-intro');
   if(btn&&btn.getAttribute('aria-pressed')==='true'){ stopIntroNarration(); return; }
-  if(!speechSynth){ showToast('Tu navegador no tiene lectura en voz alta.'); return; }
-  speak(INTRO_NARRATION);
+  _unlockVoice();
+  speak(INTRO_NARRATION,'intro');
   if(btn){ btn.setAttribute('aria-pressed','true'); btn.querySelector('span').textContent='Detener explicación'; }
-  const poll=setInterval(()=>{ if(!speechSynth.speaking){ clearInterval(poll); _resetIntroBtn(); } },500);
+  const poll=setInterval(()=>{ if(!isSpeaking&&!(speechSynth&&speechSynth.speaking)){ clearInterval(poll); _resetIntroBtn(); } },500);
 }
 function _resetIntroBtn(){
   const btn=document.getElementById('btn-listen-intro');
@@ -6243,7 +6382,9 @@ function _resetIntroBtn(){
 }
 function stopIntroNarration(){ const btn=document.getElementById('btn-listen-intro'); if(btn&&btn.getAttribute('aria-pressed')==='true') stopSpeech(); _resetIntroBtn(); }
 function stopSpeech(){
-  if(speechSynth){ speechSynth.cancel(); isSpeaking=false; }
+  _stopVoiceClip();
+  if(speechSynth){ speechSynth.cancel(); }
+  isSpeaking=false;
   const sub=document.getElementById('tts-subtitle');
   if(sub) sub.classList.add('hidden');
 }
@@ -6252,8 +6393,8 @@ function openBreathing(){ closeZonePanel(); uiModalOpen=true; if(!isMobile)contr
 function closeBreathing(){ document.getElementById('breathing-modal').classList.add('hidden'); stopBreathing(); uiModalOpen=false; const _bs=document.querySelector('#breathing-modal .breath-subtitle'); if(_bs) _bs.textContent='Inhala 4 seg · Retén 7 seg · Exhala 8 seg'; if(!isMobile&&isGameActive&&!isPaused)controls.lock(); }
 function resetBreathUI(){ document.getElementById('breath-phase').textContent='LISTO'; document.getElementById('breath-count').textContent='--'; document.getElementById('breath-instruction').textContent='Presiona "Iniciar" cuando estés preparado'; document.getElementById('btn-start-breath').classList.remove('hidden'); document.getElementById('btn-stop-breath').classList.add('hidden'); const el=document.getElementById('breath-ring-progress'); if(el){el.style.transition='none';el.style.strokeDashoffset='502';} }
 function startBreathing(){ breathCycles=0; breathCount++; document.getElementById('btn-start-breath').classList.add('hidden'); document.getElementById('btn-stop-breath').classList.remove('hidden'); runBreathPhase('inhale'); }
-function stopBreathing(){ if(breathInterval){clearInterval(breathInterval);breathInterval=null;} if(breathPhaseTimer){clearTimeout(breathPhaseTimer);breathPhaseTimer=null;} }
-function runBreathPhase(phase){ stopBreathing(); const phases={inhale:{label:'INHALA',instruction:'Respira profundo por la nariz',seconds:4,next:'hold'},hold:{label:'RETÉN',instruction:'Mantén el aire en los pulmones',seconds:7,next:'exhale'},exhale:{label:'EXHALA',instruction:'Suelta el aire lentamente por la boca',seconds:8,next:'inhale'}}; const p=phases[phase]; document.getElementById('breath-phase').textContent=p.label; document.getElementById('breath-instruction').textContent=p.instruction; let sec=p.seconds; document.getElementById('breath-count').textContent=sec; animBreathRing(phase); breathInterval=setInterval(()=>{ sec--; document.getElementById('breath-count').textContent=sec>0?sec:''; if(sec<=0){ clearInterval(breathInterval); breathInterval=null; if(phase==='exhale')breathCycles++; if(breathCycles>=3){ document.getElementById('breath-phase').textContent='✓'; document.getElementById('breath-count').textContent=''; document.getElementById('breath-instruction').textContent='¡Excelente! Tu sistema nervioso se ha calmado.'; document.getElementById('btn-start-breath').classList.remove('hidden'); document.getElementById('btn-stop-breath').classList.add('hidden'); } else breathPhaseTimer=setTimeout(()=>runBreathPhase(p.next),300); } },1000); }
+function stopBreathing(){ if(breathPhaseTimer||breathInterval) _stopVoiceClip(); if(breathInterval){clearInterval(breathInterval);breathInterval=null;} if(breathPhaseTimer){clearTimeout(breathPhaseTimer);breathPhaseTimer=null;} }
+function runBreathPhase(phase){ stopBreathing(); const phases={inhale:{label:'INHALA',instruction:'Respira profundo por la nariz',seconds:4,next:'hold'},hold:{label:'RETÉN',instruction:'Mantén el aire en los pulmones',seconds:7,next:'exhale'},exhale:{label:'EXHALA',instruction:'Suelta el aire lentamente por la boca',seconds:8,next:'inhale'}}; const p=phases[phase]; playVoice(phase); document.getElementById('breath-phase').textContent=p.label; document.getElementById('breath-instruction').textContent=p.instruction; let sec=p.seconds; document.getElementById('breath-count').textContent=sec; animBreathRing(phase); breathInterval=setInterval(()=>{ sec--; document.getElementById('breath-count').textContent=sec>0?sec:''; if(sec<=0){ clearInterval(breathInterval); breathInterval=null; if(phase==='exhale')breathCycles++; if(breathCycles>=3){ document.getElementById('breath-phase').textContent='✓'; document.getElementById('breath-count').textContent=''; document.getElementById('breath-instruction').textContent='¡Excelente! Tu sistema nervioso se ha calmado.'; document.getElementById('btn-start-breath').classList.remove('hidden'); document.getElementById('btn-stop-breath').classList.add('hidden'); } else breathPhaseTimer=setTimeout(()=>runBreathPhase(p.next),300); } },1000); }
 function animBreathRing(phase){ const el=document.getElementById('breath-ring-progress'); if(!el)return; const targets={inhale:0,hold:150,exhale:502}; const durs={inhale:4,hold:0.5,exhale:8}; el.style.transition=`stroke-dashoffset ${durs[phase]}s linear`; el.style.strokeDashoffset=targets[phase]; }
 
 function showToast(text){ const t=document.getElementById('toast'); t.textContent=text; t.classList.remove('hidden'); t.classList.add('show'); setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.classList.add('hidden'),300);},3200); }
