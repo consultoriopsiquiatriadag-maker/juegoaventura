@@ -41,29 +41,6 @@
         </div>
     </div>
 
-    <!-- ===== PANTALLA DE ANSIEDAD PRE-JUEGO ===== -->
-    <div id="anxiety-pre-screen" class="screen hidden">
-        <div class="screen-inner anxiety-screen">
-            <button class="btn-back" id="btn-back-anxiety" type="button">← Volver al menú</button>
-            <div class="anxiety-icon" aria-hidden="true">🧘</div>
-            <h2>Antes de empezar</h2>
-            <p>¿Cómo calificarías tu nivel de ansiedad en este momento?</p>
-            <p class="scale-hint"><strong>0</strong> = nada de ansiedad &nbsp;·&nbsp; <strong>10</strong> = ansiedad muy alta</p>
-            <div id="anxiety-scale-pre" class="anxiety-scale"
-                 role="group" aria-label="Escala de ansiedad del 0 al 10">
-                <!-- Generado por JS -->
-            </div>
-            <div class="anxiety-pre-btns">
-                <button id="btn-confirm-anxiety" class="btn-primary" type="button" disabled aria-label="Confirmar nivel de ansiedad y comenzar el recorrido">
-                    Comenzar el recorrido →
-                </button>
-                <button id="btn-skip-anxiety" class="btn-ghost" type="button" aria-label="Comenzar sin calificar la ansiedad">
-                    Continuar sin calificar
-                </button>
-            </div>
-            <p class="anxiety-privacy">🔒 Este dato queda solo en tu dispositivo. No se envía a ningún servidor.</p>
-        </div>
-    </div>
 
     <!-- ===== MENÚ PRINCIPAL ===== -->
     <div id="main-menu" class="screen hidden">
@@ -77,41 +54,23 @@
         <div class="menu-hero">
             <div class="hero-badge">Terapia de Exposición Virtual</div>
             <h1>Conoce el aeropuerto.<br>Pierde el miedo a volar.</h1>
-            <p class="hero-sub">Un recorrido guiado y seguro por todas las zonas del aeropuerto, con consejos de salud mental y guía auditiva en cada paso.</p>
             <div class="hero-actions">
                 <button id="btn-start" class="btn-primary" aria-label="Iniciar el recorrido por el aeropuerto">
                     <span>Iniciar Recorrido</span>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </button>
-                <button id="btn-info" class="btn-ghost" aria-label="Ver cómo funciona AeroCalma">¿Cómo funciona?</button>
             </div>
-            <div class="calm-mode-row">
-                <button id="btn-toggle-calm" class="btn-calm-toggle" aria-pressed="false" aria-label="Activar o desactivar el Modo Calma con estimulación reducida">
-                    🧘 Modo Calma
-                </button>
-                <span class="calm-hint">Para ansiedad alta o sensibilidad sensorial</span>
+            <div class="menu-toggles">
+                <button id="btn-toggle-calm" class="btn-calm-toggle" aria-pressed="false" aria-label="Modo Calma: estimulación reducida, para ansiedad alta o sensibilidad sensorial">🧘 Calma</button>
+                <button id="btn-toggle-guided" class="btn-calm-toggle btn-guided-toggle" aria-pressed="true" aria-label="Modo Guiado: la información de cada zona se abre sola. Desactivalo para explorar libremente">📍 Guiado</button>
+                <button id="btn-toggle-sound" class="btn-calm-toggle" aria-pressed="false" aria-label="Sonido ambiente suave del aeropuerto, apagado por defecto">🔊 Sonido</button>
             </div>
-            <div class="calm-mode-row guided-row">
-                <button id="btn-toggle-guided" class="btn-calm-toggle btn-guided-toggle" aria-pressed="true" aria-label="Alternar entre modo guiado y modo libre de exploración">
-                    📍 Modo Guiado
-                </button>
-                <span class="calm-hint">En modo libre explorás sin que el panel se abra solo</span>
-            </div>
-            <div class="calm-mode-row">
-                <button id="btn-toggle-sound" class="btn-calm-toggle" aria-pressed="false" aria-label="Activar o desactivar la música y el ambiente sonoro suave del aeropuerto">
-                    🔊 Sonido Ambiente
-                </button>
-                <span class="calm-hint">Música suave y ambiente de fondo — apagado por defecto</span>
-            </div>
+            <button id="btn-listen-intro" class="btn-listen" type="button" aria-pressed="false">🎧 <span>Escuchar explicativo</span></button>
             <div id="diary-display" class="diary-display hidden" aria-live="polite"></div>
         </div>
-  <!-- FASE 18 — Privacy & clinical use notices -->
-<p class='privacy-notice'>Material orientativo. No reemplaza atencion medica.</p>
-<p class='privacy-notice'>No utilizar durante una crisis aguda sin acompanamiento.</p>
-<p class='privacy-notice'>Podeis repetirse por zonas y detenerse en cualquier momento.</p>
-<p class='privacy-notice'>Sin tracking innecesario. Los datos no salen de tu dispositivo.</p>
 
         <footer class="menu-footer">
+            <span class="menu-disclaimer">Material orientativo · No reemplaza la atención médica</span><br>
             Desarrollado por el <strong>Consultorio Dr. Pedro Dagnino · Psiquiatría</strong>
             &nbsp;·&nbsp;
             <a href="mailto:consultoriopsiquiatriadag@gmail.com" class="footer-link">
@@ -119,15 +78,6 @@
             </a>
         </footer>
 
-        <div class="menu-zones-preview">
-            <div class="zone-pill">🚪 Entrada</div>
-            <div class="zone-pill">🧳 Check-in</div>
-            <div class="zone-pill">🔍 Seguridad</div>
-            <div class="zone-pill">🛋 Sala Espera</div>
-            <div class="zone-pill">✈ Embarque</div>
-            <div class="zone-pill">🛫 El Vuelo</div>
-            <div class="zone-pill">🏁 Llegada</div>
-        </div>
     </div>
 
     <!-- ===== PANTALLA INFO ===== -->
@@ -392,6 +342,22 @@
             <div class="ib-actions">
                 <button id="btn-kiosk-done" class="btn-primary hidden" type="button">Seguir explorando</button>
             </div>
+        </div>
+    </div>
+
+    <!-- FASE 38: Consultorio Dr. Pedro Dagnino -->
+    <div id="office-modal" class="overlay-dark overlay-soft hidden" role="dialog" aria-modal="true" aria-labelledby="office-title">
+        <div class="interact-box office-box">
+            <button id="btn-close-office" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">🩺 Consultorio · Psiquiatría</p>
+            <h2 id="office-title">Dr. Pedro Dagnino</h2>
+            <p class="ib-agent">«Hola, pasá. Si el miedo a volar te limita, podemos trabajarlo juntos.»</p>
+            <p class="ib-sub">Podés pedir un turno escribiendo a la Central de turnos por WhatsApp.</p>
+            <div class="ib-actions office-actions">
+                <a id="btn-office-whatsapp" class="btn-primary btn-whatsapp" href="https://wa.me/5491124769361" target="_blank" rel="noopener noreferrer">💬 Escribir a la Central de turnos</a>
+                <button id="btn-office-back" class="btn-ghost" type="button">Volver al aeropuerto</button>
+            </div>
+            <p class="office-note">Se abre WhatsApp con un mensaje listo para enviar. Vos decidís si lo mandás.</p>
         </div>
     </div>
 

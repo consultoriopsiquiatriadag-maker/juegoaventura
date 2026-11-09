@@ -1564,3 +1564,44 @@ body.calm-mode #interact-prompt { animation: none; }
 @media (max-width: 520px) {
   .interact-box { margin-top: 96px; max-height: calc(100vh - 116px); }
 }
+
+/* ══════════════════════════════════════════════════
+   FASE 38 -- Menú simplificado: 4 botones + explicación hablada
+   ══════════════════════════════════════════════════ */
+.menu-toggles {
+  display: flex; justify-content: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 22px; position: relative; z-index: 2;
+}
+.menu-toggles .btn-calm-toggle { min-width: 104px; }
+.btn-listen {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-top: 26px; padding: 9px 20px;
+  background: transparent; border: none; border-radius: 50px;
+  color: rgba(255,255,255,0.78); font: 500 0.92rem var(--ff-body);
+  cursor: pointer; position: relative; z-index: 2;
+  text-decoration: underline; text-underline-offset: 4px; text-decoration-color: rgba(255,255,255,0.3);
+}
+.btn-listen:hover { color: #fff; background: rgba(255,255,255,0.06); }
+.btn-listen[aria-pressed="true"] { color: var(--accent2); text-decoration-color: var(--accent2); }
+.menu-disclaimer { color: rgba(255,255,255,0.4); }
+#main-menu .diary-display { margin-top: 18px; }
+@media (max-width: 600px) {
+  .menu-nav { padding: 16px 18px; }
+  .menu-hero { padding: 84px 18px 70px; }
+  .menu-hero h1 { font-size: 2rem; margin-bottom: 26px; }
+  .hero-badge { margin-bottom: 18px; font-size: 0.7rem; }
+  .menu-toggles .btn-calm-toggle { min-width: 0; padding: 9px 16px; }
+}
+
+/* FASE 38 -- Consultorio: el fondo queda más claro para ver al doctor detrás */
+.overlay-soft { background: rgba(10,20,32,0.35); backdrop-filter: blur(2px); align-items: flex-end; padding-bottom: 6vh; }
+.office-box { width: min(480px, 92vw); }
+.office-actions { flex-direction: column; align-items: center; gap: 10px; }
+.btn-whatsapp {
+  background: linear-gradient(135deg, #25d366, #128c7e);
+  box-shadow: 0 4px 20px rgba(18,140,126,0.35);
+  text-decoration: none; justify-content: center;
+}
+.btn-whatsapp:hover { box-shadow: 0 8px 30px rgba(18,140,126,0.5); }
+.office-note { margin-top: 12px; font-size: 0.78rem; color: var(--text-light); }
+@media (max-width: 520px) { .overlay-soft { padding-bottom: 2vh; } .overlay-soft .interact-box { margin-top: 0; } }

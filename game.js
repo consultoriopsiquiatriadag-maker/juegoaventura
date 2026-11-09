@@ -639,6 +639,7 @@ function addInteractable(def){
 function buildInteractiveSpots(){
   buildCheckinDesk();
   buildWellnessKiosk();
+  buildConsultorio();   // FASE 38
 }
 
 // ── Mostrador B2 del check-in ───────────────────────────────
@@ -852,6 +853,9 @@ function setupInteractionUI(){
   on('btn-checkin-continue',continueFromCheckin);
   on('btn-close-checkin',()=>{ clearTimeout(_checkinTimer); if(checkinState==='verifying') _setCheckinLamp('idle'); closeUiModal('checkin-modal'); });
   on('btn-close-kiosk',()=>closeUiModal('kiosk-modal'));
+  on('btn-close-office',()=>closeUiModal('office-modal'));
+  on('btn-office-back',()=>closeUiModal('office-modal'));
+  on('btn-office-whatsapp',()=>logInteraction('consultorio','whatsapp'));
   on('btn-kiosk-done',()=>{ closeUiModal('kiosk-modal'); showToast('☕ Registrado en tu diario de práctica'); });
   document.querySelectorAll('#kiosk-modal .kiosk-item').forEach(b=>b.addEventListener('click',()=>chooseKioskItem(b.dataset.item)));
   document.addEventListener('mousedown',e=>{ if(e.button===0&&!isMobile&&controls.isLocked) _clickInteract(); });
@@ -860,6 +864,7 @@ function setupInteractionUI(){
     if(e.code!=='Escape'||!uiModalOpen) return;
     if(!document.getElementById('checkin-modal').classList.contains('hidden')) document.getElementById('btn-close-checkin').click();
     else if(!document.getElementById('kiosk-modal').classList.contains('hidden')) closeUiModal('kiosk-modal');
+    else if(!document.getElementById('office-modal').classList.contains('hidden')) closeUiModal('office-modal');
   });
   // Sonido de interfaz para todos los botones (si el sonido está activado)
   document.addEventListener('click',e=>{
@@ -868,6 +873,132 @@ function setupInteractionUI(){
     if(b.id==='btn-checkin-hand'||b.classList.contains('kiosk-item')) return; // tienen su propio sonido
     playUiTone(b.classList.contains('btn-primary')?'confirm':'tap');
   },true);
+}
+
+// ─── FASE 38: CONSULTORIO DR. PEDRO DAGNINO ───────────────
+// Un local más del hall, cerca de la entrada. Al acercarse: "Visitar el
+// consultorio". La puerta se abre, se ve al doctor sentado en su escritorio
+// (gira la cabeza hacia el visitante) y se ofrece escribir por WhatsApp a la
+// Central de turnos. El enlace se abre solo si el usuario lo toca.
+const CONSULTORIO_WHATSAPP='5491124769361'; // Central de turnos (formato internacional, sin +)
+const CONSULTORIO_MSG='Hola, me comunico desde AeroCalma. Quisiera solicitar un turno con el Dr. Pedro Dagnino.';
+let officeDoor=null, officeDoorTarget=0, officeDoctor=null, _officeCloseT=0;
+
+function buildConsultorio(){
+  const g=new THREE.Group(); g.name='consultorioDagnino';
+  // Local sobre la pared izquierda, entre z=37 y z=43; frente hacia el pasillo (+x)
+  const OX=-17.4, OZ=40, D=4.1, W=6, H=3.6;
+  g.position.set(OX,0.09,OZ);
+  const parts=new THREE.Group(); g.add(parts);     // piezas fijas (se fusionan)
+  const B=(w,h,d,col,px,py,pz,r,m)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mkStd(col,r==null?0.7:r,m||0)); o.position.set(px,py+h/2,pz); o.castShadow=true; o.receiveShadow=true; parts.add(o); return o; };
+  const C=(rt,rb,h,col,px,py,pz,r)=>{ const o=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,14),mkStd(col,r==null?0.6:r,0)); o.position.set(px,py+h/2,pz); o.castShadow=true; parts.add(o); return o; };
+
+  // Envolvente: piso de madera, paredes cálidas, techo
+  B(D,0.02,W,0x9a6f4c,D/2,0,0,0.55);
+  B(0.2,H,W,0xece4d6,0.1,0,0);
+  [-W/2,W/2].forEach(z=>B(D,H,0.2,0xe6ddcd,D/2,0,z));
+  B(D,0.12,W,0xf4efe6,D/2,H,0);
+  // Frente: paneles azul profundo a los lados de la puerta + dintel
+  const DW=1.3;                                   // ancho de la puerta
+  [[-W/2,-DW/2],[DW/2,W/2]].forEach(([a,b])=>B(0.16,H,b-a,0x1f3a56,D,0,(a+b)/2,0.5));
+  B(0.16,H-2.35,DW,0x1f3a56,D,2.35,0,0.5);
+  // Interior: alfombra, escritorio, sillón, sillas, biblioteca, planta, lámpara
+  B(2.6,0.015,3.2,0x6f8f8a,2.0,0.02,0,0.95);                 // alfombra
+  B(0.85,0.05,1.9,0x6b4630,1.65,0.74,0,0.45);                 // tapa del escritorio
+  B(0.06,0.74,1.8,0x5a3a27,2.05,0,0,0.6);                     // frente del escritorio
+  [-0.88,0.88].forEach(z=>B(0.8,0.74,0.06,0x5a3a27,1.65,0,z,0.6)); // laterales
+  B(0.04,0.22,0.32,0x2b2d31,1.45,0.79,-0.45,0.35);            // monitor (lado del doctor)
+  B(0.28,0.02,0.2,0x2b2d31,1.6,0.79,-0.45,0.35);
+  C(0.05,0.07,0.02,0x2b2d31,1.5,0.79,0.55); C(0.012,0.012,0.36,0x2b2d31,1.5,0.81,0.55); // lámpara
+  C(0.09,0.05,0.12,0xf2c879,1.58,1.12,0.55,0.4);
+  B(0.22,0.03,0.3,0xf4f1ea,1.85,0.79,0.15,0.8);              // libreta
+  // Sillón del doctor
+  B(0.55,0.08,0.55,0x2f3b46,0.85,0.44,0,0.8); B(0.1,0.7,0.55,0x2f3b46,0.55,0.48,0,0.8);
+  C(0.03,0.03,0.42,0x444a50,0.85,0.02,0);
+  // Dos sillas para pacientes, frente al escritorio
+  [-0.45,0.45].forEach(z=>{ B(0.48,0.06,0.48,0x7a9a8c,2.6,0.44,z,0.85); B(0.08,0.55,0.48,0x7a9a8c,2.86,0.5,z,0.85);
+    [[-0.2,-0.2],[-0.2,0.2],[0.2,-0.2],[0.2,0.2]].forEach(([dx,dz])=>B(0.04,0.44,0.04,0x3a3a3a,2.6+dx,0,z+dz,0.5)); });
+  // Biblioteca contra la pared del fondo
+  B(0.35,2.3,1.4,0x6b4630,0.38,0,-2.1,0.7);
+  [0.45,0.95,1.45,1.95].forEach((y,i)=>{ for(let k=0;k<6;k++) B(0.24,0.32+((k*7+i)%3)*0.04,0.13,[0x8a3b2e,0x2f5d7c,0xc8a35a,0x4a6b45,0x6a4c7a][(k+i)%5],0.42,y,-2.65+k*0.21,0.8); });
+  // Planta en maceta
+  C(0.22,0.17,0.45,0xd8cfc0,0.5,0,2.4,0.8);
+  const leaf=new THREE.Mesh(new THREE.SphereGeometry(0.42,10,8),mkStd(0x4f8a55,0.85,0)); leaf.position.set(0.5,0.95,2.4); leaf.scale.set(1,1.3,1); leaf.castShadow=true; parts.add(leaf);
+  // Diplomas en la pared del fondo
+  const dip=tex(256,192,(ctx)=>{ ctx.fillStyle='#f8f3e6'; ctx.fillRect(0,0,256,192); ctx.strokeStyle='#b08d3a'; ctx.lineWidth=10; ctx.strokeRect(10,10,236,172); ctx.fillStyle='#4a3a20'; ctx.font='bold 22px Georgia'; ctx.textAlign='center'; ctx.fillText('DIPLOMA',128,70); ctx.font='14px Georgia'; ctx.fillText('Médico · Psiquiatría',128,104); ctx.fillStyle='#b08d3a'; ctx.beginPath(); ctx.arc(128,142,16,0,Math.PI*2); ctx.fill(); });
+  dip.encoding=THREE.sRGBEncoding;
+  [-0.55,0.55].forEach(z=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.46),new THREE.MeshStandardMaterial({map:dip,roughness:0.6})); m.position.set(0.21,1.85,z); m.rotation.y=Math.PI/2; g.add(m); });
+  // Cartel del local (sobre el frente)
+  const st=tex(1024,160,(ctx)=>{ ctx.fillStyle='#16324a'; ctx.fillRect(0,0,1024,160); ctx.fillStyle='#ffffff'; ctx.textAlign='center';
+    ctx.font='bold 54px Georgia'; ctx.fillText('Consultorio Dr. Pedro Dagnino',512,76); ctx.fillStyle='#8fd3f0'; ctx.font='34px Arial'; ctx.fillText('PSIQUIATRÍA',512,128); });
+  st.encoding=THREE.sRGBEncoding;
+  const sign=new THREE.Mesh(new THREE.PlaneGeometry(5.4,0.84),new THREE.MeshStandardMaterial({map:st,emissive:0xffffff,emissiveMap:st,emissiveIntensity:0.45,roughness:0.6}));
+  sign.position.set(D+0.1,H-0.55,0); sign.rotation.y=Math.PI/2; g.add(sign);
+  // Placa junto a la puerta
+  const pl=tex(256,128,(ctx)=>{ ctx.fillStyle='#d9c48a'; ctx.fillRect(0,0,256,128); ctx.fillStyle='#3a2e14'; ctx.textAlign='center'; ctx.font='bold 24px Georgia'; ctx.fillText('Dr. Pedro Dagnino',128,56); ctx.font='18px Georgia'; ctx.fillText('Psiquiatría',128,90); });
+  pl.encoding=THREE.sRGBEncoding;
+  const plate=new THREE.Mesh(new THREE.PlaneGeometry(0.42,0.21),new THREE.MeshStandardMaterial({map:pl,roughness:0.35,metalness:0.4}));
+  plate.position.set(D+0.09,1.5,1.0); plate.rotation.y=Math.PI/2; g.add(plate);
+
+  // Puerta con bisagra (se abre hacia adentro)
+  officeDoor=new THREE.Group(); officeDoor.position.set(D,0,-DW/2); g.add(officeDoor);
+  const leafMat=mkStd(0x8a5a3b,0.55,0);
+  const dl=new THREE.Mesh(new THREE.BoxGeometry(0.06,2.3,DW-0.04),leafMat); dl.position.set(0,1.15,DW/2); dl.castShadow=true; officeDoor.add(dl);
+  const knob=new THREE.Mesh(new THREE.SphereGeometry(0.04,10,8),mkStd(0xd4b25a,0.25,0.8)); knob.position.set(0.06,1.05,DW-0.16); officeDoor.add(knob);
+
+  // El doctor, sentado y de frente a la puerta
+  officeDoctor=buildCharacter({skin:0xf1c9a5,hair:0x3a2a20,top:0xf4f6f8,pants:0x2b3442,shoes:0x1a1a1a,role:'civilian'});
+  officeDoctor.position.set(0.85,-0.36,0); officeDoctor.rotation.y=Math.PI/2;
+  officeDoctor.children.forEach(c=>{
+    if(c.userData.isLeg) c.rotation.x=-Math.PI/2;      // piernas hacia adelante: sentado
+    if(c.userData.isArm) c.rotation.x=-0.75;           // manos sobre el escritorio
+  });
+  g.add(officeDoctor);
+
+  // Luz cálida interior
+  const L=new THREE.PointLight(0xffe2bf,0.55,6.5); L.position.set(2.2,3.1,0); g.add(L);
+
+  _optimizeCharacter(parts);
+  scene.add(g);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(0.4,2.6,W),new THREE.MeshBasicMaterial({visible:false}));
+  hit.position.set(D,1.3,0); g.add(hit);
+  addInteractable({id:'consultorio',x:OX+D+1.4,z:OZ,radius:3.2,icon:'🩺',label:'Visitar el consultorio',
+    root:g,onTrigger:openConsultorio});
+}
+
+function openConsultorio(){
+  officeDoorTarget=-1.55;                            // abre la puerta
+  const a=document.getElementById('btn-office-whatsapp');
+  if(a) a.href='https://wa.me/'+CONSULTORIO_WHATSAPP+'?text='+encodeURIComponent(CONSULTORIO_MSG);
+  // Primero se ve la puerta abrirse y al doctor; después el panel
+  uiModalOpen=true; releaseMovementKeys();
+  setTimeout(()=>{ openUiModal('office-modal'); },1100);
+  logInteraction('consultorio','visita');
+}
+
+function updateConsultorio(delta,t){
+  if(!officeDoor) return;
+  // Cierra sola cuando el visitante se aleja (y no hay panel abierto)
+  if(officeDoorTarget!==0 && !uiModalOpen && (!activeInteractable||activeInteractable.id!=='consultorio')){
+    _officeCloseT+=delta; if(_officeCloseT>3) officeDoorTarget=0;
+  } else _officeCloseT=0;
+  officeDoor.rotation.y+=(officeDoorTarget-officeDoor.rotation.y)*Math.min(1,delta*2.2);
+  // El doctor respira y, con la puerta abierta, mira hacia el visitante
+  if(officeDoctor){
+    const hg=officeDoctor.userData.headGroup;
+    officeDoctor.position.y=-0.36+Math.sin(t*1.1)*0.004;
+    if(hg){
+      let ty=0, tx=0.05;
+      if(officeDoor.rotation.y<-0.4){
+        const p=new THREE.Vector3(); officeDoctor.getWorldPosition(p);
+        const ang=Math.atan2(camera.position.x-p.x,camera.position.z-p.z);
+        ty=Math.max(-0.9,Math.min(0.9,_lerpAngle(0,ang-officeDoctor.rotation.y,1)));
+        tx=-0.05;
+      }
+      hg.rotation.y+=(ty-hg.rotation.y)*Math.min(1,delta*2);
+      hg.rotation.x+=(tx-hg.rotation.x)*Math.min(1,delta*2);
+    }
+  }
 }
 
 // ─── FASE 36: OPTIMIZACIÓN DE GEOMETRÍA Y MATERIALES ───────
@@ -4565,14 +4696,8 @@ function renderAnxietyScale(containerId, onSelect){
   });
 }
 
-function showAnxietyPre(){
-  showScreen('anxiety-pre-screen');
-  anxietyPre=-1;
-  document.getElementById('btn-confirm-anxiety').disabled=true;
-  document.querySelectorAll('#anxiety-scale-pre .anxiety-btn').forEach(b=>b.classList.remove('selected'));
-}
-
 function initAnxietyScales(){
+  if(!document.getElementById('anxiety-scale-pre')) return; // pantalla retirada del menú
   renderAnxietyScale('anxiety-scale-pre',(level)=>{
     anxietyPre=level;
     document.getElementById('btn-confirm-anxiety').disabled=false;
@@ -4683,10 +4808,9 @@ function stopMenuAnimation(){
 // ══════════════════════════════════════════════════
 function setupEvents(){
   // btn-start ahora muestra la pantalla de ansiedad antes de iniciar
-  document.getElementById('btn-start').addEventListener('click',showAnxietyPre);
-  document.getElementById('btn-confirm-anxiety').addEventListener('click',startGame);
-  document.getElementById('btn-skip-anxiety').addEventListener('click',startGame);
-  document.getElementById('btn-back-anxiety').addEventListener('click',()=>showScreen('main-menu'));
+  // Se quitó la pantalla "Antes de empezar": el recorrido arranca directo
+  document.getElementById('btn-start').addEventListener('click',()=>{ stopIntroNarration(); startGame(); });
+  document.getElementById('btn-listen-intro').addEventListener('click',toggleIntroNarration);
   document.getElementById('btn-toggle-calm').addEventListener('click',toggleCalmMode);
   document.getElementById('btn-toggle-guided').addEventListener('click',toggleGuidedMode);
   document.getElementById('btn-calm-pause').addEventListener('click',toggleCalmMode);
@@ -4695,9 +4819,9 @@ function setupEvents(){
   document.getElementById('btn-emergency-exit').addEventListener('click',returnToMenu);
   document.getElementById('btn-text-increase').addEventListener('click',()=>setTextScale(0.15));
   document.getElementById('btn-text-decrease').addEventListener('click',()=>setTextScale(-0.15));
-  document.getElementById('btn-info').addEventListener('click',()=>showScreen('info-screen'));
+  const _bInfo=document.getElementById('btn-info'); if(_bInfo) _bInfo.addEventListener('click',()=>showScreen('info-screen'));
   document.getElementById('btn-back-info').addEventListener('click',()=>showScreen('main-menu'));
-  document.getElementById('btn-start-from-info').addEventListener('click',showAnxietyPre);
+  document.getElementById('btn-start-from-info').addEventListener('click',startGame);
   document.getElementById('btn-pause').addEventListener('click',pauseGame);
   document.getElementById('btn-resume').addEventListener('click',resumeGame);
   document.getElementById('btn-to-menu').addEventListener('click',returnToMenu);
@@ -5473,6 +5597,27 @@ function speak(text){
   u.onend=()=>{ isSpeaking=false; if(sub) sub.classList.add('hidden'); };
   speechSynth.speak(u);
 }
+// ── Explicación hablada del menú (reemplaza los textos largos) ──
+const INTRO_NARRATION='Bienvenido a AeroCalma. Vas a recorrer un aeropuerto virtual, paso a paso, '+
+  'desde la entrada hasta el avión y la llegada. En cada zona vas a encontrar qué esperar y consejos para manejar la ansiedad. '+
+  'Podés moverte a tu ritmo y detenerte cuando quieras. '+
+  'Modo Calma reduce el movimiento y los estímulos. Modo Guiado abre la información de cada zona al llegar; si lo apagás, explorás libremente. '+
+  'Sonido activa un ambiente suave de fondo. '+
+  'En computadora te movés con las teclas W, A, S y D y mirás con el mouse; en el celular, con el joystick y deslizando el dedo. '+
+  'Este material es orientativo y no reemplaza la atención médica. Cuando quieras, tocá Iniciar Recorrido.';
+function toggleIntroNarration(){
+  const btn=document.getElementById('btn-listen-intro');
+  if(btn&&btn.getAttribute('aria-pressed')==='true'){ stopIntroNarration(); return; }
+  if(!speechSynth){ showToast('Tu navegador no tiene lectura en voz alta.'); return; }
+  speak(INTRO_NARRATION);
+  if(btn){ btn.setAttribute('aria-pressed','true'); btn.querySelector('span').textContent='Detener explicación'; }
+  const poll=setInterval(()=>{ if(!speechSynth.speaking){ clearInterval(poll); _resetIntroBtn(); } },500);
+}
+function _resetIntroBtn(){
+  const btn=document.getElementById('btn-listen-intro');
+  if(btn){ btn.setAttribute('aria-pressed','false'); btn.querySelector('span').textContent='Escuchar explicativo'; }
+}
+function stopIntroNarration(){ const btn=document.getElementById('btn-listen-intro'); if(btn&&btn.getAttribute('aria-pressed')==='true') stopSpeech(); _resetIntroBtn(); }
 function stopSpeech(){
   if(speechSynth){ speechSynth.cancel(); isSpeaking=false; }
   const sub=document.getElementById('tts-subtitle');
@@ -5830,6 +5975,7 @@ function animate(){
   if(window.AeroSignage) AeroSignage.update(delta); // reloj de las pantallas FIDS
   updateCabinSky(delta); // nubes que pasan por las ventanillas del avión
   updateInteractables(delta,t); // FASE 37: avisos de interacción cercana
+  updateConsultorio(delta,t);   // FASE 38: puerta y doctor del consultorio
   updateAmbientChimes(delta);   // avisos sonoros suaves (si el sonido está activo)
   // Tablero de salidas: redibujar cuando cambia algún vuelo o cada 30 s (reloj)
   if(window.AeroFlights && flightBoardTexture && AeroFlights.version()!==_boardVersion){ _boardVersion=AeroFlights.version(); boardTimer=31; }
