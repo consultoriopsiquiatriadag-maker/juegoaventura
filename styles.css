@@ -1779,3 +1779,36 @@ body.calm-mode .steam i { animation-duration: 5s; }
 }
 @media (prefers-reduced-motion: reduce) { .cw-drops i { animation: none; display: none; } .mag-cover { transition: none; } }
 body.calm-mode .cw-drops i { animation-duration: 3.4s !important; }
+
+/* ═══ FASE 46: VUELO SIMULADO ═══ */
+#flight-hud {
+  position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
+  width: min(460px, calc(100vw - 32px));
+  background: rgba(13,30,48,0.82); backdrop-filter: blur(12px);
+  border: 1px solid rgba(78,205,196,0.45); border-radius: 18px;
+  color: #fff; padding: 12px 14px; pointer-events: auto;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.3);
+}
+#flight-hud .fh-flight { font: 600 0.72rem var(--ff-body); letter-spacing: .06em; text-transform: uppercase; color: var(--accent2); }
+#flight-hud .fh-body { display: flex; gap: 12px; align-items: center; margin: 6px 0 10px; }
+#flight-hud .fh-ico { font-size: 2rem; line-height: 1; }
+#flight-hud .fh-title { margin: 0; font: 700 1.02rem var(--ff-body); }
+#flight-hud .fh-text { margin: 2px 0 0; font-size: .88rem; line-height: 1.35; color: rgba(255,255,255,0.85); }
+#flight-hud.fh-swap .fh-body { animation: fhIn .5s ease; }
+@keyframes fhIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+#flight-hud .fh-actions { display: flex; gap: 8px; }
+#flight-hud .fh-actions button {
+  flex: 1; padding: 9px 10px; border-radius: 12px; font: 600 .85rem var(--ff-body); color: #fff;
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.18);
+}
+#flight-hud .fh-actions button:hover { background: rgba(255,255,255,0.18); }
+#flight-hud .fh-key { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-right: 4px; border-radius: 6px; background: rgba(78,205,196,0.35); font-size: .75rem; }
+body.is-touch #flight-hud .fh-key { display: none; }
+body.in-flight #mobile-joystick, body.in-flight #approach-hint { display: none !important; }
+/* Los botones de giro suben por encima del cartel del vuelo */
+body.in-flight #mobile-rotate-btns { bottom: 200px !important; }
+body.calm-mode #flight-hud.fh-swap .fh-body { animation: none; }
+@media (max-width: 600px) {
+  #flight-hud { bottom: 16px; padding: 10px 12px; }
+  #flight-hud .fh-ico { font-size: 1.6rem; }
+}

@@ -220,6 +220,19 @@
             </button>
         </div>
 
+        <!-- FASE 46: vuelo simulado (asiento 14C) -->
+        <div id="flight-hud" class="hidden" role="status" aria-live="polite">
+            <div class="fh-head"><span class="fh-flight">✈ Vuelo 3421 · Madrid · 14C</span></div>
+            <div class="fh-body">
+                <span class="fh-ico" aria-hidden="true">💺</span>
+                <div><p class="fh-title">Asiento 14C</p><p class="fh-text"></p></div>
+            </div>
+            <div class="fh-actions">
+                <button id="btn-flight-skip" type="button"><span class="fh-key">L</span> Ir al aterrizaje</button>
+                <button id="btn-flight-stand" type="button"><span class="fh-key">E</span> Levantarme</button>
+            </div>
+        </div>
+
         <!-- FASE 37: aviso de interacción cercana (E en computadora, toque en celular) -->
         <button id="interact-prompt" class="hidden" type="button" aria-live="polite">
             <span class="ip-key">E</span><span class="ip-label">Interactuar</span>
