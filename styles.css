@@ -1417,3 +1417,150 @@ body.calm-mode .plane-loader {
 /* Prevent text selection during touch drag */
 canvas { -webkit-user-select: none; user-select: none; touch-action: none; }
 
+
+/* ══════════════════════════════════════════════════
+   FASE 37 -- Interacciones: aviso cercano, check-in y kiosko
+   ══════════════════════════════════════════════════ */
+#interact-prompt {
+  position: absolute; bottom: 152px; left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 12px;
+  padding: 8px 20px 8px 8px;
+  background: rgba(13,30,48,0.78);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(78,205,196,0.55);
+  border-radius: 50px;
+  color: #fff; font: 600 0.92rem var(--ff-body);
+  cursor: pointer; pointer-events: auto;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.25);
+  animation: ipIn .35s ease;
+}
+#interact-prompt .ip-key {
+  display: inline-grid; place-items: center;
+  min-width: 34px; height: 34px; padding: 0 8px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  font-weight: 700; font-size: 1rem;
+}
+@keyframes ipIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+.interact-box {
+  background: #fff; border-radius: 24px;
+  padding: 36px 36px 30px;
+  position: relative; width: min(600px, 92vw);
+  max-height: 92vh; overflow-y: auto;
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+.interact-box h2 { font-family: var(--ff-display); font-size: 1.7rem; color: var(--deep); margin-bottom: 8px; }
+.ib-eyebrow { font-size: 0.78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-light); margin-bottom: 6px; }
+.ib-sub { color: var(--text-light); font-size: 0.92rem; margin-bottom: 22px; }
+.ib-agent {
+  display: inline-block; margin: 2px auto 22px;
+  padding: 10px 16px; border-radius: 14px 14px 14px 4px;
+  background: #eef5fb; color: var(--mid); font-size: 0.95rem; font-style: italic;
+}
+.ib-actions { display: flex; justify-content: center; gap: 12px; margin-top: 22px; }
+.ib-actions .btn-primary:disabled { opacity: .55; cursor: default; transform: none; }
+
+/* Documentos */
+.doc-row { display: flex; justify-content: center; gap: 22px; align-items: flex-end; flex-wrap: wrap; }
+.doc { margin: 0; transition: transform .6s ease, opacity .6s ease; }
+.doc figcaption { margin-top: 8px; font-size: 0.8rem; color: var(--text-light); }
+.doc-row.handed .doc { transform: translateY(-6px) scale(0.97); opacity: .85; }
+.pp-cover {
+  width: 126px; height: 176px; border-radius: 8px 12px 12px 8px;
+  background: linear-gradient(145deg, #1f3a5c, #142840);
+  color: #e3c77d;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+  padding: 16px 8px 14px;
+  box-shadow: inset 6px 0 0 rgba(0,0,0,0.18), 0 6px 18px rgba(20,40,64,0.3);
+  font: 700 0.72rem/1 var(--ff-body); letter-spacing: .14em;
+}
+.pp-emblem { width: 58px; height: 58px; }
+.bp-card {
+  width: 300px; border-radius: 12px; overflow: hidden; text-align: left;
+  background: #fff; border: 1px solid #d6e2ec;
+  box-shadow: 0 6px 18px rgba(20,40,64,0.15);
+}
+.bp-head {
+  display: flex; justify-content: space-between;
+  padding: 9px 12px; background: linear-gradient(135deg, var(--accent), var(--accent2));
+  color: #fff; font: 700 0.68rem var(--ff-body); letter-spacing: .06em;
+}
+.bp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 10px; padding: 12px; }
+.bp-grid div:first-child { grid-column: 1 / -1; }
+.bp-grid small { display: block; font-size: 0.62rem; color: var(--text-light); text-transform: uppercase; letter-spacing: .05em; }
+.bp-grid b { font-size: 0.86rem; color: var(--deep); }
+.bp-barcode {
+  height: 30px; margin: 0 12px 12px;
+  background: repeating-linear-gradient(90deg, #1a2e42 0 2px, transparent 2px 4px, #1a2e42 4px 5px, transparent 5px 8px, #1a2e42 8px 11px, transparent 11px 13px);
+  opacity: .8;
+}
+
+/* Estado de verificación */
+.ib-status { margin-top: 20px; font-size: 0.95rem; min-height: 1.2em; }
+.ib-status.pending { color: #8a6d1d; }
+.ib-status.ok {
+  color: #1d6b45; background: #e8f7ef; border: 1px solid #b6e4c9;
+  border-radius: 14px; padding: 12px 16px;
+}
+.ib-spinner {
+  display: inline-block; width: 14px; height: 14px; margin-right: 6px; vertical-align: -2px;
+  border: 2px solid #e9d8a6; border-top-color: #c79a2b; border-radius: 50%;
+  animation: ibSpin 1s linear infinite;
+}
+.ib-check {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 6px;
+  border-radius: 50%; background: var(--green); color: #fff; font-weight: 700; font-size: 0.8rem;
+}
+@keyframes ibSpin { to { transform: rotate(360deg); } }
+
+/* Kiosko */
+.kiosk-items { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.kiosk-item {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 18px 10px; border-radius: 16px;
+  border: 1.5px solid #dbe7f0; background: #f7fafc;
+  font-family: var(--ff-body); color: var(--deep); cursor: pointer;
+  transition: border-color .2s, background .2s, transform .2s;
+}
+.kiosk-item:hover:not(:disabled) { border-color: var(--accent2); background: #effaf8; transform: translateY(-2px); }
+.kiosk-item:disabled { cursor: default; opacity: .5; }
+.kiosk-item.chosen { opacity: 1; border-color: var(--green); background: #e8f7ef; }
+.ki-ico { font-size: 2rem; }
+.ki-name { font-weight: 600; font-size: 0.95rem; }
+.ki-desc { font-size: 0.75rem; color: var(--text-light); }
+.kiosk-result { text-align: left; }
+.kr-msg { margin-bottom: 6px; line-height: 1.45; }
+.kr-tip { font-size: 0.86rem; color: #3f7a5c; }
+
+@media (max-width: 520px) {
+  .interact-box { padding: 30px 18px 22px; }
+  .interact-box h2 { font-size: 1.35rem; }
+  .bp-card { width: 100%; max-width: 300px; }
+  .pp-cover { width: 104px; height: 146px; }
+  .kiosk-items { grid-template-columns: 1fr; }
+  .kiosk-item { flex-direction: row; justify-content: flex-start; gap: 12px; padding: 12px 14px; }
+  .ki-ico { font-size: 1.5rem; }
+  #interact-prompt { bottom: 128px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #interact-prompt, .doc, .kiosk-item { animation: none; transition: none; }
+  .ib-spinner { animation-duration: 3s; }
+}
+body.calm-mode #interact-prompt { animation: none; }
+@media (max-height: 760px) {
+  .interact-box { padding: 24px 28px 20px; }
+  .interact-box h2 { font-size: 1.45rem; }
+  .ib-agent { margin-bottom: 14px; }
+  .pp-cover { width: 104px; height: 146px; padding: 12px 8px 10px; }
+  .pp-emblem { width: 46px; height: 46px; }
+  .bp-grid { padding: 9px 12px; gap: 5px 10px; }
+  .ib-status { margin-top: 14px; }
+  .ib-actions { margin-top: 14px; }
+}
+/* La salida de emergencia (← Salir) queda siempre visible: en celular el panel baja para no taparla */
+@media (max-width: 520px) {
+  .interact-box { margin-top: 96px; max-height: calc(100vh - 116px); }
+}

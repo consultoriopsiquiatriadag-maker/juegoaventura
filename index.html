@@ -269,6 +269,11 @@
             </button>
         </div>
 
+        <!-- FASE 37: aviso de interacción cercana (E en computadora, toque en celular) -->
+        <button id="interact-prompt" class="hidden" type="button" aria-live="polite">
+            <span class="ip-key">E</span><span class="ip-label">Interactuar</span>
+        </button>
+
         <!-- Indicador "acerca para info" -->
         <div id="approach-hint" class="hidden">
             <div class="approach-inner">
@@ -331,6 +336,65 @@
     </div>
 
     <!-- ===== MODAL DE RESPIRACIÓN ===== -->
+    <!-- FASE 37: Check-in guiado -- entrega de documentos -->
+    <div id="checkin-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="checkin-title">
+        <div class="interact-box">
+            <button id="btn-close-checkin" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">🛂 Mostrador B2 · Check-in</p>
+            <h2 id="checkin-title">Entrega de documentos</h2>
+            <p id="checkin-agent-msg" class="ib-agent"></p>
+            <div class="doc-row">
+                <figure class="doc doc-passport" aria-label="Tu pasaporte">
+                    <div class="pp-cover">
+                        <span class="pp-top">PASAPORTE</span>
+                        <svg class="pp-emblem" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="22" fill="none" stroke="currentColor" stroke-width="2.5"/><ellipse cx="32" cy="32" rx="10" ry="22" fill="none" stroke="currentColor" stroke-width="2"/><path d="M10 32h44M14 21h36M14 43h36" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+                        <span class="pp-bottom">PASSPORT</span>
+                    </div>
+                    <figcaption>Pasaporte / DNI</figcaption>
+                </figure>
+                <figure class="doc doc-pass" aria-label="Tu tarjeta de embarque">
+                    <div class="bp-card">
+                        <div class="bp-head"><span>✈ TARJETA DE EMBARQUE</span><span>BOARDING PASS</span></div>
+                        <div class="bp-grid">
+                            <div><small>Pasajero/a</small><b>VIAJERO/A AEROCALMA</b></div>
+                            <div><small>Vuelo</small><b id="bp-flight">--</b></div>
+                            <div><small>Destino</small><b id="bp-dest">--</b></div>
+                            <div><small>Puerta</small><b id="bp-gate">--</b></div>
+                            <div><small>Hora</small><b id="bp-time">--</b></div>
+                            <div><small>Asiento</small><b>14C</b></div>
+                        </div>
+                        <div class="bp-barcode" aria-hidden="true"></div>
+                    </div>
+                    <figcaption>Tarjeta de embarque</figcaption>
+                </figure>
+            </div>
+            <div id="checkin-status" class="ib-status" aria-live="polite"></div>
+            <div class="ib-actions">
+                <button id="btn-checkin-hand" class="btn-primary" type="button">Entregar documentos</button>
+                <button id="btn-checkin-continue" class="btn-primary hidden" type="button">Continuar hacia seguridad →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FASE 37: Kiosko de bienestar -->
+    <div id="kiosk-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="kiosk-title">
+        <div class="interact-box kiosk-box">
+            <button id="btn-close-kiosk" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">☕ Pausa · Café &amp; Agua</p>
+            <h2 id="kiosk-title">¿Qué te gustaría tomar?</h2>
+            <p class="ib-sub">Elegir algo para vos es una pequeña acción de cuidado. No hay apuro.</p>
+            <div class="kiosk-items">
+                <button class="kiosk-item" type="button" data-item="cafe"><span class="ki-ico">☕</span><span class="ki-name">Café caliente</span><span class="ki-desc">Taza mediana</span></button>
+                <button class="kiosk-item" type="button" data-item="agua"><span class="ki-ico">💧</span><span class="ki-name">Agua</span><span class="ki-desc">Botella 500 ml</span></button>
+                <button class="kiosk-item" type="button" data-item="te"><span class="ki-ico">🍵</span><span class="ki-name">Té de hierbas</span><span class="ki-desc">Sin cafeína</span></button>
+            </div>
+            <div id="kiosk-result" class="ib-status ok kiosk-result hidden" aria-live="polite"></div>
+            <div class="ib-actions">
+                <button id="btn-kiosk-done" class="btn-primary hidden" type="button">Seguir explorando</button>
+            </div>
+        </div>
+    </div>
+
     <div id="breathing-modal" class="overlay-dark hidden">
         <div class="breathing-box">
             <button id="btn-close-breath" class="close-btn">✕</button>

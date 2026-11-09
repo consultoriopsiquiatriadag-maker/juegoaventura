@@ -213,13 +213,15 @@ function init(){
   // Guardar densidad base de niebla (depende de si Three.Sky está disponible)
   if(scene.fog) _normalFogDensity=scene.fog.density;
   buildWorld();
+  buildInteractiveSpots(); // FASE 37: mostrador B2 y kiosko de bienestar
   captureFloorReflections(); // después del mundo y antes de las personas
-  if(!isMobile) spawnNPCs(); // NPCs civiles solo en desktop -- mejora performance móvil
+  spawnNPCs(isMobile); // en celular, versión liviana (5 caminantes + tripulación)
   spawnStaffNPCs();
   loadCabinCrew();
   optimizeSceneResources(); // FASE 36: comparte materiales/geometrías y fusiona props fijos
   setupPostProcessing();
   setupEvents();
+  setupInteractionUI();
   animate();
   setTimeout(animLoad,200);
 }
@@ -599,6 +601,275 @@ function captureFloorReflections(){
   });
 }
 
+// ─── FASE 37: PUNTOS DE INTERACCIÓN (check-in y kiosko) ─────
+// Exposición guiada a micro-situaciones reales: entregar documentos en el
+// mostrador y elegir algo para tomar en la sala de espera. Al acercarse
+// aparece un aviso ("E · Entregar documentos"); se activa con E, con un clic
+// mirando el lugar o tocando el aviso en el celular.
+const interactables=[];
+let activeInteractable=null;
+let uiModalOpen=false;          // un panel de la interfaz tiene el foco: no caminar ni pausar
+let checkinLamp=null;           // luz de estado del mostrador B2
+let checkinState='idle';        // idle · verifying · ok
+const _ipRay=new THREE.Raycaster();
+
+function _markerSprite(icon,text,accent){
+  const c=document.createElement('canvas'); c.width=768; c.height=160;
+  const x=c.getContext('2d'), W=c.width;
+  x.fillStyle='rgba(13,30,48,0.82)';
+  x.beginPath(); x.moveTo(40,8); x.arcTo(W-8,8,W-8,152,32); x.arcTo(W-8,152,8,152,32); x.arcTo(8,152,8,8,32); x.arcTo(8,8,W-8,8,32); x.fill();
+  x.strokeStyle=accent; x.lineWidth=6; x.stroke();
+  x.font='72px "Segoe UI Emoji",sans-serif'; x.textBaseline='middle'; x.fillText(icon,36,86);
+  // Texto ajustado al ancho disponible
+  let fs=50; do{ x.font='600 '+fs+'px "DM Sans",Arial,sans-serif'; fs-=2; }while(x.measureText(text).width>W-170 && fs>24);
+  x.fillStyle='#fff'; x.fillText(text,138,86);
+  const t=new THREE.CanvasTexture(c); t.encoding=THREE.sRGBEncoding;
+  const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false}));
+  s.scale.set(2.9,0.6,1);
+  return s;
+}
+
+function addInteractable(def){
+  // def: {id,x,z,radius,icon,label,root,onTrigger,markerY}
+  if(def.root){ def.root.updateMatrixWorld(true); }
+  interactables.push(def);
+  return def;
+}
+
+function buildInteractiveSpots(){
+  buildCheckinDesk();
+  buildWellnessKiosk();
+}
+
+// ── Mostrador B2 del check-in ───────────────────────────────
+function buildCheckinDesk(){
+  const cx=5.5, cz=25.2;                 // mostrador B2 (fila con agentes, z=24.2)
+  const g=new THREE.Group(); g.name='checkinDeskB2';
+  // Luz de estado sobre el mesón: azul suave en espera, verde al verificar
+  const lampMat=new THREE.MeshStandardMaterial({color:0x223344,emissive:0x5ba4d4,emissiveIntensity:0.9,roughness:0.3});
+  checkinLamp=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.1,0.05,20),lampMat);
+  checkinLamp.position.set(cx+1.2,1.255,cz+0.45);
+  g.add(checkinLamp);
+  // Bandeja de documentos
+  const tray=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.025,0.3),mkStd(0xd9d4cc,0.5,0.1));
+  tray.position.set(cx+0.35,1.235,cz+0.55); g.add(tray);
+  // Zona de clic invisible que cubre el mesón
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(4.6,1.4,1.8),new THREE.MeshBasicMaterial({visible:false}));
+  hit.position.set(cx,0.7,cz); hit.name='hit'; g.add(hit);
+  // Cartel flotante
+  const mk=_markerSprite('🛂','Practicá el check-in','#8b5cf6');
+  mk.position.set(cx,2.75,cz+0.3); g.add(mk);
+  scene.add(g);
+  addInteractable({id:'checkin',x:cx,z:cz+1.6,radius:2.8,icon:'🛂',label:'Entregar documentos',
+    root:g,marker:mk,markerBaseY:2.75,onTrigger:openCheckinModal});
+}
+
+// ── Kiosko "Pausa · Café & Agua" en la sala de espera ───────
+function buildWellnessKiosk(){
+  scene.updateMatrixWorld(true);
+  // Primer lugar libre de la sala (sin asientos ni otros muebles)
+  const spots=[{x:-8,z:-14.5},{x:8,z:-14.5},{x:-7,z:-5.5}];
+  const spot=spots.find(p=>_floorIsFree(p.x,p.z,1.6))||spots[0];
+  const face=spot.x<0?1:-1;              // el frente mira al pasillo central
+  const g=new THREE.Group(); g.name='wellnessKiosk';
+  g.position.set(spot.x,0.09,spot.z); g.rotation.y=face*Math.PI/2;
+  const M=(geo,col,r,m,px,py,pz)=>{ const o=new THREE.Mesh(geo,mkStd(col,r,m||0)); o.position.set(px,py,pz); o.castShadow=true; o.receiveShadow=true; g.add(o); return o; };
+  const B=(w,h,d,col,px,py,pz,r)=>M(new THREE.BoxGeometry(w,h,d),col,r==null?0.6:r,0,px,py+h/2,pz);
+  // Mostrador de madera con tapa clara y franja verde de la zona
+  B(2.8,1.02,0.9,0x7a5236,0,0,0,0.7);
+  B(3.0,0.06,1.05,0xeee6d8,0,1.02,0.02,0.35);
+  B(2.82,0.1,0.02,0x10b981,0,0.62,0.46,0.5);
+  // Estantería trasera con agua, tazas y café
+  B(2.8,2.2,0.38,0x5a3d28,0,0,-0.95,0.8);
+  [0.95,1.4,1.85].forEach(y=>B(2.7,0.035,0.4,0xdccfb8,0,y,-0.86,0.6));
+  for(let i=0;i<9;i++) M(new THREE.CylinderGeometry(0.045,0.045,0.24,10),0x6cc3ec,0.15,0,-1.15+i*0.29,1.105,-0.82); // agua
+  for(let i=0;i<7;i++) M(new THREE.CylinderGeometry(0.06,0.045,0.11,12),0xf6f1ea,0.4,0,-1.05+i*0.35,1.49,-0.82);   // tazas
+  for(let i=0;i<5;i++) B(0.22,0.28,0.12,[0x8a5a2b,0x5c3a1e,0x9a6b3a][i%3],-0.9+i*0.45,1.885,-0.82,0.8);              // café en grano
+  // Máquina de café y tazas sobre el mesón
+  B(0.5,0.55,0.42,0x2e2e30,-0.85,1.08,-0.12,0.35);
+  B(0.36,0.06,0.2,0x9aa0a6,-0.85,1.2,0.12,0.3);
+  M(new THREE.CylinderGeometry(0.05,0.04,0.1,12),0xffffff,0.4,0,-0.6,1.13,0.2);
+  M(new THREE.CylinderGeometry(0.05,0.04,0.1,12),0xffffff,0.4,0,0.75,1.13,0.25);
+  // Postes y techito
+  [-1.45,1.45].forEach(px=>B(0.08,2.55,0.08,0x3a3a3c,px,0,0.42,0.4));
+  B(3.2,0.1,1.7,0xf3ece2,0,2.55,-0.2,0.6);
+  // Cartel
+  const st=tex(512,128,(ctx)=>{ ctx.fillStyle='#0f2a22'; ctx.fillRect(0,0,512,128); ctx.fillStyle='#9ef0cf'; ctx.textAlign='center'; let fs=54; do{ ctx.font='bold '+fs+'px Georgia'; fs-=2; }while(ctx.measureText('Pausa · Café & Agua').width>470&&fs>20); ctx.fillText('Pausa · Café & Agua',256,82); });
+  st.encoding=THREE.sRGBEncoding;
+  const sm=new THREE.Mesh(new THREE.PlaneGeometry(2.6,0.6),new THREE.MeshStandardMaterial({map:st,emissive:0xffffff,emissiveMap:st,emissiveIntensity:0.55,roughness:0.6}));
+  sm.position.set(0,2.95,0.6); g.add(sm);
+  _optimizeCharacter(g);                // une las piezas fijas (mismo método que los personajes)
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(3.2,2.6,2.2),new THREE.MeshBasicMaterial({visible:false}));
+  hit.position.set(0,1.3,-0.3); g.add(hit);
+  const mk=_markerSprite('☕','Tomate un momento','#10b981');
+  mk.position.set(0,3.65,0.4); g.add(mk);
+  scene.add(g);
+  addInteractable({id:'kiosk',x:spot.x+face*1.5,z:spot.z,radius:2.8,icon:'☕',label:'Elegir algo para tomar',
+    root:g,marker:mk,markerBaseY:3.65,onTrigger:openKioskModal});
+}
+
+// ── Detección por proximidad (cada cuadro, barato) ──────────
+function updateInteractables(delta,t){
+  let best=null,bd=Infinity;
+  if(isGameActive&&!isPaused&&!uiModalOpen){
+    const p=camera.position;
+    for(const it of interactables){ const d=Math.hypot(p.x-it.x,p.z-it.z); if(d<it.radius&&d<bd){bd=d;best=it;} }
+  }
+  if(best!==activeInteractable){
+    activeInteractable=best;
+    const el=document.getElementById('interact-prompt');
+    if(el){
+      if(best){
+        el.querySelector('.ip-key').textContent=isMobile?best.icon:'E';
+        el.querySelector('.ip-label').textContent=best.label;
+        el.classList.remove('hidden');
+      } else el.classList.add('hidden');
+    }
+  }
+  // Carteles flotantes: vaivén lento (casi quietos en Modo Calma)
+  const amp=calmMode?0.02:0.07;
+  interactables.forEach((it,i)=>{ if(it.marker) it.marker.position.y=it.markerBaseY+Math.sin(t*1.2+i)*amp; });
+  // Luz del mostrador: late suave mientras verifica
+  if(checkinLamp&&checkinState==='verifying') checkinLamp.material.emissiveIntensity=0.6+Math.abs(Math.sin(t*3))*0.9;
+}
+
+function triggerInteraction(){
+  if(!activeInteractable||uiModalOpen) return false;
+  activeInteractable.onTrigger();
+  return true;
+}
+// Clic con el puntero bloqueado: solo si se está mirando el lugar
+function _clickInteract(){
+  if(!activeInteractable||!activeInteractable.root||uiModalOpen) return;
+  _ipRay.setFromCamera({x:0,y:0},camera); _ipRay.far=7;
+  if(_ipRay.intersectObject(activeInteractable.root,true).length) triggerInteraction();
+}
+
+function openUiModal(id){
+  uiModalOpen=true;
+  closeZonePanel();
+  releaseMovementKeys();
+  joystick.active=false; joystick.nx=joystick.ny=0;
+  const jh=document.getElementById('joystick-handle'); if(jh) jh.style.transform='translate(0px,0px)';
+  if(!isMobile&&controls.isLocked) controls.unlock();
+  document.getElementById(id).classList.remove('hidden');
+}
+function closeUiModal(id){
+  document.getElementById(id).classList.add('hidden');
+  uiModalOpen=false;
+  if(!isMobile&&isGameActive&&!isPaused) controls.lock();
+}
+
+// ── Check-in: panel guiado ──────────────────────────────────
+let _checkinTimer=null;
+function _setCheckinLamp(state){
+  checkinState=state;
+  if(!checkinLamp) return;
+  const m=checkinLamp.material;
+  if(state==='ok'){ m.emissive.setHex(0x22c55e); m.emissiveIntensity=1.6; }
+  else if(state==='verifying'){ m.emissive.setHex(0xf2c14e); }
+  else { m.emissive.setHex(0x5ba4d4); m.emissiveIntensity=0.9; }
+}
+function _pickFlight(){
+  const list=(window.AeroFlights&&AeroFlights.departures())||[];
+  return list.find(f=>f.status==='A TIEMPO')||list[0]||{code:'AC 0101',dest:'MADRID',time:'10:40',gate:'A12'};
+}
+function openCheckinModal(){
+  const f=_pickFlight();
+  const set=(id,v)=>{ const e=document.getElementById(id); if(e) e.textContent=v; };
+  set('bp-flight',f.code); set('bp-dest',f.dest); set('bp-gate',f.gate); set('bp-time',f.time);
+  set('checkin-agent-msg','«Hola, buen día. ¿Me mostrás tu documento y tu reserva, por favor?»');
+  const st=document.getElementById('checkin-status'); st.className='ib-status'; st.innerHTML='';
+  document.getElementById('btn-checkin-hand').classList.remove('hidden');
+  document.getElementById('btn-checkin-hand').disabled=false;
+  document.getElementById('btn-checkin-continue').classList.add('hidden');
+  document.querySelector('#checkin-modal .doc-row').classList.remove('handed');
+  if(checkinState!=='ok') _setCheckinLamp('idle');
+  openUiModal('checkin-modal');
+}
+function handCheckinDocs(){
+  const btn=document.getElementById('btn-checkin-hand'); btn.disabled=true;
+  document.querySelector('#checkin-modal .doc-row').classList.add('handed');
+  const st=document.getElementById('checkin-status');
+  st.className='ib-status pending'; st.innerHTML='<span class="ib-spinner" aria-hidden="true"></span> El agente está revisando tu documentación…';
+  _setCheckinLamp('verifying');
+  clearTimeout(_checkinTimer);
+  _checkinTimer=setTimeout(()=>{
+    _setCheckinLamp('ok');
+    st.className='ib-status ok';
+    st.innerHTML='<span class="ib-check" aria-hidden="true">✓</span> Documentación verificada correctamente. Todo en orden para tu vuelo.';
+    document.getElementById('checkin-agent-msg').textContent='«Perfecto, ya está todo listo. Acá tenés tu tarjeta de embarque. ¡Buen viaje!»';
+    btn.classList.add('hidden');
+    document.getElementById('btn-checkin-continue').classList.remove('hidden');
+    playUiTone('success');
+    logInteraction('checkin','documentos');
+  },2000);
+}
+function continueFromCheckin(){
+  clearTimeout(_checkinTimer);
+  closeUiModal('checkin-modal');
+  showToast('🔍 Seguí la franja del piso hacia el Control de Seguridad');
+}
+
+// ── Kiosko: menú de bienestar ───────────────────────────────
+const KIOSK_ITEMS={
+  cafe:{name:'Café caliente',msg:'Has comprado un café. Tomarte unos minutos para hidratarte o respirar ayuda a relajar los hombros y estabilizar el ritmo cardíaco.',tip:'Si la cafeína te acelera, tomalo despacio o alterná con agua.'},
+  agua:{name:'Agua',msg:'Elegiste agua. Hidratarte antes del vuelo reduce la fatiga y la sequedad del aire de cabina.',tip:'Tomá unos sorbos lentos y notá cómo bajan los hombros con cada exhalación.'},
+  te:{name:'Té de hierbas',msg:'Elegiste un té de hierbas, sin cafeína. Sostener una taza tibia con las dos manos es una señal de calma para el cuerpo.',tip:'Inhalá su aroma en 4 tiempos y soltá el aire en 6.'}
+};
+function openKioskModal(){
+  document.querySelectorAll('#kiosk-modal .kiosk-item').forEach(b=>{ b.classList.remove('chosen'); b.disabled=false; });
+  document.getElementById('kiosk-result').classList.add('hidden');
+  document.getElementById('btn-kiosk-done').classList.add('hidden');
+  openUiModal('kiosk-modal');
+}
+function chooseKioskItem(id){
+  const it=KIOSK_ITEMS[id]; if(!it) return;
+  document.querySelectorAll('#kiosk-modal .kiosk-item').forEach(b=>{ b.classList.toggle('chosen',b.dataset.item===id); b.disabled=true; });
+  const r=document.getElementById('kiosk-result');
+  r.innerHTML=`<p class="kr-msg">${it.msg}</p><p class="kr-tip">${it.tip}</p>`;
+  r.classList.remove('hidden');
+  document.getElementById('btn-kiosk-done').classList.remove('hidden');
+  playUiTone('success');
+  logInteraction('kiosk',id);
+}
+
+// Registro en el diario local (sin datos personales): contadores y las
+// últimas 20 interacciones, para que el terapeuta pueda ver la práctica.
+function logInteraction(type,item){
+  const d=loadDiary();
+  d.interactions=d.interactions||{};
+  const key=type+':'+item;
+  d.interactions[key]=(d.interactions[key]||0)+1;
+  d.interactionLog=(d.interactionLog||[]).concat([{type,item,at:new Date().toISOString()}]).slice(-20);
+  saveDiary(d);
+}
+
+function setupInteractionUI(){
+  const on=(id,fn)=>{ const e=document.getElementById(id); if(e) e.addEventListener('click',fn); };
+  on('interact-prompt',()=>triggerInteraction());
+  on('btn-checkin-hand',handCheckinDocs);
+  on('btn-checkin-continue',continueFromCheckin);
+  on('btn-close-checkin',()=>{ clearTimeout(_checkinTimer); if(checkinState==='verifying') _setCheckinLamp('idle'); closeUiModal('checkin-modal'); });
+  on('btn-close-kiosk',()=>closeUiModal('kiosk-modal'));
+  on('btn-kiosk-done',()=>{ closeUiModal('kiosk-modal'); showToast('☕ Registrado en tu diario de práctica'); });
+  document.querySelectorAll('#kiosk-modal .kiosk-item').forEach(b=>b.addEventListener('click',()=>chooseKioskItem(b.dataset.item)));
+  document.addEventListener('mousedown',e=>{ if(e.button===0&&!isMobile&&controls.isLocked) _clickInteract(); });
+  // Escape cierra el panel abierto
+  document.addEventListener('keydown',e=>{
+    if(e.code!=='Escape'||!uiModalOpen) return;
+    if(!document.getElementById('checkin-modal').classList.contains('hidden')) document.getElementById('btn-close-checkin').click();
+    else if(!document.getElementById('kiosk-modal').classList.contains('hidden')) closeUiModal('kiosk-modal');
+  });
+  // Sonido de interfaz para todos los botones (si el sonido está activado)
+  document.addEventListener('click',e=>{
+    const b=e.target.closest&&e.target.closest('button');
+    if(!b||b.disabled) return;
+    if(b.id==='btn-checkin-hand'||b.classList.contains('kiosk-item')) return; // tienen su propio sonido
+    playUiTone(b.classList.contains('btn-primary')?'confirm':'tap');
+  },true);
+}
+
 // ─── FASE 36: OPTIMIZACIÓN DE GEOMETRÍA Y MATERIALES ───────
 // Objetivo: menos llamadas de dibujo y menos memoria de GPU, sin cambiar
 // nada de lo que se ve. Caídas de FPS = tirones de cámara = mareo.
@@ -826,7 +1097,7 @@ const TRANSIT={
 
 // ¿Hay un objeto (entre 0.25 y 3.5 m de alto) en (x,z) o a radio r?
 function _floorIsFree(x,z,r){
-  const rc=new THREE.Raycaster();
+  const rc=new THREE.Raycaster(); rc.camera=camera; // los Sprite lo necesitan
   const down=new THREE.Vector3(0,-1,0);
   const pts=[[0,0],[r,0],[-r,0],[0,r],[0,-r]];
   for(const [dx,dz] of pts){
@@ -3058,14 +3329,12 @@ function buildCharacter(opts){
   // ── CINTURA y cadera
   { const h=new THREE.Mesh(new THREE.CylinderGeometry(0.155,0.18,0.12,10),pM); h.position.set(0,0.88,0); h.castShadow=true; g.add(h); }
 
-  // ── TORSO trapezoidal (más ancho en hombros -- proporción natural)
-  // Parte baja del torso
-  g.add(BX(0.42,0.30,0.26,tM,0,1.02,0));
-  // Parte alta (más ancha -- pecho)
-  g.add(BX(0.50,0.32,0.28,tM,0,1.31,0));
-  // Detalle costados del torso (ligero sombreado)
-  g.add(BX(0.04,0.56,0.24,darkTop,-0.25,1.15,0));
-  g.add(BX(0.04,0.56,0.24,darkTop, 0.25,1.15,0));
+  // ── TORSO en cápsula: perfil de revolución (cintura → pecho → hombros
+  // redondeados), aplanado en profundidad. Más limpio y humano que las cajas.
+  { const prof=[[0,0.84],[0.15,0.845],[0.172,0.9],[0.18,1.0],[0.196,1.12],[0.228,1.26],[0.24,1.35],[0.232,1.42],[0.19,1.475],[0.11,1.505],[0,1.51]]
+      .map(([r,y])=>new THREE.Vector2(r,y));
+    const torso=new THREE.Mesh(new THREE.LatheGeometry(prof,16),tM);
+    torso.scale.set(1,1,0.6); torso.castShadow=true; torso.receiveShadow=true; g.add(torso); }
   // Hombros redondeados -- esferas
   [-0.27,0.27].forEach(sx=>{
     const sh=SP(0.115,8,tM,sx,1.43,0); sh.scale.set(1,0.8,0.9); g.add(sh);
@@ -3082,12 +3351,8 @@ function buildCharacter(opts){
     // Antebrazo
     ag.add(new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.065,0.30,8),sM));
     ag.children[2].position.set(0,-0.54,0); ag.children[2].castShadow=true;
-    // Mano
-    ag.add(BX(0.155,0.12,0.105,sM,0,-0.70,0));
-    // Dedos insinuados (3 líneas)
-    [-.045,0,.045].forEach(fx=>ag.add(BX(0.028,0.08,0.018,mkStd(skin,0.7,0),fx,-0.775,0.04)));
-    // Pulgar
-    ag.add(BX(0.06,0.075,0.06,sM,s*0.095,-0.70,0.04));
+    // Mano: forma simple y redondeada
+    { const hand=SP(0.07,9,sM,0,-0.73,0.01); hand.scale.set(0.95,1.3,0.75); ag.add(hand); }
     ag.userData={isArm:true,side:s}; g.add(ag);
   });
 
@@ -3705,7 +3970,7 @@ const POI_POINTS=[
   {x:7,z:-16},{x:-7,z:-16}
 ];
 
-function spawnNPCs(){
+function spawnNPCs(lite){ // lite: celular -- menos personas, mismas rutas principales
   const civRoutes=[
     {x:-5,z:44,dx:-5,dz:25,spd:1.2},{x:3,z:42,dx:5,dz:20,spd:1.5},
     {x:-2,z:30,dx:-3,dz:45,spd:1.0},{x:7,z:15,dx:6,dz:-5,spd:1.3},
@@ -3714,7 +3979,7 @@ function spawnNPCs(){
     {x:-8,z:-12,dx:-7,dz:10,spd:1.2},{x:3,z:32,dx:2,dz:48,spd:1.4}
     // (una ruta menos que antes: su lugar lo ocupa la pareja que camina junta, más abajo)
   ];
-  civRoutes.forEach(d=>{
+  (lite?civRoutes.slice(0,3):civRoutes).forEach(d=>{
     const skin=SKINS[Math.floor(Math.random()*SKINS.length)];
     const hair=HAIRS[Math.floor(Math.random()*HAIRS.length)];
     const top=TOPS[Math.floor(Math.random()*TOPS.length)];
@@ -3743,10 +4008,31 @@ function spawnNPCs(){
     npcs.push(npc); scene.add(npc);
   });
 
+  // ── Caminantes del pasillo central (Fase 37): trayectos largos de ida y
+  // vuelta por el eje del hall; al llegar al extremo se detienen, giran
+  // 180° despacio y regresan. Dan sensación de flujo hacia el embarque.
+  [
+    {x:-4.2,z:47,dx:-4.2,dz:14,spd:0.75},
+    {x:4.2,z:3,dx:4.2,dz:-22,spd:0.7}
+  ].forEach((d,i)=>{
+    const npc=buildCharacter({skin:SKINS[(i+2)%SKINS.length],hair:HAIRS[(i+3)%HAIRS.length],top:TOPS[(i*3+1)%TOPS.length],pants:[0x2a3344,0x3a3428][i],shoes:0x111111,role:'civilian'});
+    npc.userData.isNPC=true; npc.userData.isWalking=true;
+    npc.userData.spd=d.spd; npc.userData.wt=Math.random()*Math.PI*2;
+    npc.userData.progress=Math.random();
+    npc.userData.start=new THREE.Vector3(d.x,0,d.z);
+    npc.userData.dest=new THREE.Vector3(d.dx,0,d.dz);
+    npc.position.copy(npc.userData.start).lerp(npc.userData.dest,npc.userData.progress);
+    npc.userData.behaviorState='walk';
+    npc.userData.behaviorTimer=14+Math.random()*10; // casi no se detienen
+    npc.userData.lookTarget=null;
+    npc.userData.idlePhase=Math.random()*Math.PI*2;
+    npcs.push(npc); scene.add(npc);
+  });
+
   // ── Perfil "pareja / grupo pequeño": dos personas que caminan
   // juntas, en paralelo y al mismo paso -- dan sensación de compañía
   // sin aumentar la densidad general (reemplaza, no suma, al conteo).
-  {
+  if(!lite){
     const base={x:-6,z:5,dx:-5,dz:30,spd:1.0};
     const sharedProgress=Math.random();
     [-0.5,0.45].forEach((off,gi)=>{
@@ -3806,7 +4092,7 @@ function spawnNPCs(){
     {x:-6,z:27,dx:-6,dz:27,spd:0,role:'civilian',skin:0xfde0bd,hair:0x6b4226,top:0x1a4a99,pants:0x1a2a3a,behaviorState:'queue'},
     {x:-6,z:28,dx:-6,dz:28,spd:0,role:'civilian',skin:0xc88a52,hair:0x3b1f0f,top:0x6622aa,pants:0x333322,behaviorState:'queue'},
   ];
-  extraNPCdefs.forEach(function(d){
+  (lite?[]:extraNPCdefs).forEach(function(d){
     var npc=buildCharacter({skin:d.skin,hair:d.hair,top:d.top,pants:d.pants||0x1a2a3a,shoes:0x111111,role:d.role||'civilian'});
     npc.position.set(d.x,0,d.z);
     npc.userData.isNPC=true; npc.userData.isWalking=d.spd>0;
@@ -3833,7 +4119,7 @@ function spawnStaffNPCs(){
   // Fase 8: En móvil se reducen agentes de check-in (3 en vez de 5)
   // y se omite 1 policía -- mantiene presencia sin sobrecargar el render
   // ── CHECK-IN AGENTS (behind counters at z=24, facing player z+)
-  const agentX=isMobile?[-11,0,11]:[-11,-5.5,0,5.5,11];
+  const agentX=isMobile?[-11,5.5,11]:[-11,-5.5,0,5.5,11]; // 5.5 = mostrador B2 (práctica de check-in)
   const agentTops=[0x1a3060,0x1a3060,0x25408a,0x1a3060,0x25408a];
   agentX.forEach((ax,i)=>{
     const skin=SKINS[i%SKINS.length];
@@ -3988,6 +4274,7 @@ function spawnCabinCrewFallback(){
 // ══════════════════════════════════════════════════
 // Fase 8: LOD frame counter para throttling de NPCs lejanos
 let _npcFrame=0;
+function _lerpAngle(a,b,t){ let d=((b-a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI; return a+d*t; }
 function updateNPCs(delta, speedFactor){
   const playerPos=camera.position;
   const t=clock.getElapsedTime();
@@ -4039,25 +4326,36 @@ function updateNPCs(delta, speedFactor){
            avoidX=Math.sin(avoidAng)*avoidStr*delta*2;
            avoidZ=Math.cos(avoidAng)*avoidStr*delta*2;
          }
-         ud.progress+=delta*ud.spd*0.055*walkMult*(speedFactor||1.0);
-         if(ud.progress>=1){ ud.progress=0; const tmp=ud.start.clone(); ud.start.copy(ud.dest); ud.dest.copy(tmp); }
-         const pos=ud.start.clone().lerp(ud.dest,ud.progress);
-         npc.position.set(pos.x+avoidX,0,pos.z+avoidZ);
         const dir=ud.dest.clone().sub(ud.start).normalize();
-        if(dir.length()>0.01) npc.rotation.y=Math.atan2(dir.x,dir.z);
-        // Walk cycle
-        ud.wt+=delta*ud.spd*4.5;
-        const sw=Math.sin(ud.wt)*0.45;
-        npc.children.forEach(c=>{
-          if(c.userData.isLeg) c.rotation.x=sw*c.userData.side;
-          if(c.userData.isArm) c.rotation.x=-sw*c.userData.side*0.55;
-        });
+        if(ud.turnT>0){
+          // Media vuelta: se detiene, apoya los pies y gira despacio (sin "saltos")
+          ud.turnT-=delta;
+          npc.position.y=0; npc.rotation.z*=0.9;
+          npc.children.forEach(c=>{ if(c.userData.isLeg||c.userData.isArm) c.rotation.x*=(1-Math.min(1,delta*5)); });
+        } else {
+          ud.progress+=delta*ud.spd*0.055*walkMult*(speedFactor||1.0);
+          if(ud.progress>=1){ ud.progress=0; const tmp=ud.start.clone(); ud.start.copy(ud.dest); ud.dest.copy(tmp); ud.turnT=1.3; }
+          const pos=ud.start.clone().lerp(ud.dest,ud.progress);
+          // Ciclo de paso: piernas y brazos alternados + leve rebote y balanceo
+          ud.wt+=delta*ud.spd*4.5;
+          const sw=Math.sin(ud.wt)*0.45;
+          npc.children.forEach(c=>{
+            if(c.userData.isLeg) c.rotation.x=sw*c.userData.side;
+            if(c.userData.isArm) c.rotation.x=-sw*c.userData.side*0.55;
+          });
+          const bob=calmMode?0.018:0.035;
+          npc.position.set(pos.x+avoidX,Math.abs(Math.sin(ud.wt))*bob*npc.scale.y,pos.z+avoidZ);
+          npc.rotation.z=Math.sin(ud.wt)*0.022;
+        }
+        // Orientación suave hacia la dirección de marcha (gira en ~1 s al dar la vuelta)
+        if(dir.lengthSq()>0.0001) npc.rotation.y=_lerpAngle(npc.rotation.y,Math.atan2(dir.x,dir.z),Math.min(1,delta*(ud.turnT>0?3:8)));
       } else {
         // En pausa: de pie, quieto -- piernas/brazos vuelven a reposo suavemente
         npc.children.forEach(c=>{
           if(c.userData.isLeg) c.rotation.x*=(1-Math.min(1,delta*3));
           if(c.userData.isArm) c.rotation.x*=(1-Math.min(1,delta*3));
         });
+        npc.position.y=0;
         // Balanceo de peso muy sutil (persona quieta, no estatua)
         ud.idlePhase=(ud.idlePhase||0)+delta*0.6;
         npc.rotation.z=Math.sin(ud.idlePhase)*0.012;
@@ -4459,7 +4757,7 @@ function setupEvents(){
       startAtZone=-1;
     }
   });
-  controls.addEventListener('unlock',()=>{ releaseMovementKeys(); if(!isMobile&&isGameActive&&!isPaused){ isPaused=true; document.getElementById('pause-menu').classList.remove('hidden'); } });
+  controls.addEventListener('unlock',()=>{ releaseMovementKeys(); if(uiModalOpen) return; if(!isMobile&&isGameActive&&!isPaused){ isPaused=true; document.getElementById('pause-menu').classList.remove('hidden'); } });
   if(isMobile) setupMobileControls();
 }
 
@@ -4473,7 +4771,7 @@ function onKeyDown(e){
     case 'KeyA': case 'ArrowLeft':  movement.left=true;     break;
     case 'KeyD': case 'ArrowRight': movement.right=true;    break;
     case 'KeyB': openBreathing();        break;
-    case 'KeyE': openCurrentZonePanel(); break;
+    case 'KeyE': if(!triggerInteraction()) openCurrentZonePanel(); break;
     case 'Tab': e.preventDefault(); isThirdPerson=!isThirdPerson; showToast(isThirdPerson?'Cámara tercera persona':'Cámara primera persona'); break;
   }
 }
@@ -5002,10 +5300,76 @@ function buildHallMurmur(){
   bandpass.connect(lowpass);
   lowpass.connect(murmurShape);
   murmurShape.connect(hallGainNode);
+  // Retumbo grave del espacio (ventilación, eco del hall): el mismo ruido con
+  // un pasa-bajos muy bajo. Se siente más de lo que se oye.
+  const rumbleLP=audioCtx.createBiquadFilter();
+  rumbleLP.type='lowpass'; rumbleLP.frequency.value=160; rumbleLP.Q.value=0.5;
+  const rumbleGain=audioCtx.createGain(); rumbleGain.gain.value=0.9;
+  noise.connect(rumbleLP); rumbleLP.connect(rumbleGain); rumbleGain.connect(hallGainNode);
   noise.start(now);
 
   ambientNodes.noise=noise;
   ambientNodes.lfo.push(lfo);
+}
+
+// ── Sonidos de interfaz y avisos sutiles (Fase 37) ─────────────
+// Tonos cortos con osciladores: sin archivos de audio. Solo suenan si el
+// usuario activó el sonido (mismo botón que el ambiente) y son más suaves
+// en Modo Calma.
+let uiBus=null;
+function _uiOut(){
+  if(!audioEnabled||!audioCtx) return null;
+  if(audioCtx.state==='suspended') audioCtx.resume();
+  if(!uiBus){
+    uiBus=audioCtx.createGain();
+    const lp=audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=3200; // sin agudos punzantes
+    uiBus.connect(lp); lp.connect(audioCtx.destination);
+  }
+  uiBus.gain.value=calmMode?0.55:1.0;
+  return uiBus;
+}
+// Una nota con ataque y caída suaves (sin clics)
+function _tone(out,freq,start,dur,peak,type){
+  const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+  o.type=type||'sine'; o.frequency.value=freq;
+  g.gain.setValueAtTime(0.0001,start);
+  g.gain.exponentialRampToValueAtTime(peak,start+0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001,start+dur);
+  o.connect(g); g.connect(out); o.start(start); o.stop(start+dur+0.05);
+}
+// kind: 'tap' (botón común) · 'confirm' (acción principal) · 'success' (logro)
+function playUiTone(kind){
+  const out=_uiOut(); if(!out) return;
+  const t=audioCtx.currentTime+0.005;
+  if(kind==='confirm'){
+    _tone(out,523.25,t,0.16,0.045); _tone(out,783.99,t+0.09,0.22,0.04);
+  } else if(kind==='success'){
+    [523.25,659.25,783.99].forEach((f,i)=>_tone(out,f,t+i*0.13,0.5,0.04));
+  } else {
+    _tone(out,880,t,0.07,0.03); _tone(out,660,t+0.035,0.08,0.02,'triangle');
+  }
+}
+// Aviso de megafonía sin voz: "ding-dong" suave, cada 1,5–2 min (más
+// espaciado en Modo Calma). Va por el canal del ambiente, así respeta el
+// apagado, la pausa y el volumen de calma.
+let _chimeTimer=25;
+function playAirportChime(){
+  if(!audioEnabled||!audioCtx||!ambientMaster) return;
+  const out=audioCtx.createGain(); out.gain.value=calmMode?0.35:0.6;
+  const lp=audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2400;
+  out.connect(lp); lp.connect(ambientMaster);
+  const t=audioCtx.currentTime+0.02;
+  _tone(out,659.25,t,1.6,0.09); _tone(out,1318.5,t,0.9,0.012);   // "ding" + brillo tenue
+  _tone(out,523.25,t+0.62,2.0,0.09); _tone(out,1046.5,t+0.62,1.0,0.010); // "dong"
+  setTimeout(()=>{ try{ out.disconnect(); lp.disconnect(); }catch(e){} },3500);
+}
+function updateAmbientChimes(delta){
+  if(!audioEnabled||!isGameActive||isPaused) return;
+  _chimeTimer-=delta;
+  if(_chimeTimer<=0){
+    playAirportChime();
+    _chimeTimer=calmMode?150+Math.random()*60:85+Math.random()*35;
+  }
 }
 
 // Sube/baja suavemente el volumen maestro (evita "clics" perceptibles)
@@ -5115,8 +5479,8 @@ function stopSpeech(){
   if(sub) sub.classList.add('hidden');
 }
 
-function openBreathing(){ closeZonePanel(); if(!isMobile)controls.unlock(); document.getElementById('breathing-modal').classList.remove('hidden'); resetBreathUI(); }
-function closeBreathing(){ document.getElementById('breathing-modal').classList.add('hidden'); stopBreathing(); if(!isMobile&&isGameActive&&!isPaused)controls.lock(); }
+function openBreathing(){ closeZonePanel(); uiModalOpen=true; if(!isMobile)controls.unlock(); document.getElementById('breathing-modal').classList.remove('hidden'); resetBreathUI(); }
+function closeBreathing(){ document.getElementById('breathing-modal').classList.add('hidden'); stopBreathing(); uiModalOpen=false; if(!isMobile&&isGameActive&&!isPaused)controls.lock(); }
 function resetBreathUI(){ document.getElementById('breath-phase').textContent='LISTO'; document.getElementById('breath-count').textContent='--'; document.getElementById('breath-instruction').textContent='Presiona "Iniciar" cuando estés preparado'; document.getElementById('btn-start-breath').classList.remove('hidden'); document.getElementById('btn-stop-breath').classList.add('hidden'); const el=document.getElementById('breath-ring-progress'); if(el){el.style.transition='none';el.style.strokeDashoffset='502';} }
 function startBreathing(){ breathCycles=0; breathCount++; document.getElementById('btn-start-breath').classList.add('hidden'); document.getElementById('btn-stop-breath').classList.remove('hidden'); runBreathPhase('inhale'); }
 function stopBreathing(){ if(breathInterval){clearInterval(breathInterval);breathInterval=null;} if(breathPhaseTimer){clearTimeout(breathPhaseTimer);breathPhaseTimer=null;} }
@@ -5408,7 +5772,7 @@ function animate(){
 
   // Suavizado de movimiento: sin sacudidas, transiciones graduales
   // Modo calma activa menor velocidad y FOV reducido
-  if(isGameActive && !isPaused && (isMobile || controls.isLocked)){
+  if(isGameActive && !isPaused && !uiModalOpen && (isMobile || controls.isLocked)){
     if(isMobile){
       // Botones de rotación: velocidad 1.8 rad/s
       if(rotateLeft)  mobileYaw+=1.8*delta;
@@ -5465,6 +5829,8 @@ function animate(){
   boardTimer+=delta;
   if(window.AeroSignage) AeroSignage.update(delta); // reloj de las pantallas FIDS
   updateCabinSky(delta); // nubes que pasan por las ventanillas del avión
+  updateInteractables(delta,t); // FASE 37: avisos de interacción cercana
+  updateAmbientChimes(delta);   // avisos sonoros suaves (si el sonido está activo)
   // Tablero de salidas: redibujar cuando cambia algún vuelo o cada 30 s (reloj)
   if(window.AeroFlights && flightBoardTexture && AeroFlights.version()!==_boardVersion){ _boardVersion=AeroFlights.version(); boardTimer=31; }
   if(boardTimer>30&&flightBoardTexture){ boardTimer=0; drawFlightBoard(); flightBoardTexture.needsUpdate=true; }
