@@ -2145,7 +2145,7 @@ function _cabinBulkheads(){
     ctx.fillStyle='#6fb3e8'; ctx.fillRect(0,0,512,6);
     ctx.fillStyle='#fff'; ctx.font='bold 30px Arial'; ctx.textAlign='center';
     ctx.fillText('SEGURIDAD · SAFETY',256,52);
-    [['🚪','Salidas: adelante y atrás'],['💺','Cinturón abrochado'],['📱','Modo avión activado'],['🫁','Respirá lento: 4 · 7 · 8']]
+    [['🚪','Salidas: adelante y atrás'],['💺','Cinturón abrochado'],['📱','Modo avión activado'],['🌬️','Respirá lento: 4 · 7 · 8']]
       .forEach(([ic,tx],i)=>{ ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.fillRect(28,74+i*54,456,46);
         ctx.fillStyle='#e8f2fb'; ctx.font='24px Arial'; ctx.textAlign='left'; ctx.fillText(ic+'  '+tx,44,105+i*54); });
   });
@@ -5043,6 +5043,7 @@ function toggleMap(){
 }
 
 function showScreen(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.add('hidden')); if(id) document.getElementById(id).classList.remove('hidden'); }
+let _welcomeShown=false;
 function startGame(){
   stopMenuAnimation();
   gameStartTime=Date.now();
@@ -5055,23 +5056,30 @@ function startGame(){
   isGameActive=true; isPaused=false; currentZoneIndex=-1;
   visitedZones.clear(); breathCount=0;
   document.getElementById('breath-count-stat').textContent='0';
-  camera.position.set(0,PLAYER_HEIGHT,52);
+  // Inicio: centro del pasillo, justo antes de la zona de check-in (entrega de
+  // equipaje), mirando hacia los mostradores. La Entrada queda como etapa
+  // cumplida para que el recorrido pueda completarse.
+  const ci=ZONE_DATA.find(z=>z.id==='checkin');
+  camera.position.set(ci.position.x,PLAYER_HEIGHT,ci.position.z+ci.radius+1);
+  _welcomeShown=false;
   playerMesh=buildPlayerBody();
   playerMesh.visible=false;
   scene.add(playerMesh);
   if(isMobile){
-    mobileYaw=Math.PI; mobilePitch=0;
+    mobileYaw=0; mobilePitch=0;
     camera.rotation.order='YXZ';
     camera.rotation.y=mobileYaw; camera.rotation.x=mobilePitch;
-    showToast('✈ Avanzá hacia la entrada. Usá 💡 Consejos, 🫁 Respirar y 🔊 Escuchar.');
+    showToast('✈ Avanzá hacia el check-in. Usá 💡 Consejos, 🌬️ Respirar y 🔊 Escuchar.');
   } else {
-    camera.rotation.set(0,Math.PI,0);
+    camera.rotation.set(0,0,0);
     document.getElementById('click-to-play').classList.remove('hidden');
     document.getElementById('controls-hint').classList.remove('hidden');
     // Auto-focus en el botón principal para que Enter/Espacio funcionen sin mouse
     setTimeout(()=>{ const b=document.getElementById('btn-ctp-activate'); if(b) b.focus(); },80);
   }
   resetProgressUI();
+  const ei=ZONE_DATA.findIndex(z=>z.id==='entrance');
+  if(ei>=0){ visitedZones.add(ei); updateProgress(ei); }
   applyCalmModeState(); // Fase 9: sincroniza visual/NPCs con calmMode al iniciar
   resumeAmbientAudioIfEnabled();
 }
@@ -5102,25 +5110,27 @@ function enterZone(i){
   updateProgress(i);
   if(first){
     flashZoneColor(zone.color); // flash sutil del color de la zona
-    if(i===0){
+    const welcomeNow=!_welcomeShown;
+    if(welcomeNow){
+      _welcomeShown=true;
       // Bienvenida extendida en la primera zona
       const msg=isMobile
-        ? '✈ ¡Primera zona! Tocá 💡 Consejos para leer info, 🫁 para respirar y 🔊 para escuchar la guía.'
+        ? '✈ ¡Primera zona! Tocá 💡 Consejos para leer info, 🌬️ para respirar y 🔊 para escuchar la guía.'
         : '✈ Primera zona alcanzada. Se abrirá el panel de información de cada zona al llegar. Podés usar E, B y 🔊 en cualquier momento.';
       showToast(msg);
     }
     if(guidedMode){
       if(isMobile){
-        if(i!==0) showToast(`${zone.emoji} ${zone.name} -- tocá 💡 para info`);
+        if(!welcomeNow) showToast(`${zone.emoji} ${zone.name} -- tocá 💡 para info`);
         narrateZone(i);
       } else {
         openZonePanel(i);
         narrateZone(i);
-        if(i!==0) showToast(`${zone.emoji} ${zone.name}`);
+        if(!welcomeNow) showToast(`${zone.emoji} ${zone.name}`);
       }
     } else {
       // Modo libre: solo toast suave, sin panel ni narración automática
-      showToast(`${zone.emoji} ${zone.name}`);
+      if(!welcomeNow) showToast(`${zone.emoji} ${zone.name}`);
     }
   }
   if(visitedZones.size>=ZONE_DATA.length) setTimeout(()=>endGame(),2000);
@@ -5591,10 +5601,9 @@ function speak(text){
   const v=voices.find(v=>v.lang.startsWith('es')&&!v.name.includes('Google'))||voices.find(v=>v.lang.startsWith('es'));
   if(v) u.voice=v;
   isSpeaking=true;
-  // Mostrar subtítulo visual
-  const sub=document.getElementById('tts-subtitle');
-  if(sub){ sub.textContent=text; sub.classList.remove('hidden'); }
-  u.onend=()=>{ isSpeaking=false; if(sub) sub.classList.add('hidden'); };
+  // El texto hablado ya no se muestra en pantalla (tapaba el centro en celular);
+  // la misma información está en el panel 💡 Consejos de cada zona.
+  u.onend=()=>{ isSpeaking=false; };
   speechSynth.speak(u);
 }
 // ── Explicación hablada del menú (reemplaza los textos largos) ──
