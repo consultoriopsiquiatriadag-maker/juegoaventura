@@ -643,6 +643,8 @@ function buildInteractiveSpots(){
   buildConsultorio();   // FASE 38
   buildCafeSpot();      // FASE 40: pausa de café en AeroCafé
   buildMateDispensers();// FASE 40: agua caliente para el mate
+  buildReviewsMural();  // FASE 42: mural de reseñas
+  buildDonationTotem(); // FASE 42: aporte voluntario
 }
 
 // ── Mostrador B2 del check-in ───────────────────────────────
@@ -857,6 +859,13 @@ function setupInteractionUI(){
   on('btn-close-checkin',()=>{ clearTimeout(_checkinTimer); if(checkinState==='verifying') _setCheckinLamp('idle'); closeUiModal('checkin-modal'); });
   on('btn-close-kiosk',()=>closeUiModal('kiosk-modal'));
   on('btn-close-office',()=>closeUiModal('office-modal'));
+  on('btn-close-reviews',()=>closeUiModal('reviews-modal'));
+  on('btn-close-donation',()=>closeUiModal('donation-modal'));
+  on('btn-donation-copy',copyDonationAlias);
+  on('btn-donation-back',()=>closeUiModal('donation-modal'));
+  const rf=document.getElementById('review-form'); if(rf) rf.addEventListener('submit',submitReview);
+  // El logo del consultorio en su panel (mismo dibujo que el cartel 3D)
+  const ol=document.getElementById('office-logo'); if(ol) ol.src=drawConsultorioLogo(256).toDataURL('image/png');
   on('btn-cafe-sip',cafeSip);
   on('btn-cafe-done',()=>{ closeUiModal('cafe-modal'); showToast('☕ Pausa de café registrada en tu diario'); });
   on('btn-close-cafe',()=>{ clearTimeout(_cafeTimer); closeUiModal('cafe-modal'); });
@@ -876,6 +885,8 @@ function setupInteractionUI(){
     if(!document.getElementById('checkin-modal').classList.contains('hidden')) document.getElementById('btn-close-checkin').click();
     else if(!document.getElementById('kiosk-modal').classList.contains('hidden')) closeUiModal('kiosk-modal');
     else if(!document.getElementById('office-modal').classList.contains('hidden')) closeUiModal('office-modal');
+    else if(!document.getElementById('reviews-modal').classList.contains('hidden')) closeUiModal('reviews-modal');
+    else if(!document.getElementById('donation-modal').classList.contains('hidden')) closeUiModal('donation-modal');
     else if(!document.getElementById('cafe-modal').classList.contains('hidden')){ clearTimeout(_cafeTimer); closeUiModal('cafe-modal'); }
     else if(!document.getElementById('mate-modal').classList.contains('hidden')){ clearTimeout(_mateTimer); closeUiModal('mate-modal'); }
     else if(!document.getElementById('zone-panel').classList.contains('hidden')) closeZonePanel();
@@ -973,6 +984,7 @@ function buildConsultorio(){
   const L=new THREE.PointLight(0xffe2bf,0.55,6.5); L.position.set(2.2,3.1,0); g.add(L);
 
   _optimizeCharacter(parts);
+  _consultorioIdentity(g,D); // FASE 42: logo y foto institucional
   scene.add(g);
   const hit=new THREE.Mesh(new THREE.BoxGeometry(0.4,2.6,W),new THREE.MeshBasicMaterial({visible:false}));
   hit.position.set(D,1.3,0); g.add(hit);
@@ -1152,6 +1164,198 @@ function fillMate(){
     playUiTone('success');
     logInteraction('mate','agua');
   },2600);
+}
+
+// ─── FASE 42: IDENTIDAD, RESEÑAS Y APORTE VOLUNTARIO ──────
+const DOCTOR_PHOTO='assets/dr-dagnino.jpg';   // foto institucional del Dr. Dagnino
+const MP_ALIAS='dr.peter.mp';                  // alias de Mercado Pago para aportes
+const REVIEWS_KEY='aerocalma_reviews';
+
+// Logo circular "Consultorio" (mismo diseño que el de la Central de turnos),
+// dibujado por código para que se vea nítido a cualquier tamaño.
+function drawConsultorioLogo(size){
+  const c=document.createElement('canvas'); c.width=c.height=size;
+  const x=c.getContext('2d'), R=size/2, k=size/1024;
+  x.fillStyle='#ffffff'; x.beginPath(); x.arc(R,R,R-2,0,Math.PI*2); x.fill();
+  const g=x.createLinearGradient(0,0,0,size); g.addColorStop(0,'#3f6a9e'); g.addColorStop(1,'#4a4370');
+  x.strokeStyle=g; x.lineWidth=34*k; x.beginPath(); x.arc(R,R,R-20*k,0,Math.PI*2); x.stroke();
+  // Texto en arco
+  const arc=(text,radius,center,top,font)=>{
+    x.save(); x.translate(R,R); x.font=font; x.fillStyle='#93b6da'; x.textAlign='center'; x.textBaseline='middle';
+    const chars=[...text]; const widths=chars.map(ch=>x.measureText(ch).width+6*k);
+    const total=widths.reduce((a,b)=>a+b,0); let a=center-(top?1:-1)*total/radius/2;
+    chars.forEach((ch,i)=>{ const step=widths[i]/radius; a+=(top?1:-1)*step/2;
+      x.save(); x.rotate(a); x.translate(0,(top?-1:1)*radius); x.fillText(ch,0,0); x.restore();
+      a+=(top?1:-1)*step/2; });
+    x.restore();
+  };
+  arc('DR. DAGNINO',R-118*k,0,true,`600 ${112*k}px Georgia,serif`);
+  arc('MÉDICO PSIQUIATRA',R-110*k,0,false,`600 ${78*k}px Georgia,serif`);
+  x.fillStyle='#93b6da'; x.fillRect(100*k,R-6*k,80*k,10*k); x.fillRect(size-180*k,R-6*k,80*k,10*k);
+  x.fillStyle='#365d8a'; x.textAlign='center'; x.textBaseline='middle';
+  let fs=150*k; do{ x.font=`700 ${fs}px "Arial Narrow","Roboto Condensed",Arial,sans-serif`; fs-=4*k; }while(x.measureText('CONSULTORIO').width>560*k);
+  x.fillText('CONSULTORIO',R,R-4*k);
+  return c;
+}
+
+// Logo volumétrico (disco con relieve) y cuadro con la foto, en el frente
+// del consultorio. Se llama desde buildConsultorio().
+function _consultorioIdentity(g,D){
+  // Logo: disco con canto, la cara frontal lleva el logo
+  const logoTex=new THREE.CanvasTexture(drawConsultorioLogo(1024)); logoTex.encoding=THREE.sRGBEncoding;
+  logoTex.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  const disc=new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.46,0.07,48),mkStd(0x3f5f8f,0.35,0.3));
+  disc.rotation.z=Math.PI/2; disc.position.set(D+0.115,1.95,1.95); disc.castShadow=true; g.add(disc);
+  const face=new THREE.Mesh(new THREE.CircleGeometry(0.44,48),new THREE.MeshBasicMaterial({map:logoTex,toneMapped:false}) /* colores fieles al logo (sin lavado de ACES) */);
+  face.position.set(D+0.152,1.95,1.95); face.rotation.y=Math.PI/2; g.add(face);
+  // Cuadro institucional con la foto (marco oscuro con filete dorado)
+  const fr=new THREE.Mesh(new THREE.BoxGeometry(0.06,1.12,0.8),mkStd(0x1d2633,0.4,0.2)); fr.position.set(D+0.11,1.75,-1.85); g.add(fr);
+  const fil=new THREE.Mesh(new THREE.BoxGeometry(0.065,1.02,0.7),mkStd(0xc8a35a,0.3,0.7)); fil.position.set(D+0.115,1.75,-1.85); g.add(fil);
+  const photoMat=new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.55});
+  new THREE.TextureLoader().load(DOCTOR_PHOTO,t=>{ t.encoding=THREE.sRGBEncoding; t.anisotropy=renderer.capabilities.getMaxAnisotropy(); photoMat.map=t; photoMat.needsUpdate=true; });
+  const ph=new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.93),photoMat); ph.position.set(D+0.15,1.78,-1.85); ph.rotation.y=Math.PI/2; g.add(ph);
+  // Rótulo bajo la foto
+  const lt=tex(512,96,(ctx)=>{ ctx.fillStyle='#1d2633'; ctx.fillRect(0,0,512,96); ctx.fillStyle='#e9d9a6'; ctx.textAlign='center'; ctx.font='bold 34px Georgia'; ctx.fillText('Dr. Pedro Dagnino',256,44); ctx.fillStyle='#c9d6e6'; ctx.font='24px Georgia'; ctx.fillText('Médico Psiquiatra',256,80); });
+  lt.encoding=THREE.sRGBEncoding;
+  const lb=new THREE.Mesh(new THREE.PlaneGeometry(0.8,0.15),new THREE.MeshStandardMaterial({map:lt,roughness:0.5}));
+  lb.position.set(D+0.15,1.1,-1.85); lb.rotation.y=Math.PI/2; g.add(lb);
+}
+
+// ── Mural de reseñas ─────────────────────────────────────────
+let reviewsTexture=null;
+function loadReviews(){ try{ const r=JSON.parse(localStorage.getItem(REVIEWS_KEY)); return Array.isArray(r)?r:[]; }catch(e){ return []; } }
+function saveReviews(list){ try{ localStorage.setItem(REVIEWS_KEY,JSON.stringify(list.slice(-50))); }catch(e){} }
+function _wrapLines(ctx,text,maxW,maxLines){
+  const words=String(text).split(/\s+/); const lines=[]; let cur='';
+  for(const w of words){ const t=cur?cur+' '+w:w; if(ctx.measureText(t).width>maxW&&cur){ lines.push(cur); cur=w; if(lines.length===maxLines) break; } else cur=t; }
+  if(lines.length<maxLines&&cur) lines.push(cur);
+  if(lines.length===maxLines&&words.join(' ').length>lines.join(' ').length) lines[maxLines-1]=lines[maxLines-1].replace(/.{0,2}$/,'…');
+  return lines;
+}
+function drawReviewsMural(canvas){
+  const x=canvas.getContext('2d'), W=canvas.width, H=canvas.height;
+  const bg=x.createLinearGradient(0,0,0,H); bg.addColorStop(0,'#13304a'); bg.addColorStop(1,'#0d2236');
+  x.fillStyle=bg; x.fillRect(0,0,W,H);
+  x.fillStyle='#8fd3f0'; x.font='600 30px Arial'; x.textAlign='left'; x.fillText('MURAL DE RESEÑAS',48,62);
+  x.fillStyle='#ffffff'; x.font='bold 46px Georgia'; x.fillText('Lo que cuentan quienes ya recorrieron AeroCalma',48,120);
+  const list=loadReviews().slice(-3).reverse();
+  if(!list.length){
+    x.fillStyle='rgba(255,255,255,0.85)'; x.font='36px Georgia'; x.fillText('Todavía no hay reseñas en este dispositivo.',48,250);
+    x.fillStyle='#9ef0cf'; x.font='600 34px Arial'; x.fillText('Acercate y dejá la tuya: tu experiencia puede ayudar a otra persona.',48,310);
+  } else {
+    const cw=(W-48*2-24*2)/3;
+    list.forEach((r,i)=>{
+      const cx=48+i*(cw+24), cy=160, ch=H-210;
+      x.fillStyle='rgba(255,255,255,0.08)'; x.fillRect(cx,cy,cw,ch);
+      x.fillStyle='#4ecdc4'; x.font='bold 60px Georgia'; x.fillText('“',cx+20,cy+66);
+      x.fillStyle='#ffffff'; x.font='28px Georgia';
+      _wrapLines(x,r.text,cw-44,7).forEach((l,k)=>x.fillText(l,cx+22,cy+100+k*38));
+      x.fillStyle='#8fd3f0'; x.font='600 26px Arial'; x.fillText('— '+r.name,cx+22,cy+ch-28);
+    });
+  }
+  x.fillStyle='rgba(255,255,255,0.45)'; x.font='22px Arial'; x.fillText('Las reseñas se guardan solo en este dispositivo.',48,H-22);
+}
+function buildReviewsMural(){
+  scene.updateMatrixWorld(true);
+  const spots=[{x:16.4,z:36},{x:-16.4,z:30},{x:16.4,z:16.5}];
+  const spot=spots.find(p=>_floorIsFree(p.x-0.6,p.z,0.4)&&_floorIsFree(p.x-0.6,p.z-1.6,0.3)&&_floorIsFree(p.x-0.6,p.z+1.6,0.3))||spots[0];
+  const face=spot.x>0?-1:1;
+  const g=new THREE.Group(); g.name='reviewsMural';
+  g.position.set(spot.x,0.09,spot.z); g.rotation.y=face*Math.PI/2;   // frente (+z local) hacia el pasillo
+  const parts=new THREE.Group(); g.add(parts);
+  const B=(w,h,d,col,px,py,pz,r,m)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mkStd(col,r==null?0.5:r,m||0)); o.position.set(px,py+h/2,pz); o.castShadow=true; o.receiveShadow=true; parts.add(o); return o; };
+  B(4.1,2.6,0.16,0x23384d,0,0.35,0,0.45,0.2);             // marco/panel
+  [-1.7,1.7].forEach(px=>B(0.14,0.35,0.3,0x3a4a5a,px,0,0,0.5,0.3)); // patas
+  B(1.3,0.08,0.4,0xd9dee4,0,1.05,0.28,0.4,0.1);            // repisa
+  B(0.1,1.05,0.1,0x3a4a5a,0,0,0.28,0.5,0.3);
+  _optimizeCharacter(parts);
+  const cv=document.createElement('canvas'); cv.width=1600; cv.height=880; drawReviewsMural(cv);
+  reviewsTexture=new THREE.CanvasTexture(cv); reviewsTexture.encoding=THREE.sRGBEncoding; reviewsTexture.anisotropy=renderer.capabilities.getMaxAnisotropy();
+  const screen=new THREE.Mesh(new THREE.PlaneGeometry(3.9,2.14),new THREE.MeshStandardMaterial({map:reviewsTexture,emissive:0xffffff,emissiveMap:reviewsTexture,emissiveIntensity:0.55,roughness:0.5}));
+  screen.position.set(0,1.67,0.085); g.add(screen);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(4.2,2.8,0.8),new THREE.MeshBasicMaterial({visible:false})); hit.position.set(0,1.5,0.2); g.add(hit);
+  const mk=_markerSprite('💬','Dejá tu reseña','#4ecdc4'); mk.position.set(0,3.45,0.3); g.add(mk);
+  scene.add(g);
+  addInteractable({id:'reviews',x:spot.x+face*2.4,z:spot.z,radius:3.0,icon:'💬',label:'Leer y dejar reseñas',
+    root:g,marker:mk,markerBaseY:3.45,onTrigger:openReviewsModal});
+}
+function _escapeHTML(s){ return String(s).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+function renderReviewsList(){
+  const el=document.getElementById('reviews-list'); if(!el) return;
+  const list=loadReviews().slice().reverse();
+  el.innerHTML=list.length
+    ? list.map(r=>`<li><p>“${_escapeHTML(r.text)}”</p><span>— ${_escapeHTML(r.name)} · ${_escapeHTML(r.date||'')}</span></li>`).join('')
+    : '<li class="empty">Todavía no hay reseñas en este dispositivo. ¡Podés ser la primera persona!</li>';
+}
+function openReviewsModal(){
+  renderReviewsList();
+  document.getElementById('review-feedback').classList.add('hidden');
+  openUiModal('reviews-modal');
+}
+function submitReview(e){
+  e.preventDefault();
+  const name=document.getElementById('review-name').value.trim().slice(0,40)||'Anónimo';
+  const text=document.getElementById('review-text').value.trim().slice(0,280);
+  const fb=document.getElementById('review-feedback');
+  if(text.length<3){ fb.textContent='Escribí un comentario breve antes de enviar.'; fb.className='review-feedback warn'; return; }
+  const list=loadReviews();
+  list.push({name,text,date:new Date().toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'})});
+  saveReviews(list);
+  document.getElementById('review-text').value='';
+  fb.textContent='¡Gracias! Tu reseña ya aparece en el mural.'; fb.className='review-feedback ok';
+  renderReviewsList();
+  if(reviewsTexture){ drawReviewsMural(reviewsTexture.image); reviewsTexture.needsUpdate=true; }
+  playUiTone('success');
+  logInteraction('reseña','enviada');
+}
+
+// ── Tótem de aporte voluntario (Mercado Pago) ───────────────
+function buildDonationTotem(){
+  scene.updateMatrixWorld(true);
+  const spots=[{x:-13.6,z:46.5},{x:13.6,z:33},{x:-13.6,z:27}];
+  const spot=spots.find(p=>_floorIsFree(p.x,p.z,0.6)&&_floorIsFree(p.x+(p.x<0?1:-1)*1.2,p.z,0.4))||spots[0];
+  const face=spot.x<0?1:-1;
+  const g=new THREE.Group(); g.name='donationTotem';
+  g.position.set(spot.x,0.09,spot.z); g.rotation.y=face*Math.PI/2;
+  const parts=new THREE.Group(); g.add(parts);
+  const B=(w,h,d,col,px,py,pz,r,m)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mkStd(col,r==null?0.4:r,m||0)); o.position.set(px,py+h/2,pz); o.castShadow=true; o.receiveShadow=true; parts.add(o); return o; };
+  B(0.8,0.06,0.5,0x5c6368,0,0,0,0.5,0.3);                 // base
+  B(0.66,1.9,0.24,0xf4f7fa,0,0.06,0,0.35,0.05);           // cuerpo
+  B(0.68,0.12,0.26,0x009ee3,0,1.96,0,0.4,0.1);            // remate celeste
+  B(0.68,0.05,0.26,0x009ee3,0,0.5,0,0.4,0.1);             // franja
+  _optimizeCharacter(parts);
+  const st=tex(320,640,(ctx)=>{
+    ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,320,640);
+    ctx.fillStyle='#009ee3'; ctx.fillRect(0,0,320,120);
+    ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='bold 34px Arial'; ctx.fillText('APORTE',160,56); ctx.fillText('VOLUNTARIO',160,98);
+    ctx.fillStyle='#e8f6fd'; ctx.beginPath(); ctx.arc(160,250,86,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#009ee3'; ctx.beginPath(); ctx.moveTo(160,300); ctx.bezierCurveTo(90,250,110,190,160,222); ctx.bezierCurveTo(210,190,230,250,160,300); ctx.fill();
+    ctx.fillStyle='#1a2e42'; ctx.font='bold 30px Arial'; ctx.fillText('Soporte del',160,392); ctx.fillText('proyecto',160,430);
+    ctx.fillStyle='#607d9b'; ctx.font='24px Arial'; ctx.fillText('Ayudá a que AeroCalma',160,486); ctx.fillText('siga siendo gratuito',160,518);
+    ctx.fillStyle='#009ee3'; ctx.font='bold 24px Arial'; ctx.fillText('Mercado Pago',160,590);
+  });
+  st.encoding=THREE.sRGBEncoding;
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(0.6,1.2),new THREE.MeshStandardMaterial({map:st,emissive:0xffffff,emissiveMap:st,emissiveIntensity:0.35,roughness:0.5}));
+  scr.position.set(0,1.28,0.125); g.add(scr);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(0.9,2.1,0.6),new THREE.MeshBasicMaterial({visible:false})); hit.position.set(0,1.05,0); g.add(hit);
+  const mk=_markerSprite('💙','Aporte voluntario','#009ee3'); mk.position.set(0,2.65,0.1); mk.scale.multiplyScalar(0.85); g.add(mk);
+  scene.add(g);
+  addInteractable({id:'donation',x:spot.x+face*1.3,z:spot.z,radius:2.4,icon:'💙',label:'Aporte voluntario',
+    root:g,marker:mk,markerBaseY:2.65,onTrigger:openDonationModal});
+}
+function openDonationModal(){
+  document.getElementById('donation-alias').textContent=MP_ALIAS;
+  document.getElementById('donation-copied').classList.add('hidden');
+  openUiModal('donation-modal');
+  logInteraction('aporte','ver');
+}
+function copyDonationAlias(){
+  const done=()=>{ document.getElementById('donation-copied').classList.remove('hidden'); playUiTone('success'); logInteraction('aporte','copiar-alias'); };
+  if(navigator.clipboard&&window.isSecureContext){ navigator.clipboard.writeText(MP_ALIAS).then(done,()=>_legacyCopy(MP_ALIAS)&&done()); }
+  else if(_legacyCopy(MP_ALIAS)) done();
+}
+function _legacyCopy(text){
+  try{ const ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); const ok=document.execCommand('copy'); document.body.removeChild(ta); return ok; }catch(e){ return false; }
 }
 
 // ─── FASE 36: OPTIMIZACIÓN DE GEOMETRÍA Y MATERIALES ───────
@@ -5030,7 +5234,8 @@ function setupEvents(){
   // Mapa y orientacion -- tecla M
   document.addEventListener('keydown',(e)=>{
     if(e.key==='m' || e.key==='M'){
-      if(!isGameActive) return;
+      if(!isGameActive||uiModalOpen) return;
+      if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return;
       toggleMap();
     }
   });
@@ -5060,6 +5265,7 @@ function setupEvents(){
 }
 
 function onKeyDown(e){
+  if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')) return; // escribiendo una reseña
   // ESC con juego pausado → reanudar (el pointer lock ya se liberó; este ESC es el segundo)
   if(e.code==='Escape'&&isGameActive&&isPaused){ resumeGame(); return; }
   if(!isGameActive) return;

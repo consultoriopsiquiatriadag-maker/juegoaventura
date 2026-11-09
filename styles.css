@@ -1667,3 +1667,49 @@ body.calm-mode .steam i { animation-duration: 5s; }
   #approach-hint.is-inside .approach-inner { padding: 6px 6px 6px 14px; }
   #interact-prompt { bottom: 284px; }
 }
+
+/* ══════════════════════════════════════════════════
+   FASE 42 -- Tarjeta del doctor, reseñas y aporte voluntario
+   ══════════════════════════════════════════════════ */
+.office-card { display: flex; gap: 18px; align-items: center; text-align: left; margin: 4px 0 14px; }
+.office-photo {
+  width: 96px; height: 144px; object-fit: cover; border-radius: 12px;
+  border: 3px solid #fff; box-shadow: 0 0 0 1px #c8a35a, 0 8px 22px rgba(20,40,64,0.25);
+}
+.office-id h2 { margin: 6px 0 2px; font-size: 1.5rem; }
+.office-role { color: var(--text-light); font-size: 0.92rem; letter-spacing: .02em; }
+.office-logo { width: 54px; height: 54px; border-radius: 50%; display: block; }
+
+.reviews-box { width: min(560px, 92vw); text-align: left; }
+.reviews-box h2, .reviews-box .ib-eyebrow { text-align: center; }
+.review-form { display: grid; gap: 10px; margin: 8px 0 14px; }
+.review-form label { display: grid; gap: 4px; font-size: 0.82rem; color: var(--text-light); font-weight: 600; }
+.review-form input, .review-form textarea {
+  font: 0.95rem var(--ff-body); color: var(--deep);
+  border: 1.5px solid #d6e2ec; border-radius: 12px; padding: 10px 12px; resize: vertical; background: #f9fbfd;
+}
+.review-form input:focus, .review-form textarea:focus { outline: none; border-color: var(--accent2); background: #fff; }
+.review-form .btn-primary { justify-self: center; }
+.review-feedback { text-align: center; font-size: 0.88rem; }
+.review-feedback.ok { color: #1d6b45; }
+.review-feedback.warn { color: #8a6d1d; }
+.reviews-list { list-style: none; display: grid; gap: 10px; max-height: 32vh; overflow-y: auto; padding-right: 4px; }
+.reviews-list li { background: #f4f8fb; border-radius: 12px; padding: 10px 14px; }
+.reviews-list li p { color: var(--deep); font-size: 0.92rem; line-height: 1.45; }
+.reviews-list li span { display: block; margin-top: 4px; font-size: 0.78rem; color: var(--text-light); }
+.reviews-list li.empty { text-align: center; color: var(--text-light); font-size: 0.9rem; }
+
+.donation-box { width: min(460px, 92vw); }
+.alias-box {
+  display: grid; justify-items: center; gap: 8px;
+  background: #eaf6fd; border: 1.5px solid #b9e2f6; border-radius: 16px; padding: 16px;
+}
+.alias-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: .06em; color: #3f7aa0; }
+.alias-value { font: 700 1.5rem var(--ff-body); color: #0b5f8a; letter-spacing: .02em; user-select: all; }
+.btn-mp { background: linear-gradient(135deg, #00b1ea, #009ee3); box-shadow: 0 4px 18px rgba(0,158,227,0.35); padding: 11px 26px; }
+.alias-copied { color: #1d6b45; font-size: 0.86rem; font-weight: 600; }
+.donation-steps { text-align: left; margin: 16px 6px 0 26px; display: grid; gap: 6px; color: var(--mid); font-size: 0.92rem; }
+@media (max-width: 520px) {
+  .office-photo { width: 78px; height: 117px; }
+  .office-id h2 { font-size: 1.25rem; }
+}

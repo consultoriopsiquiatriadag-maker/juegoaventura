@@ -350,8 +350,14 @@
     <div id="office-modal" class="overlay-dark overlay-soft hidden" role="dialog" aria-modal="true" aria-labelledby="office-title">
         <div class="interact-box office-box">
             <button id="btn-close-office" class="close-btn" type="button" aria-label="Cerrar">✕</button>
-            <p class="ib-eyebrow">🩺 Consultorio · Psiquiatría</p>
-            <h2 id="office-title">Dr. Pedro Dagnino</h2>
+            <div class="office-card">
+                <img class="office-photo" src="assets/dr-dagnino.jpg" alt="Dr. Pedro Dagnino" width="96" height="144">
+                <div class="office-id">
+                    <img id="office-logo" class="office-logo" alt="Logo Consultorio Dr. Dagnino · Médico Psiquiatra" width="54" height="54">
+                    <h2 id="office-title">Dr. Pedro Dagnino</h2>
+                    <p class="office-role">Médico Psiquiatra</p>
+                </div>
+            </div>
             <p class="ib-agent">«Hola, pasá. Si el miedo a volar te limita, podemos trabajarlo juntos.»</p>
             <p class="ib-sub">Podés pedir un turno escribiendo a la Central de turnos por WhatsApp.</p>
             <div class="ib-actions office-actions">
@@ -395,6 +401,45 @@
                 <button id="btn-mate-fill" class="btn-primary" type="button">Cargar agua</button>
                 <button id="btn-mate-done" class="btn-primary hidden" type="button">Seguir el recorrido</button>
             </div>
+        </div>
+    </div>
+
+    <!-- FASE 42: Mural de reseñas -->
+    <div id="reviews-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="reviews-title">
+        <div class="interact-box reviews-box">
+            <button id="btn-close-reviews" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">💬 Mural de reseñas</p>
+            <h2 id="reviews-title">Contá tu experiencia</h2>
+            <form id="review-form" class="review-form" autocomplete="off">
+                <label>Nombre o alias <input id="review-name" type="text" maxlength="40" placeholder="Ej.: Laura, o Anónimo"></label>
+                <label>Tu comentario <textarea id="review-text" maxlength="280" rows="3" placeholder="¿Cómo te sentiste recorriendo el aeropuerto?" required></textarea></label>
+                <button class="btn-primary" type="submit">Publicar en el mural</button>
+                <p id="review-feedback" class="review-feedback hidden" aria-live="polite"></p>
+            </form>
+            <ul id="reviews-list" class="reviews-list" aria-label="Reseñas"></ul>
+            <p class="office-note">Las reseñas se guardan solo en este dispositivo y no se envían a ningún servidor.</p>
+        </div>
+    </div>
+
+    <!-- FASE 42: Aporte voluntario (Mercado Pago) -->
+    <div id="donation-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="donation-title">
+        <div class="interact-box donation-box">
+            <button id="btn-close-donation" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">💙 Aporte voluntario</p>
+            <h2 id="donation-title">Soporte del proyecto</h2>
+            <p class="ib-sub">Tu aporte ayuda a mantener la plataforma activa y gratuita para quienes lo necesitan.</p>
+            <div class="alias-box">
+                <span class="alias-label">Alias de Mercado Pago</span>
+                <strong id="donation-alias" class="alias-value">dr.peter.mp</strong>
+                <button id="btn-donation-copy" class="btn-primary btn-mp" type="button">Copiar alias</button>
+                <span id="donation-copied" class="alias-copied hidden">✓ Alias copiado</span>
+            </div>
+            <ol class="donation-steps">
+                <li>Abrí Mercado Pago (o tu banco) y elegí <b>Transferir</b>.</li>
+                <li>Pegá el alias <b>dr.peter.mp</b>.</li>
+                <li>Elegí el monto que quieras. Es totalmente opcional.</li>
+            </ol>
+            <div class="ib-actions"><button id="btn-donation-back" class="btn-ghost" type="button">Volver al aeropuerto</button></div>
         </div>
     </div>
 
