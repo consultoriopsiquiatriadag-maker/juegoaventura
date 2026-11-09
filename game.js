@@ -96,7 +96,10 @@ let _normalFogDensity=0.006;   // se lee después de setupLighting() para maneja
 // ── AMBIENTE SONORO (Fase 5) ──────────────────────
 // Apagado por defecto: el recorrido empieza siempre sin audio.
 // El usuario lo activa voluntariamente (botón en menú o pausa).
-let audioEnabled=false;
+// Sonido ambiente: activo por defecto; arranca con el clic en "Iniciar Recorrido"
+// (política de audio de los navegadores) y se recuerda si la persona lo apaga.
+let audioEnabled=_loadSoundPref();
+function _loadSoundPref(){ try{ return localStorage.getItem('aerocalma_sound')!=='off'; }catch(e){ return true; } }
 let audioCtx=null, ambientMaster=null, musicGainNode=null, hallGainNode=null;
 let ambientNodes=null;            // referencias para detener/limpiar al salir
 const AMBIENT_MUSIC_BASE=0.05;    // música -- volumen bajo, no invasivo
@@ -826,6 +829,210 @@ function updateGate(delta){
   if(gateFlapTarget&&!_autoWalk&&!uiModalOpen&&camera.position.z<GATE.z-6) { gateFlapTarget=0; if(gateLed) gateLed.material.emissive.setHex(0xff4d4d); }
 }
 
+// ─── FASE 44: SONIDO DE AVIONES, REVISTAS, CARGA Y BAÑOS ───
+
+// ── Paso lejano de un avión (motores a reacción) en la zona de Embarque ──
+// Ruido filtrado con un barrido de frecuencia, un retumbo grave y paneo de
+// izquierda a derecha; sube y baja suave (sin golpes). Respeta el silencio,
+// la pausa y el Modo Calma porque va por el canal del ambiente.
+let _jetTimer=0;
+function playJetFlyby(){
+  if(!audioEnabled||!audioCtx||!ambientMaster) return;
+  const t=audioCtx.currentTime+0.05, dur=11;
+  const len=audioCtx.sampleRate*2, buf=audioCtx.createBuffer(1,len,audioCtx.sampleRate), d=buf.getChannelData(0);
+  let b=0; for(let i=0;i<len;i++){ b=0.97*b+0.03*(Math.random()*2-1); d[i]=b*6; }   // ruido "marrón": más grave
+  const src=audioCtx.createBufferSource(); src.buffer=buf; src.loop=true;
+  const bp=audioCtx.createBiquadFilter(); bp.type='bandpass'; bp.Q.value=0.8;
+  bp.frequency.setValueAtTime(220,t); bp.frequency.linearRampToValueAtTime(820,t+dur*0.45); bp.frequency.linearRampToValueAtTime(260,t+dur);
+  const lp=audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1400;
+  const rum=audioCtx.createBiquadFilter(); rum.type='lowpass'; rum.frequency.value=110;
+  const g=audioCtx.createGain(), peak=calmMode?0.35:0.7;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(peak,t+dur*0.42); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  const pan=audioCtx.createStereoPanner?audioCtx.createStereoPanner():null;
+  src.connect(bp); bp.connect(lp); lp.connect(g); src.connect(rum); rum.connect(g);
+  if(pan){ pan.pan.setValueAtTime(-0.8,t); pan.pan.linearRampToValueAtTime(0.8,t+dur); g.connect(pan); pan.connect(ambientMaster); }
+  else g.connect(ambientMaster);
+  src.start(t); src.stop(t+dur+0.1);
+  src.onended=()=>{ try{ g.disconnect(); if(pan) pan.disconnect(); }catch(e){} };
+}
+function updateJetSounds(delta){
+  const z=currentZoneIndex>=0?ZONE_DATA[currentZoneIndex]:null;
+  if(!z||z.id!=='boarding'||!audioEnabled||isPaused) return;
+  _jetTimer-=delta;
+  if(_jetTimer<=0){ playJetFlyby(); _jetTimer=calmMode?60+Math.random()*30:32+Math.random()*20; }
+}
+
+// Busca el primer lugar libre de una lista (para no chocar con lo existente)
+function _freeSpot(list,r){ scene.updateMatrixWorld(true); return list.find(p=>_floorIsFree(p.x,p.z,r))||null; }
+
+// ── Puesto de revistas digitales ─────────────────────────────
+function _magCoverTex(title,c1,c2){
+  return tex(256,340,(ctx)=>{ const g=ctx.createLinearGradient(0,0,0,340); g.addColorStop(0,c1); g.addColorStop(1,c2); ctx.fillStyle=g; ctx.fillRect(0,0,256,340);
+    ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.font='bold 20px Georgia'; ctx.fillText('AeroCalma',16,34); ctx.fillRect(16,44,224,3);
+    ctx.fillStyle='#fff'; ctx.font='bold 26px Georgia'; _wrapLines(ctx,title,224,6).forEach((l,i)=>ctx.fillText(l,16,110+i*32));
+    ctx.font='16px Arial'; ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.fillText('Dr. Pedro Dagnino',16,322); });
+}
+function buildMagazineStand(){
+  const spot=_freeSpot([{x:-6.5,z:-13.5},{x:6,z:-4.5},{x:-6,z:-4.5},{x:5.5,z:-17.5}],1.3)||{x:-6.5,z:-13.5};
+  const face=spot.x<0?1:-1;
+  const g=new THREE.Group(); g.name='magazineStand'; g.position.set(spot.x,0.09,spot.z); g.rotation.y=face*Math.PI/2;
+  const parts=new THREE.Group(); g.add(parts);
+  const B=(w,h,d,col,px,py,pz,r)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mkStd(col,r==null?0.6:r,0)); o.position.set(px,py+h/2,pz); o.castShadow=true; o.receiveShadow=true; parts.add(o); };
+  B(1.9,0.75,0.6,0x6b4a33,0,0,0,0.7);  B(2.0,0.05,0.7,0xe9e1d3,0,0.75,0,0.4);   // mesón
+  B(1.9,1.3,0.12,0x5a3d28,0,0.8,-0.3,0.7);                                     // atril trasero
+  [1.05,1.55].forEach(y=>B(1.85,0.04,0.16,0xdccfb8,0,y,-0.2,0.6));             // repisas
+  _optimizeCharacter(parts);
+  const covers=[['Claves para entender la ansiedad antes de volar','#1f4e79','#2f7cb3'],['Ejercicios de respiración y regulación','#1d6b4f','#38a37a'],['Preguntas frecuentes sobre el proceso terapéutico','#5b3a7a','#8a5fb0']];
+  covers.forEach(([t,a,b],i)=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(0.42,0.56),new THREE.MeshStandardMaterial({map:_magCoverTex(t,a,b),roughness:0.5}));
+    m.position.set(-0.6+i*0.6,1.37,-0.14); m.rotation.x=-0.18; g.add(m);
+    const flat=new THREE.Mesh(new THREE.PlaneGeometry(0.34,0.46),m.material); flat.rotation.x=-Math.PI/2; flat.rotation.z=(i-1)*0.15; flat.position.set(-0.6+i*0.6,0.81,0.12); g.add(flat); });
+  const st=tex(512,96,(ctx)=>{ ctx.fillStyle='#2b1d12'; ctx.fillRect(0,0,512,96); ctx.fillStyle='#f5d9a8'; ctx.font='bold 36px Georgia'; ctx.textAlign='center'; ctx.fillText('Revistas · Lecturas de bienestar',256,60); });
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(1.9,0.36),new THREE.MeshStandardMaterial({map:st,emissive:0xffffff,emissiveMap:st,emissiveIntensity:0.35})); sg.position.set(0,2.32,-0.23); g.add(sg);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(2.1,2.4,0.9),new THREE.MeshBasicMaterial({visible:false})); hit.position.set(0,1.2,0); g.add(hit);
+  const mk=_markerSprite('📚','Revistas de bienestar','#c8a35a'); mk.position.set(0,2.95,0); mk.scale.multiplyScalar(0.85); g.add(mk);
+  scene.add(g);
+  addInteractable({id:'magazines',x:spot.x+face*1.4,z:spot.z,radius:2.3,icon:'📚',label:'Ver revistas digitales',
+    root:g,marker:mk,markerBaseY:2.95,onTrigger:()=>openUiModal('mag-modal')});
+}
+
+// ── Estaciones de carga de teléfonos ─────────────────────────
+const chargeLeds=[];
+function _buildChargeColumn(x,z,face){
+  const g=new THREE.Group(); g.name='chargeStation'; g.position.set(x,0.09,z); g.rotation.y=face*Math.PI/2;
+  const parts=new THREE.Group(); g.add(parts);
+  const B=(w,h,d,col,px,py,pz,r,m)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mkStd(col,r==null?0.4:r,m||0)); o.position.set(px,py+h/2,pz); o.castShadow=true; parts.add(o); };
+  B(0.6,0.06,0.6,0x3a4048,0,0,0,0.5,0.3); B(0.42,1.9,0.42,0x26313c,0,0.06,0,0.35,0.25); B(0.48,0.08,0.48,0x4ecdc4,0,1.96,0,0.4,0.1);
+  for(let i=0;i<4;i++) B(0.09,0.05,0.02,0x0d1116,-0.13+(i%2)*0.26,0.95+Math.floor(i/2)*0.22,0.215,0.5,0.2);   // tomas USB
+  _optimizeCharacter(parts);
+  const sc=tex(128,128,(ctx)=>{ ctx.fillStyle='#0d1e30'; ctx.fillRect(0,0,128,128); ctx.fillStyle='#4ecdc4'; ctx.font='bold 54px Arial'; ctx.textAlign='center'; ctx.fillText('⚡',64,62); ctx.font='bold 18px Arial'; ctx.fillText('CARGA',64,96); ctx.fillStyle='#9fb3c8'; ctx.font='14px Arial'; ctx.fillText('gratis',64,116); });
+  const s=new THREE.Mesh(new THREE.PlaneGeometry(0.34,0.34),new THREE.MeshStandardMaterial({map:sc,emissive:0xffffff,emissiveMap:sc,emissiveIntensity:0.6})); s.position.set(0,1.6,0.215); g.add(s);
+  // Tira LED de carga (late suave)
+  const led=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.9,0.02),new THREE.MeshStandardMaterial({color:0x113322,emissive:0x2ee59d,emissiveIntensity:1}));
+  led.position.set(0.19,0.5,0.215); g.add(led); chargeLeds.push(led);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(0.7,2,0.7),new THREE.MeshBasicMaterial({visible:false})); hit.position.set(0,1,0); g.add(hit);
+  const mk=_markerSprite('⚡','Cargar el teléfono','#4ecdc4'); mk.position.set(0,2.6,0); mk.scale.multiplyScalar(0.75); g.add(mk);
+  scene.add(g);
+  addInteractable({id:'charge',x:x+face*1.1,z,radius:2.0,icon:'⚡',label:'Cargar el teléfono',root:g,marker:mk,markerBaseY:2.6,onTrigger:openChargeModal});
+}
+function buildChargeStations(){
+  // Una en el hall de check-in, una después de seguridad y una en la sala de espera
+  const bands=[[{x:12.6,z:22},{x:-12.6,z:26.5},{x:12.6,z:30},{x:12.6,z:42},{x:9.2,z:44.5}],[{x:-12.6,z:2},{x:12.6,z:1},{x:-12.6,z:-1.5}],[{x:12.6,z:-16.5},{x:-12.6,z:-17},{x:12.6,z:-11}]];
+  let n=0;
+  bands.forEach(list=>{ const p=list.find(q=>_freeSpot([q],0.5)&&_freeSpot([{x:q.x-Math.sign(q.x)*1.1,z:q.z}],0.35)); if(p){ _buildChargeColumn(p.x,p.z,p.x<0?1:-1); n++; } });
+  return n;
+}
+let _chargeTimer=null;
+function openChargeModal(){
+  clearInterval(_chargeTimer);
+  let pct=18; const fill=document.getElementById('batt-fill'), lab=document.getElementById('batt-pct');
+  const setP=()=>{ fill.style.width=pct+'%'; lab.textContent=pct+'%'; };
+  setP(); document.getElementById('charge-step').textContent='Conectando…'; document.getElementById('charge-tip').classList.add('hidden'); document.getElementById('btn-charge-done').classList.add('hidden');
+  openUiModal('charge-modal');
+  _chargeTimer=setInterval(()=>{ pct=Math.min(100,pct+4); setP();
+    if(pct>=100){ clearInterval(_chargeTimer);
+      document.getElementById('charge-step').textContent='Batería al 100%. Mantener el teléfono conectado un momento te permite hacer una pausa mental de las pantallas y conectar con el entorno.';
+      document.getElementById('charge-tip').classList.remove('hidden'); document.getElementById('btn-charge-done').classList.remove('hidden');
+      playUiTone('success'); logInteraction('carga','telefono'); }
+    else document.getElementById('charge-step').textContent='Cargando… Mientras tanto, levantá la vista: ¿qué ves a tu alrededor?';
+  },140);
+}
+
+// ── Sector de baños ─────────────────────────────────────────
+// Entre la pared lateral del hall (x≈-16.85) y el pasillo; acceso libre del mostrador A3 del check-in
+const RESTROOM={x0:-16.7,x1:-13.6,z0:28.4,z1:35.4,H:3.3,door0:32.6,door1:34.2};
+function _tileTex(base,grout,cells){
+  const t=tex(256,256,(ctx)=>{ ctx.fillStyle=grout; ctx.fillRect(0,0,256,256); const s=256/cells;
+    for(let i=0;i<cells;i++) for(let j=0;j<cells;j++){ ctx.fillStyle=base; ctx.fillRect(i*s+2,j*s+2,s-4,s-4); ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.fillRect(i*s+3,j*s+3,s-8,3); } });
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; t.encoding=THREE.sRGBEncoding; return t;
+}
+function _pictoTex(){
+  return tex(512,200,(ctx)=>{ ctx.fillStyle='#1f2a36'; ctx.fillRect(0,0,512,200); ctx.fillStyle='#fff';
+    const person=(cx,skirt)=>{ ctx.beginPath(); ctx.arc(cx,42,16,0,Math.PI*2); ctx.fill();
+      if(skirt){ ctx.beginPath(); ctx.moveTo(cx-12,64); ctx.lineTo(cx+12,64); ctx.lineTo(cx+26,124); ctx.lineTo(cx-26,124); ctx.closePath(); ctx.fill(); ctx.fillRect(cx-10,124,7,40); ctx.fillRect(cx+3,124,7,40); }
+      else { ctx.fillRect(cx-16,64,32,62); ctx.fillRect(cx-14,126,11,40); ctx.fillRect(cx+3,126,11,40); } };
+    person(90,true); person(200,false);
+    ctx.beginPath(); ctx.arc(318,42,16,0,Math.PI*2); ctx.fill(); ctx.lineWidth=12; ctx.strokeStyle='#fff'; ctx.beginPath(); ctx.arc(318,124,34,0.3,Math.PI*1.9); ctx.stroke(); ctx.fillRect(310,62,14,50);
+    ctx.font='bold 40px Arial'; ctx.textAlign='left'; ctx.fillText('Baños',390,88); ctx.font='24px Arial'; ctx.fillStyle='#b9c8d8'; ctx.fillText('Toilets',392,124); });
+}
+function buildRestrooms(){
+  const R=RESTROOM, D=R.x1-R.x0, W=R.z1-R.z0, cz=(R.z0+R.z1)/2, cx=(R.x0+R.x1)/2;
+  const g=new THREE.Group(); g.name='restrooms'; scene.add(g);
+  const wallT=_tileTex('#eef2f4','#c9d2d8',6); wallT.repeat.set(4,2.5);
+  const wallM=new THREE.MeshStandardMaterial({map:wallT,roughness:0.35});
+  const floorT=_tileTex('#b7c3cc','#8d9aa5',4); floorT.repeat.set(5,6);
+  const B=(w,h,d,mat,px,py,pz)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat); o.position.set(px,py+h/2,pz); o.receiveShadow=true; o.castShadow=true; g.add(o); return o; };
+  const fl=new THREE.Mesh(new THREE.PlaneGeometry(D,W),new THREE.MeshStandardMaterial({map:floorT,roughness:0.3})); fl.rotation.x=-Math.PI/2; fl.position.set(cx,0.1,cz); fl.receiveShadow=true; g.add(fl);
+  B(0.2,R.H,W,wallM,R.x0+0.1,0.09,cz);                                  // fondo
+  [R.z0,R.z1].forEach(z=>B(D,R.H,0.2,wallM,cx,0.09,z));                  // laterales
+  B(D,0.12,W,mkStd(0xf4f6f7,0.7,0),cx,R.H+0.09,cz);                     // techo
+  const panelM=new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xf4f8ff,emissiveIntensity:0.9});
+  [cz-1.6,cz+1.6].forEach(z=>{ const p=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.03,0.9),panelM); p.position.set(cx,R.H+0.02,z); g.add(p); });
+  // Frente con acceso (sin puerta: entrada en "L" típica de aeropuerto)
+  const frontM=mkStd(0x2c4a63,0.5,0.1);
+  B(0.2,R.H,R.door0-R.z0,frontM,R.x1,0.09,(R.z0+R.door0)/2);
+  B(0.2,R.H,R.z1-R.door1,frontM,R.x1,0.09,(R.door1+R.z1)/2);
+  B(0.2,R.H-2.45,R.door1-R.door0,frontM,R.x1,2.54,(R.door0+R.door1)/2);
+  const pt=_pictoTex(); pt.encoding=THREE.sRGBEncoding;
+  const ps=new THREE.Mesh(new THREE.PlaneGeometry(2.4,0.94),new THREE.MeshBasicMaterial({map:pt,toneMapped:false})); ps.position.set(R.x1+0.11,2.95,(R.door0+R.door1)/2); ps.rotation.y=Math.PI/2; g.add(ps);
+  // Mesada con 2 lavabos y espejos sobre el fondo
+  const stone=mkStd(0xf3f1ec,0.25,0.05), chrome=mkStd(0xd9dee2,0.15,0.9);
+  B(0.62,0.08,3.6,stone,R.x0+0.51,0.85,30.6);
+  B(0.55,0.85,3.5,mkStd(0x7b8a96,0.6,0.1),R.x0+0.48,0.0,30.6);
+  const mirrorM=new THREE.MeshStandardMaterial({color:0xdfe7ec,metalness:1.0,roughness:0.05});
+  reflectiveFloorMats.push(mirrorM);   // recibe el mapa de reflejos del hall (ver captureFloorReflections)
+  [29.7,31.5].forEach(z=>{
+    const bowl=new THREE.Mesh(new THREE.SphereGeometry(0.22,20,12,0,Math.PI*2,0,Math.PI/2),mkStd(0xffffff,0.15,0.05)); bowl.scale.set(1,0.45,1.25); bowl.rotation.x=Math.PI; bowl.position.set(R.x0+0.55,0.98,z); g.add(bowl);
+    const tap=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,0.22,10),chrome); tap.position.set(R.x0+0.3,1.05,z); g.add(tap);
+    const spout=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.025,0.03),chrome); spout.position.set(R.x0+0.37,1.15,z); g.add(spout);
+    const frame=new THREE.Mesh(new THREE.BoxGeometry(0.04,1.1,0.95),chrome); frame.position.set(R.x0+0.21,1.82,z); g.add(frame);
+    const mirror=new THREE.Mesh(new THREE.PlaneGeometry(0.86,1.0),mirrorM); mirror.position.set(R.x0+0.235,1.82,z); mirror.rotation.y=Math.PI/2; g.add(mirror);
+  });
+  // Cabina (box) en la esquina del fondo
+  const partM=mkStd(0x8fa7b8,0.45,0.1);
+  [[R.x0,R.x0+1.5]].forEach(([a,b],i)=>{
+    B(0.05,2.0,1.6,partM,b,0.24,R.z1-0.8);                                       // tabique
+    B(b-a-0.75,2.0,0.05,partM,a+(b-a-0.75)/2,0.24,R.z1-1.6);                     // panel frontal
+    const door=B(0.7,1.95,0.05,mkStd(0x6f8ea3,0.45,0.1),b-0.4,0.27,R.z1-1.62);
+    const ind=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.05,0.02),new THREE.MeshStandardMaterial({color:0x113322,emissive:0x2ee59d,emissiveIntensity:1.1})); ind.position.set(b-0.15,1.2,R.z1-1.66); g.add(ind);
+    const wc=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.17,0.42,16),mkStd(0xffffff,0.2,0.05)); wc.position.set((a+b)/2,0.3,R.z1-0.45); g.add(wc);
+    const tank=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.38,0.18),mkStd(0xffffff,0.2,0.05)); tank.position.set((a+b)/2,0.65,R.z1-0.17); g.add(tank);
+  });
+  B(0.25,0.35,0.22,mkStd(0xcfd6db,0.25,0.6),R.x1-0.9,1.15,R.z0+0.21);           // secador de manos
+  const L=new THREE.PointLight(0xf4f8ff,0.55,7); L.position.set(cx,R.H-0.3,cz); g.add(L);
+  // Interacción: frente a los lavabos y en una cabina
+  const hitS=new THREE.Mesh(new THREE.BoxGeometry(1.2,2,3.7),new THREE.MeshBasicMaterial({visible:false})); hitS.position.set(R.x0+0.6,1,30.6); g.add(hitS);
+  addInteractable({id:'restroom-sink',x:R.x0+1.5,z:30.6,radius:1.5,icon:'💧',label:'Pausa en el lavabo',root:g,onTrigger:openRestroomModal});
+  addInteractable({id:'restroom-box',x:R.x0+0.75,z:R.z1-2.2,radius:0.9,icon:'🚪',label:'Entrar a un box',root:g,onTrigger:openRestroomModal});
+}
+function openRestroomModal(){ openUiModal('restroom-modal'); }
+// Agua fría: gotas y tono frío en pantalla con un mensaje guiado
+function coldWaterFace(){
+  closeUiModal('restroom-modal');
+  const ov=document.getElementById('cold-water'), drops=ov.querySelector('.cw-drops');
+  if(!drops.childElementCount){ for(let i=0;i<46;i++){ const s=document.createElement('i'); s.style.left=(Math.random()*100)+'%'; s.style.animationDelay=(Math.random()*2.2)+'s'; s.style.animationDuration=(1.6+Math.random()*1.4)+'s'; drops.appendChild(s); } }
+  ov.classList.remove('hidden'); requestAnimationFrame(()=>ov.classList.add('show'));
+  uiModalOpen=true; releaseMovementKeys();
+  playWaterSplash();
+  logInteraction('baño','agua-fria');
+  clearTimeout(ov._t); ov._t=setTimeout(()=>{ ov.classList.remove('show'); setTimeout(()=>{ ov.classList.add('hidden'); uiModalOpen=false; },900); },calmMode?9000:7500);
+}
+function playWaterSplash(){
+  const out=_uiOut(); if(!out) return;
+  const t=audioCtx.currentTime, len=audioCtx.sampleRate*1.6, buf=audioCtx.createBuffer(1,len,audioCtx.sampleRate), d=buf.getChannelData(0);
+  for(let i=0;i<len;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/len,1.5);
+  const src=audioCtx.createBufferSource(); src.buffer=buf;
+  const hp=audioCtx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=900;
+  const g=audioCtx.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.12,t+0.15); g.gain.exponentialRampToValueAtTime(0.0001,t+1.6);
+  src.connect(hp); hp.connect(g); g.connect(out); src.start(t);
+}
+function restroomBreathing(){
+  closeUiModal('restroom-modal');
+  openBreathing();
+  const sub=document.querySelector('#breathing-modal .breath-subtitle'); if(sub) sub.textContent='Pausa en el baño · Inhala 4 · Retén 7 · Exhala 8';
+  startBreathing();
+  logInteraction('baño','respiracion');
+}
+
 // ─── FASE 37: PUNTOS DE INTERACCIÓN (check-in y kiosko) ─────
 // Exposición guiada a micro-situaciones reales: entregar documentos en el
 // mostrador y elegir algo para tomar en la sala de espera. Al acercarse
@@ -865,10 +1072,13 @@ function buildInteractiveSpots(){
   buildCheckinDesk();
   buildWellnessKiosk();
   buildConsultorio();   // FASE 38
+  buildRestrooms();     // FASE 44: sector de baños (antes que los demás: ocupa su lugar)
   buildCafeSpot();      // FASE 40: pausa de café en AeroCafé
   buildMateDispensers();// FASE 40: agua caliente para el mate
   buildReviewsMural();  // FASE 42: mural de reseñas
   buildDonationTotem(); // FASE 42: aporte voluntario
+  buildMagazineStand(); // FASE 44: revistas digitales
+  buildChargeStations();// FASE 44: estaciones de carga
 }
 
 // ── Mostrador B2 del check-in ───────────────────────────────
@@ -1083,6 +1293,15 @@ function setupInteractionUI(){
   on('btn-close-kiosk',()=>closeUiModal('kiosk-modal'));
   on('btn-close-office',()=>closeUiModal('office-modal'));
   on('btn-gate-scan',scanBoardingPass);
+  on('btn-close-mag',()=>closeUiModal('mag-modal'));
+  document.querySelectorAll('#mag-modal .mag-cover').forEach(a=>a.addEventListener('click',()=>logInteraction('revista',a.dataset.mag)));
+  on('btn-close-charge',()=>{ clearInterval(_chargeTimer); closeUiModal('charge-modal'); });
+  on('btn-charge-done',()=>{ closeUiModal('charge-modal'); showToast('⚡ Teléfono cargado. Buen momento para mirar alrededor.'); });
+  on('btn-close-restroom',()=>closeUiModal('restroom-modal'));
+  on('btn-reg-water',coldWaterFace);
+  on('btn-reg-breath',restroomBreathing);
+  on('btn-hud-sound',toggleAmbientSound);
+  syncSoundButtons();
   on('btn-gate-walk',walkToAircraft);
   on('btn-close-gate',()=>{ clearTimeout(_gateTimer); closeUiModal('gate-modal'); });
   on('btn-close-reviews',()=>closeUiModal('reviews-modal'));
@@ -1111,6 +1330,9 @@ function setupInteractionUI(){
     if(!document.getElementById('checkin-modal').classList.contains('hidden')) document.getElementById('btn-close-checkin').click();
     else if(!document.getElementById('kiosk-modal').classList.contains('hidden')) closeUiModal('kiosk-modal');
     else if(!document.getElementById('office-modal').classList.contains('hidden')) closeUiModal('office-modal');
+    else if(!document.getElementById('mag-modal').classList.contains('hidden')) closeUiModal('mag-modal');
+    else if(!document.getElementById('charge-modal').classList.contains('hidden')){ clearInterval(_chargeTimer); closeUiModal('charge-modal'); }
+    else if(!document.getElementById('restroom-modal').classList.contains('hidden')) closeUiModal('restroom-modal');
     else if(!document.getElementById('gate-modal').classList.contains('hidden')){ clearTimeout(_gateTimer); closeUiModal('gate-modal'); }
     else if(!document.getElementById('reviews-modal').classList.contains('hidden')) closeUiModal('reviews-modal');
     else if(!document.getElementById('donation-modal').classList.contains('hidden')) closeUiModal('donation-modal');
@@ -1351,7 +1573,7 @@ function buildMateDispensers(){
   let n=0;
   bands.forEach(zs=>{
     for(const z of zs){
-      const sides=(n%2===0)?[-1,1]:[1,-1];          // alterna lados del hall
+      const sides=(n%2===0)?[1,-1]:[-1,1];          // alterna lados del hall
       let placed=false;
       for(const sd of sides){
         for(const ax of [11.5,10.5,12.5]){
@@ -2842,7 +3064,7 @@ function buildShopBase(x,z,width,depth,wallCol,fasciaCol){
   const bw=new THREE.Mesh(mkBox(0.28,h,width),wm);
   bw.position.set(bx,h/2,z); bw.castShadow=true; scene.add(bw);
   // Paredes laterales
-  [z-width/2,z+width].forEach(sz=>{
+  [z-width/2,z+width/2].forEach(sz=>{   // (antes z+width: dejaba una pared suelta 4 m más allá del local)
     const sw=new THREE.Mesh(mkBox(depth,h,0.22),wm);
     sw.position.set(x+s*depth/2,h/2,sz); sw.castShadow=true; scene.add(sw);
   });
@@ -5492,6 +5714,7 @@ function checkZones(){
 function enterZone(i){
   currentZoneIndex=i;
   const zone=ZONE_DATA[i];
+  if(zone.id==='boarding') _jetTimer=2.5; // al llegar al gate se oye un avión despegando a lo lejos
   const first=!visitedZones.has(i);
   visitedZones.add(i);
   updateProgress(i);
@@ -5926,12 +6149,15 @@ function syncSoundButtons(){
   if(mainBtn) mainBtn.setAttribute('aria-pressed', audioEnabled?'true':'false');
   if(pauseBtn) pauseBtn.setAttribute('aria-pressed', audioEnabled?'true':'false');
   if(label) label.textContent=audioEnabled?'ON':'OFF';
+  const hud=document.getElementById('btn-hud-sound');
+  if(hud){ hud.textContent=audioEnabled?'🔊':'🔇'; hud.setAttribute('aria-pressed',audioEnabled?'true':'false'); hud.setAttribute('aria-label',audioEnabled?'Silenciar el sonido ambiente':'Activar el sonido ambiente'); }
 }
 
 // Activa/desactiva el ambiente sonoro -- debe llamarse desde un gesto del
 // usuario (click) por la política de autoplay de los navegadores.
 function toggleAmbientSound(){
   audioEnabled=!audioEnabled;
+  try{ localStorage.setItem('aerocalma_sound',audioEnabled?'on':'off'); }catch(e){}
   if(audioEnabled){
     const ok=ensureAmbientAudio();
     if(!ok){ audioEnabled=false; syncSoundButtons(); return; }
@@ -6023,7 +6249,7 @@ function stopSpeech(){
 }
 
 function openBreathing(){ closeZonePanel(); uiModalOpen=true; if(!isMobile)controls.unlock(); document.getElementById('breathing-modal').classList.remove('hidden'); resetBreathUI(); }
-function closeBreathing(){ document.getElementById('breathing-modal').classList.add('hidden'); stopBreathing(); uiModalOpen=false; if(!isMobile&&isGameActive&&!isPaused)controls.lock(); }
+function closeBreathing(){ document.getElementById('breathing-modal').classList.add('hidden'); stopBreathing(); uiModalOpen=false; const _bs=document.querySelector('#breathing-modal .breath-subtitle'); if(_bs) _bs.textContent='Inhala 4 seg · Retén 7 seg · Exhala 8 seg'; if(!isMobile&&isGameActive&&!isPaused)controls.lock(); }
 function resetBreathUI(){ document.getElementById('breath-phase').textContent='LISTO'; document.getElementById('breath-count').textContent='--'; document.getElementById('breath-instruction').textContent='Presiona "Iniciar" cuando estés preparado'; document.getElementById('btn-start-breath').classList.remove('hidden'); document.getElementById('btn-stop-breath').classList.add('hidden'); const el=document.getElementById('breath-ring-progress'); if(el){el.style.transition='none';el.style.strokeDashoffset='502';} }
 function startBreathing(){ breathCycles=0; breathCount++; document.getElementById('btn-start-breath').classList.add('hidden'); document.getElementById('btn-stop-breath').classList.remove('hidden'); runBreathPhase('inhale'); }
 function stopBreathing(){ if(breathInterval){clearInterval(breathInterval);breathInterval=null;} if(breathPhaseTimer){clearTimeout(breathPhaseTimer);breathPhaseTimer=null;} }
@@ -6297,9 +6523,10 @@ function buildHallQuality(){
     var tape=new THREE.Mesh(mkBox(0.08,0.04,6),tapeMat);
     tape.position.set(-8+ti,1.8,28); scene.add(tape);
   }
-  [[-16,38],[16,38],[-16,30],[16,30],[-16,22],[16,22]].forEach(function(pp){ addPlant(pp[0],pp[1],1.0+Math.random()*0.5); });
+  // (-16,38) y (-16,30) quedaban dentro del consultorio y de los baños
+  [[16,38],[16,30],[-16,22],[16,22]].forEach(function(pp){ addPlant(pp[0],pp[1],1.0+Math.random()*0.5); });
   var binColors=[0x44aa44,0x4488cc,0xcccc44];
-  var binPos=[[-12,32],[12,32],[-14,32],[14,32],[-8,36],[8,36]];
+  var binPos=[[-12,31.4],[12,32],[14,32],[-8,36],[8,36]]; // sin el de (-14,32): era la entrada de los baños
   binPos.forEach(function(bp,bi){
     var bin=new THREE.Mesh(mkBox(0.5,0.8,0.5),mkStd(binColors[bi%3],0.7,0.05));
     bin.position.set(bp[0],0.4,bp[1]); bin.castShadow=true; scene.add(bin);
@@ -6344,7 +6571,8 @@ function animate(){
       controls.moveRight(-velocity.x*delta); controls.moveForward(-velocity.z*delta);
     }
     const pos=camera.position;
-    pos.x=Math.max(-16,Math.min(16,pos.x)); pos.z=Math.max(-70,Math.min(54,pos.z)); pos.y=PLAYER_HEIGHT;
+    const inWC=pos.z>RESTROOM.z0+0.3&&pos.z<RESTROOM.z1-0.3&&pos.x<-15.5;
+    pos.x=Math.max(inWC?RESTROOM.x0+0.75:-16,Math.min(16,pos.x)); pos.z=Math.max(-70,Math.min(54,pos.z)); pos.y=PLAYER_HEIGHT;
     checkZones();
   }
 
@@ -6375,6 +6603,8 @@ function animate(){
   updateInteractables(delta,t); // FASE 37: avisos de interacción cercana
   updateConsultorio(delta,t);   // FASE 38: puerta y doctor del consultorio
   updateGate(delta);            // FASE 43: hojas de las puertas automáticas
+  updateJetSounds(delta);       // FASE 44: aviones a lo lejos en Embarque
+  if(chargeLeds.length){ const k=0.6+Math.abs(Math.sin(t*1.6))*0.9; chargeLeds.forEach(l=>l.material.emissiveIntensity=k); }
   updateAutoWalk(delta);        // FASE 43: caminata guiada por la manga
   updateAmbientChimes(delta);   // avisos sonoros suaves (si el sonido está activo)
   // Tablero de salidas: redibujar cuando cambia algún vuelo o cada 30 s (reloj)

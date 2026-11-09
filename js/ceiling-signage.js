@@ -49,9 +49,9 @@ const LAYOUT = {
   ],
   restrooms: [
     // "right" para quien mira a -Z = lado +X del hall
-    { x: 9.5, z: 31, front:'right', back:'left' },
-    { x: 9.5, z: -8, front:'right', back:'left' },
-    { x: 9.5, z:-24, front:'up',    back:'up'   },
+    // Los baños están sobre la pared izquierda (x≈-16, z≈32), entre AeroCafé y el consultorio
+    { x: 9.5, z: 31, front:'left',  back:'right' },
+    { x: 9.5, z: -8, front:'down',  back:'up'    },
   ],
   fids: [
     { x: 0, z: 29 },

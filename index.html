@@ -144,6 +144,7 @@
                     <span class="step" data-zone="6">🏁</span>
                 </div>
             </div>
+            <button id="btn-hud-sound" class="hud-btn hud-sound" type="button" aria-pressed="true" aria-label="Silenciar el sonido ambiente">🔊</button>
             <button id="btn-pause" class="hud-btn" aria-label="Pausar el juego">⏸ Pausa</button>
         </div>
 
@@ -469,6 +470,56 @@
                 <button id="btn-gate-walk" class="btn-primary hidden" type="button">Caminar hacia el avión →</button>
             </div>
         </div>
+    </div>
+
+    <!-- FASE 44: Revistas digitales -->
+    <div id="mag-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="mag-title">
+        <div class="interact-box mag-box">
+            <button id="btn-close-mag" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">📚 Revistas y lecturas de bienestar</p>
+            <h2 id="mag-title">Elegí una lectura</h2>
+            <p class="ib-sub">Se abre en una pestaña nueva. Cuando termines, volvés al aeropuerto donde estabas.</p>
+            <div class="mag-grid">
+                <a class="mag-cover mag-1" data-mag="ansiedad" href="https://www.instagram.com/doctor.dagnino/" target="_blank" rel="noopener noreferrer"><span class="mag-brand">AeroCalma</span><span class="mag-title">Claves para entender la ansiedad antes de volar</span><span class="mag-cta">Ver en Instagram ↗</span></a>
+                <a class="mag-cover mag-2" data-mag="respiracion" href="https://www.instagram.com/doctor.dagnino/reels/" target="_blank" rel="noopener noreferrer"><span class="mag-brand">AeroCalma</span><span class="mag-title">Ejercicios prácticos de respiración y regulación</span><span class="mag-cta">Ver reels ↗</span></a>
+                <a class="mag-cover mag-3" data-mag="faq" href="https://juegosconsultoriodagnino.netlify.app/turnos" target="_blank" rel="noopener noreferrer"><span class="mag-brand">Consultorio</span><span class="mag-title">Preguntas frecuentes sobre el proceso terapéutico</span><span class="mag-cta">Ver en el sitio ↗</span></a>
+            </div>
+        </div>
+    </div>
+
+    <!-- FASE 44: Estación de carga -->
+    <div id="charge-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="charge-title">
+        <div class="interact-box ritual-box">
+            <button id="btn-close-charge" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">⚡ Estación de carga</p>
+            <h2 id="charge-title">Una pausa de pantallas</h2>
+            <div class="ritual-visual" aria-hidden="true">
+                <div class="phone"><div class="phone-screen"><div class="batt"><div id="batt-fill" class="batt-fill"></div></div><span id="batt-pct">18%</span></div></div>
+            </div>
+            <p id="charge-step" class="ritual-step" aria-live="polite"></p>
+            <p id="charge-tip" class="ritual-tip hidden">Probá 2 minutos sin mirar el teléfono: nombrá 3 cosas que ves y 2 sonidos que escuchás.</p>
+            <div class="ib-actions"><button id="btn-charge-done" class="btn-primary hidden" type="button">Seguir el recorrido</button></div>
+        </div>
+    </div>
+
+    <!-- FASE 44: Baños -- pausa de regulación -->
+    <div id="restroom-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="restroom-title">
+        <div class="interact-box">
+            <button id="btn-close-restroom" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">🚻 Baños · Pausa de regulación</p>
+            <h2 id="restroom-title">Un momento para vos</h2>
+            <p class="ib-sub">Estás en un espacio tranquilo y privado. Elegí lo que te haga bien ahora.</p>
+            <div class="kiosk-items reg-items">
+                <button id="btn-reg-water" class="kiosk-item" type="button"><span class="ki-ico">💧</span><span class="ki-name">Lavarse la cara con agua fría</span><span class="ki-desc">Calma el cuerpo en segundos</span></button>
+                <button id="btn-reg-breath" class="kiosk-item" type="button"><span class="ki-ico">🌬️</span><span class="ki-name">Respiración rápida 4-7-8</span><span class="ki-desc">Tres ciclos guiados</span></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FASE 44: Efecto de agua fría -->
+    <div id="cold-water" class="cold-water hidden" aria-live="polite">
+        <div class="cw-drops" aria-hidden="true"></div>
+        <p class="cw-msg">El agua fría estimula el nervio vago, ayudando a reducir la frecuencia cardíaca de forma inmediata. Siente el alivio.</p>
     </div>
 
     <div id="breathing-modal" class="overlay-dark hidden">
