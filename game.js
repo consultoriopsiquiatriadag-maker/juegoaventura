@@ -219,6 +219,7 @@ function init(){
   spawnStaffNPCs();
   loadCabinCrew();
   optimizeSceneResources(); // FASE 36: comparte materiales/geometrías y fusiona props fijos
+  window._lightFit=fitLightsToGPU(); // FASE 41: evita la pantalla blanca en GPUs de celular
   setupPostProcessing();
   setupEvents();
   setupInteractionUI();
@@ -1315,6 +1316,27 @@ function _sceneStats(){
   const g=new Set(), m=new Set(); let meshes=0, casters=0;
   scene.traverse(o=>{ if(!o.isMesh) return; meshes++; if(o.castShadow) casters++; g.add(o.geometry); [].concat(o.material).forEach(x=>m.add(x)); });
   return {meshes,casters,geometries:g.size,materials:m.size};
+}
+
+// ── Luces según la GPU del dispositivo ──────────────────────
+// Cada luz puntual ocupa ~4 "uniforms" del shader de cada material. Muchos
+// celulares Android solo admiten 224–256 (las PC y los iPhone, 1024): con las
+// ~69 luces del hall el shader no compila y la escena se ve en blanco, con
+// solo carteles. Se conservan las luces que entran (las más influyentes) y se
+// compensa con un poco de luz ambiente. En celular, además, máximo 12 por
+// rendimiento.
+let _ambientExtra=0;
+function fitLightsToGPU(){
+  const maxU=renderer.capabilities.maxFragmentUniforms||224;
+  const pls=[]; scene.traverse(o=>{ if(o.isPointLight) pls.push(o); });
+  let budget=Math.max(0,Math.floor((maxU-60-48)/4)); // ~60 del material + margen
+  if(isMobile) budget=Math.min(budget,12);
+  if(pls.length<=budget) return {kept:pls.length,removed:0,maxU};
+  pls.sort((a,b)=>b.intensity*(b.distance||30)-a.intensity*(a.distance||30));
+  const drop=pls.slice(budget);
+  drop.forEach(l=>{ if(l.parent) l.parent.remove(l); });
+  _ambientExtra=Math.min(0.12,0.03+drop.length*0.0015);
+  return {kept:budget,removed:drop.length,maxU};
 }
 
 function optimizeSceneResources(){
@@ -5212,7 +5234,7 @@ function startGame(){
   // equipaje), mirando hacia los mostradores. La Entrada queda como etapa
   // cumplida para que el recorrido pueda completarse.
   const ci=ZONE_DATA.find(z=>z.id==='checkin');
-  camera.position.set(ci.position.x,PLAYER_HEIGHT,ci.position.z+ci.radius+1);
+  camera.position.set(ci.position.x,PLAYER_HEIGHT,ci.position.z+ci.radius+0.8); // más cerca del check-in que de la Entrada
   _welcomeShown=false;
   playerMesh=buildPlayerBody();
   playerMesh.visible=false;
@@ -6125,7 +6147,7 @@ function animate(){
 
   // Ciclo sutil de luz ambiental -- simula variación de iluminación del aeropuerto
   // Período ~52 s, amplitud ±0.03 → imperceptible pero da vida al espacio
-  if(ambientLight) ambientLight.intensity=AMBIENT_BASE+Math.sin(t*0.12)*0.03;
+  if(ambientLight) ambientLight.intensity=AMBIENT_BASE+_ambientExtra+Math.sin(t*0.12)*0.03;
 
   // Rings pulse -- más suave en modo calma
   ringTime+=delta;

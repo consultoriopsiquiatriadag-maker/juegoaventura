@@ -1659,3 +1659,11 @@ body.calm-mode #interact-prompt { animation: none; }
 }
 @media (prefers-reduced-motion: reduce) { .steam i { animation: none; opacity: .5; } .cup-fill, .termo-fill { transition: none; } }
 body.calm-mode .steam i { animation-duration: 5s; }
+
+/* FASE 41 -- En celular, carteles por encima del joystick y de los botones de giro */
+@media (max-width: 768px) {
+  #approach-hint { bottom: 232px; max-width: 92vw; }
+  #approach-hint .approach-inner { white-space: nowrap; font-size: 0.8rem; padding: 7px 14px; }
+  #approach-hint.is-inside .approach-inner { padding: 6px 6px 6px 14px; }
+  #interact-prompt { bottom: 284px; }
+}
