@@ -1812,3 +1812,14 @@ body.calm-mode #flight-hud.fh-swap .fh-body { animation: none; }
   #flight-hud { bottom: 16px; padding: 10px 12px; }
   #flight-hud .fh-ico { font-size: 1.6rem; }
 }
+
+/* FASE 47: cartel del cinturón en el panel del vuelo */
+#flight-hud .fh-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#flight-hud .fh-belt {
+  font: 700 .7rem var(--ff-body); padding: 3px 8px; border-radius: 20px;
+  color: rgba(255,255,255,0.45); background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+  transition: color .4s, background .4s, box-shadow .4s;
+}
+#flight-hud .fh-belt.on { color: #1b1300; background: #ffcf5a; border-color: #ffcf5a; box-shadow: 0 0 12px rgba(255,207,90,0.55); }
+#flight-hud .fh-actions button { padding: 9px 6px; font-size: .8rem; }
+@media (max-width: 600px) { #flight-hud .fh-actions button { font-size: .74rem; } }

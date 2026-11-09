@@ -1304,6 +1304,7 @@ function setupInteractionUI(){
   on('btn-reg-breath',restroomBreathing);
   on('btn-hud-sound',toggleAmbientSound);
   on('btn-flight-skip',skipToLanding);
+  on('btn-flight-breath',()=>{ if(_flight) openBreathing(); });
   on('btn-flight-stand',()=>endFlight(false));
   syncSoundButtons();
   on('btn-gate-walk',walkToAircraft);
@@ -2797,7 +2798,8 @@ function _cabinBins(rows){
     p.position.set(x+sd*1.64,2.0,(binZ0+binZ1)/2); p.receiveShadow=true; scene.add(p);
   });
   const readM=new THREE.MeshBasicMaterial({color:new THREE.Color(1.1,1.0,0.85)});
-  const signM=new THREE.MeshBasicMaterial({color:new THREE.Color(0.35,0.55,0.85)});
+  const signM=new THREE.MeshBasicMaterial({color:new THREE.Color(0.28,0.3,0.34)});
+  cabinBeltSign=signM;   // FASE 47: se enciende en despegue, turbulencia y aterrizaje
   const reads=[], signs=[];
   rows.forEach(zr=>[-1,1].forEach(sd=>{
     for(let k=0;k<3;k++) reads.push(_m4(x+sd*(CABIN.aisleHalf+CABIN.seatW*(k+0.5)),1.98,zr+0.12));
@@ -2909,9 +2911,17 @@ function _cabinWindows(rows){
     });
   });
   _cabinInstanced(frameGeo,frameM,frames);
-  _cabinInstanced(glassGeo,glassMat(cabinSky.left,-0.38),glassL,false);
-  _cabinInstanced(glassGeo,glassMat(cabinSky.right,0.38),glassR,false);
-  if(shades.length) _cabinInstanced(shadeGeo,shadeM,shades);
+  cabinSky.matL=_cabinInstanced(glassGeo,glassMat(cabinSky.left,-0.38),glassL,false).material;
+  cabinSky.matR=_cabinInstanced(glassGeo,glassMat(cabinSky.right,0.38),glassR,false).material;
+  // FASE 47: vistas por etapa del vuelo (el avión arranca estacionado en la puerta)
+  cabinSky.views={
+    sky:{left:cabinSky.left,right:cabinSky.right},
+    ground:{left:_cabinGroundTexture(4242),right:_cabinGroundTexture(9191)},
+    fog:{left:_cabinFogTexture(555),right:_cabinFogTexture(777)}
+  };
+  cabinSky.all=[].concat(...Object.values(cabinSky.views).map(v=>[v.left,v.right]));
+  _setWindowView('ground',true);
+  if(shades.length) cabinSky.shades=_cabinInstanced(shadeGeo,shadeM,shades);
 }
 
 // Desplazamiento continuo de las nubes (el avión avanza hacia +Z:
@@ -2919,8 +2929,12 @@ function _cabinWindows(rows){
 function updateCabinSky(delta){
   if(!cabinSky) return;
   const v=(calmMode?0.006:0.015)*delta*_skyMul;
-  cabinSky.right.offset.x+=v;
-  cabinSky.left.offset.x-=v;
+  if(!v) return;
+  const views=cabinSky.views||{sky:{left:cabinSky.left,right:cabinSky.right}};
+  Object.keys(views).forEach(k=>{
+    const m=v*(WIN_VIEW_SPEED[k]||1);
+    views[k].right.offset.x+=m; views[k].left.offset.x-=m;
+  });
 }
 
 // ── 6. MAMPAROS delantero y trasero con puertas, galley y pantallas ──
@@ -3003,6 +3017,7 @@ function _cabinLighting(){
   for(let zz=zFront-2.2; zz>zRear+1; zz-=4.6){
     const l=new THREE.PointLight(0xffe7c8,0.55,6.5);
     l.position.set(x,2.75,zz); scene.add(l);
+    l.userData.baseI=0.55; (cabinLights=cabinLights||{pts:[],strip:stripM}).pts.push(l);
   }
 }
 
@@ -4984,7 +4999,7 @@ function spawnCabinCrewFallback(){
   npcs.push(att1); scene.add(att1);
 
   // Carrito de servicio junto a auxiliar 1
-  const cart1=buildServiceCart();
+  const cart1=buildServiceCart(); serviceCart=cart1;
   cart1.position.set(1.2, 0, -33.0);   // galley derecho, fuera del paso de la puerta
   cart1.rotation.y=-Math.PI*0.08;
   scene.add(cart1);
@@ -6360,7 +6375,7 @@ const CREW_DIR='audios/tripulacion/', CAPT_DIR='audios/comandante/';
 let _flight=null;            // vuelo en curso
 let _cabinSeq=null;          // secuencia de audios (bienvenida a bordo o vuelo)
 let _seat14C=null;           // {x,z}
-let _skyMul=1;               // multiplicador de velocidad de las nubes
+let _skyMul=0;               // velocidad de lo que pasa por la ventanilla (0 = estacionado)
 let _eng=null;               // nodos del sonido de motores
 
 function buildSeatSpot(){
@@ -6383,6 +6398,8 @@ function _seqJump(label){
 }
 function updateCabinSeq(delta){
   const s=_cabinSeq; if(!s||isPaused) return;
+  // Respirando: el anuncio en curso se repite al volver
+  if(_breathOpen()){ if(s.state==='playing') s.state='idle'; return; }
   if(s.wait>0){ s.wait-=delta; return; }
   if(s.state==='playing'){
     if(isSpeaking) return;
@@ -6418,7 +6435,9 @@ function startFlight(){
   _autoWalk=null;
   // Asomado apenas al pasillo: así se ve adelante (y a la azafata) por sobre el respaldo
   _flight={ seat:new THREE.Vector3(_seat14C.x+0.21,CABIN.floorY+1.2,_seat14C.z+0.05),
-            shake:0, shakeTarget:0, bump:0, tilt:0, tiltTarget:0, t:0 };
+            shake:0, shakeTarget:0, bump:0, tilt:0, tiltTarget:0, skyTarget:0, t:0 };
+  _crewWalkers(false); _setWindowView('ground');
+  if(cabinSky&&cabinSky.shades) cabinSky.shades.visible=false; // persianas arriba, como pide la tripulación
   // Mirando hacia adelante (la nariz está hacia +Z)
   camera.rotation.order='YXZ';
   // En pantallas angostas (celular vertical) se gira un poco más hacia el pasillo
@@ -6430,12 +6449,14 @@ function startFlight(){
   _flightAudio(true);
   _engineSet(0.05,300,1.5);
   _skyMul=0;
+  _beltSign(true,false);
   logInteraction('vuelo','inicio');
   const T=CREW_DIR, C=CAPT_DIR;
   _runCabinSeq([
-    {cap:['💺','Asiento 14C','Abrochate el cinturón. El avión todavía está en la puerta.'],w:2.5},
+    {cap:['💺','Asiento 14C','Abrochate el cinturón. El avión todavía está en la puerta.'],f:()=>_beltSign(true,true),w:2.5},
     {f:()=>_attendantDemo(true)},
-    {cap:['👋','Demostración de seguridad','Miremos juntos las indicaciones de la tripulación.'],a:T+'TC03-seguridad-intro.mp3'},
+    // Mientras la tripulación muestra la seguridad, el avión carretea despacio hacia la pista
+    {cap:['👋','Demostración de seguridad','Miremos juntos las indicaciones de la tripulación.'],f:()=>{ _flight.skyTarget=0.12; _engineSet(0.07,340,4); },a:T+'TC03-seguridad-intro.mp3'},
     {cap:['🔒','Cinturón','Hebilla adentro hasta escuchar el clic. Bajo, sobre la cadera.'],a:T+'TC04-seguridad-cinturon.mp3'},
     {cap:['🚪','Salidas de emergencia','Dos adelante, cuatro sobre las alas, dos atrás. Las luces del piso te guían.'],a:T+'TC05-seguridad-salidas.mp3'},
     {cap:['😷','Máscaras de oxígeno','Caen solas del panel de arriba. Primero la tuya y respirá normal.'],a:T+'TC06-seguridad-oxigeno.mp3'},
@@ -6445,36 +6466,43 @@ function startFlight(){
     {f:()=>_attendantDemo(false),w:1},
     {cap:['🎙️','El comandante','Bienvenida, tiempo de vuelo y clima en la ruta.'],a:C+'CM01-antes-del-despegue.mp3'},
     {cap:['🔊','Ruidos normales','Motores fuertes, un golpe al guardar las ruedas, menos potencia al subir: todo normal.'],a:C+'CM02-ruidos-normales.mp3'},
-    {cap:['🛫','Listos para despegar','La tripulación se sienta. Apoyá la espalda y aflojá los hombros.'],a:C+'CM03-tripulacion-despegue.mp3'},
-    // Despegue
-    {f:()=>{ _engineSet(0.17,950,4); _flight.shakeTarget=calmMode?0.0025:0.005; _skyMul=0.4; },w:5},
-    {cap:['🛫','Despegando','Vas a sentir el empuje en la espalda. Inhalá en 4… exhalá en 8.'],
-     f:()=>{ _flight.tiltTarget=calmMode?0.06:0.1; _skyMul=2.6; _flight.shakeTarget=calmMode?0.0015:0.003; },w:9},
-    {f:()=>{ _thump(0.5); },w:7},                                   // se guarda el tren de aterrizaje
-    {cap:['⬆️','Subiendo','La potencia baja un poco: es lo previsto.'],f:()=>{ _engineSet(0.11,650,5); },w:8},
-    {f:()=>{ _flight.tiltTarget=0; _flight.shakeTarget=0.0006; _engineSet(0.075,480,6); _skyMul=1; },w:3},
+    {cap:['🛫','En la cabecera de la pista','La tripulación se sienta y las luces bajan, como en todo despegue.'],
+     f:()=>{ _cabinDim(true); _flight.skyTarget=0; _engineSet(0.06,320,2); },a:C+'CM03-tripulacion-despegue.mp3'},
+    // Carrera de despegue
+    {cap:['🛫','Carrera de despegue','Vas a sentir el empuje en la espalda. Si querés, tocá 🌬️ y respiramos juntos.'],
+     f:()=>{ _engineSet(0.17,950,4); _flight.shakeTarget=calmMode?0.0025:0.005; _flight.skyTarget=calmMode?2.2:3.2; },w:7},
+    {cap:['🛫','Despegando','Las ruedas dejan la pista. Inhalá en 4… exhalá en 8.'],
+     f:()=>{ _flight.tiltTarget=calmMode?0.06:0.1; _flight.shakeTarget=calmMode?0.0015:0.003; },w:4},
+    {f:()=>{ _thump(0.5); _flight.skyTarget=1.2; },w:3},                     // se guarda el tren de aterrizaje
+    {cap:['☁️','Atravesando las nubes','Afuera se ve todo blanco un momento. Es normal.'],f:()=>_setWindowView('fog'),w:6},
+    {cap:['⬆️','Sobre las nubes','La potencia baja un poco: es lo previsto.'],
+     f:()=>{ _setWindowView('sky'); _flight.skyTarget=1; _engineSet(0.11,650,5); },w:7},
+    {f:()=>{ _flight.tiltTarget=0; _flight.shakeTarget=0.0006; _engineSet(0.075,480,6); _cabinDim(false); },w:3},
     // Crucero
     {label:'cruise',cap:['☁️','En crucero','Diez mil metros. El vuelo avanza tranquilo.'],a:C+'CM04-en-crucero.mp3'},
-    {w:2},
-    {cap:['🥤','Servicio a bordo','Bebidas y algo para comer. Podés llamar con el botón de asistencia.'],a:T+'TC10-servicio.mp3'},
-    {w:4},
+    {cap:['💺','Cinturón apagado','Podés aflojarte. Igual conviene llevarlo puesto sentado.'],f:()=>_beltSign(false,true),w:2.5},
+    {cap:['🥤','Servicio a bordo','Bebidas y algo para comer. Podés llamar con el botón de asistencia.'],f:()=>_startService(),a:T+'TC10-servicio.mp3'},
+    {w:14},
     // Turbulencia leve (se omite en Modo Calma)
-    {skipIf:()=>calmMode,cap:['〰️','Un poco de movimiento','Como pozos en el camino: incómodo, pero seguro.'],a:C+'CM05-turbulencia.mp3'},
+    {skipIf:()=>calmMode,cap:['〰️','Un poco de movimiento','Como pozos en el camino: incómodo, pero seguro.'],f:()=>{ _beltSign(true,true); if(_svc) _svc.phase='back'; },a:C+'CM05-turbulencia.mp3'},
     {skipIf:()=>calmMode,f:()=>{ _flight.shakeTarget=0.014; },w:6},
     {skipIf:()=>calmMode,a:T+'TC11-turbulencia.mp3'},
-    {skipIf:()=>calmMode,f:()=>{ _flight.shakeTarget=0.0006; },w:3},
+    {skipIf:()=>calmMode,f:()=>{ _flight.shakeTarget=0.0006; _beltSign(false,true); },w:3},
     // Descenso
-    {cap:['🛬','Descenso','Faltan unos minutos para llegar a Madrid.'],f:()=>{ _flight.tiltTarget=-0.035; _engineSet(0.06,420,5); },a:C+'CM06-inicio-descenso.mp3'},
+    {cap:['🛬','Descenso','Faltan unos minutos para llegar a Madrid.'],
+     f:()=>{ _stopService(); _beltSign(true,true); _flight.tiltTarget=-0.035; _engineSet(0.06,420,5); },a:C+'CM06-inicio-descenso.mp3'},
     {a:T+'TC12-descenso.mp3'},
     {w:3},
-    // Aterrizaje
-    {label:'landing',cap:['🛬','Aterrizando','Un toque suave en la pista y listo.'],
-     f:()=>{ _flight.tiltTarget=0.02; _engineSet(0.07,450,3); _skyMul=1.6; _flight.shakeTarget=0.002; },w:5},
-    {f:()=>{ _thump(1); _flight.bump=calmMode?0.012:0.025; _flight.tiltTarget=0; _engineSet(0.15,820,0.8); _skyMul=0.5; },w:4},
-    {f:()=>{ _engineSet(0.045,300,4); _skyMul=0; _flight.shakeTarget=0.001; },w:2},
-    {cap:['🏁','¡Llegaste a Madrid!','Nuestro vuelo ha llegado a su fin.'],a:C+'CM07-fin-del-vuelo.mp3'},
+    // Aproximación y aterrizaje
+    {label:'landing',cap:['🛬','Aproximación','Atravesamos las nubes. Las luces bajan para aterrizar.'],
+     f:()=>{ _cabinDim(true); _setWindowView('fog'); _flight.skyTarget=1.2; _flight.tiltTarget=0.02; _engineSet(0.07,450,3); _flight.shakeTarget=0.002; },w:5},
+    {cap:['🛬','Aterrizando','Ya se ve la pista. Un toque suave y listo.'],f:()=>{ _setWindowView('ground'); _flight.skyTarget=3.2; },w:4},
+    {f:()=>{ _thump(1); _flight.bump=calmMode?0.012:0.025; _flight.tiltTarget=0; _engineSet(0.15,820,0.8); _flight.skyTarget=0.8; },w:4},
+    {f:()=>{ _engineSet(0.045,300,4); _flight.skyTarget=0.12; _flight.shakeTarget=0.001; },w:2},
+    {cap:['🏁','¡Llegaste a Madrid!','Nuestro vuelo ha llegado a su fin.'],f:()=>_cabinDim(false),a:C+'CM07-fin-del-vuelo.mp3'},
     {a:T+'TC13-aterrizaje.mp3'},
-    {f:()=>{ _flight.shakeTarget=0; _engineSet(0,300,6); },a:C+'CM08-puertas.mp3'},
+    {cap:['🏁','En la puerta','El avión se detuvo. Ya podés desabrocharte.'],
+     f:()=>{ _flight.skyTarget=0; _flight.shakeTarget=0; _engineSet(0,300,6); _beltSign(false,true); },a:C+'CM08-puertas.mp3'},
     {a:T+'TC14-despedida.mp3'},
     {f:()=>endFlight(true)}
   ]);
@@ -6482,8 +6510,9 @@ function startFlight(){
 // "Ir al aterrizaje": salta lo que falte (ya en crucero, sin despegue brusco)
 function skipToLanding(){
   if(!_flight) return;
-  _attendantDemo(false);
-  _flight.tiltTarget=0; _flight.shakeTarget=0.0006; _engineSet(0.07,480,1.5); _skyMul=1;
+  _attendantDemo(false); _stopService();
+  _flight.tiltTarget=0; _flight.shakeTarget=0.0006; _engineSet(0.07,480,1.5);
+  _setWindowView('sky'); _flight.skyTarget=1; _skyMul=1; _cabinDim(false); _beltSign(true,true);
   _seqJump('landing');
 }
 function endFlight(completed){
@@ -6492,8 +6521,10 @@ function endFlight(completed){
   _cabinSeq=null;
   _applyTilt(-_flight.tilt);
   const seatZ=_flight.seat.z;
-  _flight=null; _skyMul=1;
-  _attendantDemo(false);
+  _flight=null; _skyMul=0;
+  _attendantDemo(false); _stopService(); _crewWalkers(true);
+  _setWindowView('ground'); _cabinDimTarget=1; _beltSign(false,false);
+  if(cabinSky&&cabinSky.shades) cabinSky.shades.visible=true;
   _engineSet(0,300,completed?1:0.6);
   _flightAudio(false);
   document.getElementById('flight-hud').classList.add('hidden');
@@ -6502,6 +6533,7 @@ function endFlight(completed){
   camera.position.set(CABIN.x,PLAYER_HEIGHT,seatZ);
   camera.rotation.order='YXZ';
   if(isMobile){ mobileYaw=0; mobilePitch=0; } else camera.rotation.set(0,0,0);
+  if(_breathOpen()) closeBreathing();
   if(completed){
     logInteraction('vuelo','completo');
     showToast('🏁 ¡Bienvenido a Madrid! Seguí por el pasillo hacia la salida trasera.');
@@ -6542,6 +6574,7 @@ function updateFlight(delta,t){
   f.t+=delta;
   f.shake+=(f.shakeTarget-f.shake)*Math.min(1,delta*1.5);
   f.bump*=Math.pow(0.02,delta);
+  _skyMul+=(f.skyTarget-_skyMul)*Math.min(1,delta*0.6);
   const k=Math.min(1,delta*(f.tiltTarget>f.tilt?0.35:0.5));
   const nt=f.tilt+(f.tiltTarget-f.tilt)*k; _applyTilt(nt-f.tilt); f.tilt=nt;
   const a=f.shake, b=f.bump;
@@ -6597,6 +6630,152 @@ function _flightAudio(on){
     n.gain.cancelScheduledValues(now); n.gain.setValueAtTime(n.gain.value,now); n.gain.linearRampToValueAtTime(v,now+2);
   });
 }
+
+// ─── FASE 47: VUELO QUE SE VE ───────────────────────────────
+// Ventanilla por etapas (plataforma → pista → nubes → cielo → pista de Madrid),
+// cartel luminoso del cinturón con su "ding", luces de cabina atenuadas en
+// despegue y aterrizaje, y el carrito de servicio por el pasillo.
+var cabinLights=null, cabinBeltSign=null, serviceCart=null;
+let _winFade=null, _cabinDimK=1, _cabinDimTarget=1, _svc=null;
+const WIN_VIEW_SPEED={ ground:6, fog:3, sky:1 };   // lo cercano pasa más rápido
+
+// Vista desde la ventanilla en tierra: cielo, terminal y torre a lo lejos,
+// pasto, pista con su eje y balizas. Continua en horizontal (se repite).
+function _cabinGroundTexture(seed){
+  let a=seed; const rnd=()=>{ a=(a*16807)%2147483647; return a/2147483647; };
+  const t=tex(1024,256,(ctx,c)=>{
+    const W=c.width,H=c.height;
+    const sky=ctx.createLinearGradient(0,0,0,H*0.46);
+    sky.addColorStop(0,'#3a76b4'); sky.addColorStop(1,'#9fbfdc');
+    ctx.fillStyle=sky; ctx.fillRect(0,0,W,H*0.46);
+    // Edificios bajos y torre de control (siluetas suaves, gris azulado)
+    for(let x=0;x<W;){
+      const w=40+rnd()*110, h=10+rnd()*26;
+      ctx.fillStyle=`rgb(${96+rnd()*30|0},${106+rnd()*28|0},${122+rnd()*25|0})`;
+      ctx.fillRect(x,H*0.46-h,w,h);
+      ctx.fillStyle='rgba(30,60,95,0.55)'; ctx.fillRect(x,H*0.46-h*0.62,w,h*0.18);   // franja vidriada
+      x+=w+6+rnd()*40;
+    }
+    [[W*0.22],[W*0.71]].forEach(([tx])=>{
+      ctx.fillStyle='#7d8a99'; ctx.fillRect(tx,H*0.46-58,9,58);
+      ctx.fillStyle='#4e6277'; ctx.fillRect(tx-9,H*0.46-70,27,13);
+    });
+    // Colas de aviones estacionados
+    [W*0.4,W*0.88].forEach(px=>{
+      ctx.fillStyle='#d4dbe2'; ctx.beginPath(); ctx.moveTo(px,H*0.46); ctx.lineTo(px+30,H*0.46); ctx.lineTo(px+22,H*0.46-34); ctx.lineTo(px+12,H*0.46-34); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='#3d7fc2'; ctx.fillRect(px+13,H*0.46-30,10,8);
+    });
+    // Pasto y pista
+    ctx.fillStyle='#62803f'; ctx.fillRect(0,H*0.46,W,H*0.12);
+    ctx.fillStyle='rgba(255,255,255,0.08)'; for(let i=0;i<40;i++) ctx.fillRect(rnd()*W,H*(0.47+rnd()*0.1),20+rnd()*60,2);
+    const tar=ctx.createLinearGradient(0,H*0.58,0,H); tar.addColorStop(0,'#767b81'); tar.addColorStop(1,'#4f5459');
+    ctx.fillStyle=tar; ctx.fillRect(0,H*0.58,W,H*0.42);
+    ctx.fillStyle='rgba(255,255,255,0.75)'; ctx.fillRect(0,H*0.6,W,2);              // borde de pista
+    ctx.fillStyle='#e8c33a'; for(let x=0;x<W;x+=64) ctx.fillRect(x,H*0.8,34,4);    // eje (amarillo)
+    for(let x=10;x<W;x+=48){                                                      // balizas
+      ctx.fillStyle='#bcd7ff'; ctx.beginPath(); ctx.arc(x,H*0.595,2.4,0,Math.PI*2); ctx.fill();
+    }
+    ctx.fillStyle='rgba(0,0,0,0.12)'; for(let i=0;i<70;i++) ctx.fillRect(rnd()*W,H*(0.62+rnd()*0.36),8+rnd()*40,1.5); // marcas de neumáticos
+  });
+  t.wrapS=THREE.RepeatWrapping; t.wrapT=THREE.ClampToEdgeWrapping; t.repeat.set(0.16,1);
+  return t;
+}
+// Dentro de la nube: blanco grisáceo con jirones que pasan rápido
+function _cabinFogTexture(seed){
+  let a=seed; const rnd=()=>{ a=(a*16807)%2147483647; return a/2147483647; };
+  const t=tex(1024,256,(ctx,c)=>{
+    const W=c.width,H=c.height;
+    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#e9eef3'); g.addColorStop(1,'#c9d3dd');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    for(let i=0;i<70;i++){
+      const cx=rnd()*W, cy=rnd()*H, r=30+rnd()*90;
+      [-W,0,W].forEach(off=>{
+        const rg=ctx.createRadialGradient(cx+off,cy,0,cx+off,cy,r);
+        const v=rnd()<0.5?'255,255,255':'185,197,210';
+        rg.addColorStop(0,`rgba(${v},0.55)`); rg.addColorStop(1,`rgba(${v},0)`);
+        ctx.fillStyle=rg; ctx.fillRect(cx+off-r,cy-r,r*2,r*2);
+      });
+    }
+  });
+  t.wrapS=THREE.RepeatWrapping; t.wrapT=THREE.ClampToEdgeWrapping; t.repeat.set(0.16,1);
+  return t;
+}
+// Cambia lo que se ve por las ventanillas (con un breve fundido)
+function _setWindowView(kind,instant){
+  if(!cabinSky||!cabinSky.views||!cabinSky.views[kind]) return;
+  if(instant||!cabinSky.matL){ _applyWindowView(kind); return; }
+  if(cabinSky.view===kind&&!_winFade) return;
+  _winFade={to:kind,t:0};
+}
+function _applyWindowView(kind){
+  cabinSky.view=kind;
+  if(cabinSky.matL) cabinSky.matL.map=cabinSky.views[kind].left;
+  if(cabinSky.matR) cabinSky.matR.map=cabinSky.views[kind].right;
+}
+function _updateWindowFade(delta){
+  if(!_winFade||!cabinSky.matL) return;
+  const f=_winFade; f.t+=delta;
+  const D=0.45;                                      // bajar → cambiar → subir
+  if(f.t>=D&&!f.done){ _applyWindowView(f.to); f.done=true; }
+  const k=f.t<D?1-f.t/D*0.65:Math.min(1,0.35+(f.t-D)/D*0.65);
+  [cabinSky.matL,cabinSky.matR].forEach(m=>m.color.setScalar(0.88*k));
+  if(f.t>=D*2){ [cabinSky.matL,cabinSky.matR].forEach(m=>m.color.setScalar(0.88)); _winFade=null; }
+}
+
+// Luces de cabina: se atenúan en despegue y aterrizaje (menos en Modo Calma)
+function _cabinDim(on){ _cabinDimTarget=on?(calmMode?0.75:0.5):1; }
+function _updateCabinDim(delta){
+  if(!cabinLights) return;
+  if(Math.abs(_cabinDimK-_cabinDimTarget)<0.002) return;
+  _cabinDimK+=(_cabinDimTarget-_cabinDimK)*Math.min(1,delta*0.8);
+  cabinLights.pts.forEach(l=>{ l.intensity=l.userData.baseI*_cabinDimK; });
+  cabinLights.strip.color.setRGB(1.1*_cabinDimK,1.02*_cabinDimK,0.9*_cabinDimK);
+}
+
+// Cartel luminoso del cinturón (en cada fila y en el cartel del vuelo)
+function _beltSign(on,ding){
+  if(cabinBeltSign) on?cabinBeltSign.color.setRGB(1.5,1.2,0.55):cabinBeltSign.color.setRGB(0.28,0.3,0.34);
+  const b=document.querySelector('#flight-hud .fh-belt'); if(b) b.classList.toggle('on',!!on);
+  if(ding) _cabinDing();
+}
+function _cabinDing(){
+  const out=_uiOut(); if(!out) return;
+  const t=audioCtx.currentTime+0.02;
+  _tone(out,1174.7,t,1.6,0.06); _tone(out,2349.3,t,0.7,0.008);
+}
+
+// Tripulantes que caminan el pasillo: se sientan durante el vuelo
+function _crewWalkers(visible){
+  npcs.forEach(n=>{ if(n.userData.role==='attendant'&&n.userData.isWalking) n.visible=visible; });
+}
+
+// Carrito de servicio: sale del galley delantero, llega hasta tu fila y vuelve
+function _att(){ return npcs.find(n=>n.userData.role==='attendant'&&n.userData.isStaff); }
+function _startService(){
+  if(_svc||!serviceCart||!_seat14C) return;
+  const a=_att();
+  _svc={phase:'go',z:-35.3,stopZ:_seat14C.z+1.35,wait:0,
+        cartHome:{x:serviceCart.position.x,z:serviceCart.position.z,r:serviceCart.rotation.y},
+        attHome:a?{x:a.position.x,z:a.position.z,r:a.rotation.y,b:a.userData.baseRotY}:null};
+}
+function _stopService(){
+  if(!_svc) return;
+  const h=_svc.cartHome; serviceCart.position.set(h.x,0,h.z); serviceCart.rotation.y=h.r;
+  const a=_att(), ah=_svc.attHome;
+  if(a&&ah){ a.position.set(ah.x,0,ah.z); a.rotation.y=ah.r; a.userData.baseRotY=ah.b; }
+  _svc=null;
+}
+function _updateService(delta){
+  const s=_svc; if(!s) return;
+  const v=0.8*delta;
+  if(s.phase==='go'){ s.z=Math.max(s.stopZ,s.z-v); if(s.z<=s.stopZ) s.phase='wait'; }
+  else if(s.phase==='wait'){ s.wait+=delta; if(s.wait>9) s.phase='back'; }
+  else { s.z=Math.min(-35.3,s.z+v); if(s.z>=-35.3){ _stopService(); return; } }
+  serviceCart.position.set(CABIN.x,0,s.z); serviceCart.rotation.y=0;
+  const a=_att();
+  if(a){ a.position.set(CABIN.x,0,s.z+0.8); const r=s.phase==='back'?0:Math.PI; a.rotation.y=r; a.userData.baseRotY=r; }
+}
+function _breathOpen(){ const el=document.getElementById('breathing-modal'); return el&&!el.classList.contains('hidden'); }
 
 function narrateZone(i){ if(i>=0&&i<ZONE_DATA.length) speak(ZONE_DATA[i].narration,ZONE_DATA[i].id); }
 function narrateCurrentZone(){ if(currentZoneIndex>=0) narrateZone(currentZoneIndex); else speak('Caminá hacia la entrada del aeropuerto para comenzar tu recorrido.','sin-zona'); }
@@ -7010,6 +7189,7 @@ function animate(){
   if(chargeLeds.length){ const k=0.6+Math.abs(Math.sin(t*1.6))*0.9; chargeLeds.forEach(l=>l.material.emissiveIntensity=k); }
   updateAutoWalk(delta);        // FASE 43: caminata guiada por la manga
   updateCabinSeq(delta);        // FASE 46: anuncios de a bordo
+  _updateWindowFade(delta); _updateCabinDim(delta); if(!isPaused) _updateService(delta); // FASE 47
   updateAmbientChimes(delta);   // avisos sonoros suaves (si el sonido está activo)
   // Tablero de salidas: redibujar cuando cambia algún vuelo o cada 30 s (reloj)
   if(window.AeroFlights && flightBoardTexture && AeroFlights.version()!==_boardVersion){ _boardVersion=AeroFlights.version(); boardTimer=31; }
