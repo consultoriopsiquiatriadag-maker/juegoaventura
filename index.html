@@ -229,6 +229,7 @@
             <div class="approach-inner">
                 <div class="approach-pulse"></div>
                 <span id="approach-text">Avanza hacia esta zona</span>
+                <span id="approach-cta" class="approach-cta hidden">Ver info ›</span>
             </div>
         </div>
 
@@ -358,6 +359,42 @@
                 <button id="btn-office-back" class="btn-ghost" type="button">Volver al aeropuerto</button>
             </div>
             <p class="office-note">Se abre WhatsApp con un mensaje listo para enviar. Vos decidís si lo mandás.</p>
+        </div>
+    </div>
+
+    <!-- FASE 40: Pausa de café en AeroCafé -->
+    <div id="cafe-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="cafe-title">
+        <div class="interact-box ritual-box">
+            <button id="btn-close-cafe" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">☕ AeroCafé</p>
+            <h2 id="cafe-title">Un café sin apuro</h2>
+            <div class="ritual-visual" aria-hidden="true">
+                <div id="cafe-cup" class="cup"><div class="cup-fill"></div><div class="cup-handle"></div><div class="steam"><i></i><i></i><i></i></div></div>
+                <div class="saucer"></div>
+            </div>
+            <p id="cafe-step" class="ritual-step" aria-live="polite"></p>
+            <div class="ib-actions">
+                <button id="btn-cafe-sip" class="btn-primary" type="button">Tomar un sorbo</button>
+                <button id="btn-cafe-done" class="btn-primary hidden" type="button">Seguir el recorrido</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FASE 40: Agua caliente para el mate -->
+    <div id="mate-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="mate-title">
+        <div class="interact-box ritual-box">
+            <button id="btn-close-mate" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">♨️ Agua caliente para el mate</p>
+            <h2 id="mate-title">Cargá tu termo</h2>
+            <div class="ritual-visual" aria-hidden="true">
+                <div id="mate-termo" class="termo"><div class="termo-cap"></div><div class="termo-body"><div class="termo-fill"></div></div></div>
+            </div>
+            <p id="mate-step" class="ritual-step" aria-live="polite"></p>
+            <p id="mate-tip" class="ritual-tip hidden">✈ Para el vuelo: el termo puede pasar por el control de seguridad, pero <b>vacío</b>. Cargalo de nuevo del otro lado.</p>
+            <div class="ib-actions">
+                <button id="btn-mate-fill" class="btn-primary" type="button">Cargar agua</button>
+                <button id="btn-mate-done" class="btn-primary hidden" type="button">Seguir el recorrido</button>
+            </div>
         </div>
     </div>
 

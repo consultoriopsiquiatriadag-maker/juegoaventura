@@ -640,6 +640,8 @@ function buildInteractiveSpots(){
   buildCheckinDesk();
   buildWellnessKiosk();
   buildConsultorio();   // FASE 38
+  buildCafeSpot();      // FASE 40: pausa de café en AeroCafé
+  buildMateDispensers();// FASE 40: agua caliente para el mate
 }
 
 // ── Mostrador B2 del check-in ───────────────────────────────
@@ -747,8 +749,8 @@ function _clickInteract(){
 }
 
 function openUiModal(id){
-  uiModalOpen=true;
   closeZonePanel();
+  uiModalOpen=true;
   releaseMovementKeys();
   joystick.active=false; joystick.nx=joystick.ny=0;
   const jh=document.getElementById('joystick-handle'); if(jh) jh.style.transform='translate(0px,0px)';
@@ -854,6 +856,14 @@ function setupInteractionUI(){
   on('btn-close-checkin',()=>{ clearTimeout(_checkinTimer); if(checkinState==='verifying') _setCheckinLamp('idle'); closeUiModal('checkin-modal'); });
   on('btn-close-kiosk',()=>closeUiModal('kiosk-modal'));
   on('btn-close-office',()=>closeUiModal('office-modal'));
+  on('btn-cafe-sip',cafeSip);
+  on('btn-cafe-done',()=>{ closeUiModal('cafe-modal'); showToast('☕ Pausa de café registrada en tu diario'); });
+  on('btn-close-cafe',()=>{ clearTimeout(_cafeTimer); closeUiModal('cafe-modal'); });
+  on('btn-mate-fill',fillMate);
+  on('btn-mate-done',()=>{ closeUiModal('mate-modal'); showToast('♨️ Termo cargado. ¡Buen mate!'); });
+  on('btn-close-mate',()=>{ clearTimeout(_mateTimer); closeUiModal('mate-modal'); });
+  // Cartel de zona: tocar/clic abre la información
+  on('approach-hint',()=>{ if(document.getElementById('approach-hint').classList.contains('is-inside')&&currentZoneIndex>=0) openZonePanel(currentZoneIndex); });
   on('btn-office-back',()=>closeUiModal('office-modal'));
   on('btn-office-whatsapp',()=>logInteraction('consultorio','whatsapp'));
   on('btn-kiosk-done',()=>{ closeUiModal('kiosk-modal'); showToast('☕ Registrado en tu diario de práctica'); });
@@ -865,12 +875,15 @@ function setupInteractionUI(){
     if(!document.getElementById('checkin-modal').classList.contains('hidden')) document.getElementById('btn-close-checkin').click();
     else if(!document.getElementById('kiosk-modal').classList.contains('hidden')) closeUiModal('kiosk-modal');
     else if(!document.getElementById('office-modal').classList.contains('hidden')) closeUiModal('office-modal');
+    else if(!document.getElementById('cafe-modal').classList.contains('hidden')){ clearTimeout(_cafeTimer); closeUiModal('cafe-modal'); }
+    else if(!document.getElementById('mate-modal').classList.contains('hidden')){ clearTimeout(_mateTimer); closeUiModal('mate-modal'); }
+    else if(!document.getElementById('zone-panel').classList.contains('hidden')) closeZonePanel();
   });
   // Sonido de interfaz para todos los botones (si el sonido está activado)
   document.addEventListener('click',e=>{
     const b=e.target.closest&&e.target.closest('button');
     if(!b||b.disabled) return;
-    if(b.id==='btn-checkin-hand'||b.classList.contains('kiosk-item')) return; // tienen su propio sonido
+    if(['btn-checkin-hand','btn-cafe-sip','btn-mate-fill'].includes(b.id)||b.classList.contains('kiosk-item')) return; // tienen su propio sonido
     playUiTone(b.classList.contains('btn-primary')?'confirm':'tap');
   },true);
 }
@@ -999,6 +1012,145 @@ function updateConsultorio(delta,t){
       hg.rotation.x+=(tx-hg.rotation.x)*Math.min(1,delta*2);
     }
   }
+}
+
+// ─── FASE 40: PAUSA DE CAFÉ Y AGUA PARA EL MATE ───────────
+// AeroCafé: frente al local se puede "tomar un café" en tres sorbos lentos,
+// cada uno con una consigna breve de relajación.
+// Dispensers de agua caliente para el mate en varios puntos del hall.
+
+function buildCafeSpot(){
+  // Frente del local AeroCafé (buildCafe(-15.5,20): fachada en x≈-13.3)
+  const g=new THREE.Group(); g.name='cafeSpot';
+  const mk=_markerSprite('☕','Pausa de café','#b06a28');
+  mk.position.set(-12.8,2.65,20); g.add(mk);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(2.4,3,8.5),new THREE.MeshBasicMaterial({visible:false}));
+  hit.position.set(-14.4,1.5,20); g.add(hit);
+  scene.add(g);
+  addInteractable({id:'cafe',x:-12.0,z:20,radius:3.0,icon:'☕',label:'Tomar un café',
+    root:g,marker:mk,markerBaseY:2.65,onTrigger:openCafeModal});
+}
+
+const CAFE_SIPS=[
+  'Primer sorbo. Sentí el calor de la taza entre las manos.',
+  'Inhalá el aroma en 4 tiempos… y soltá el aire en 6.',
+  'Último sorbo. Notá cómo bajan los hombros. No hay apuro.'
+];
+let _cafeSip=0, _cafeTimer=null;
+function openCafeModal(){
+  _cafeSip=0; clearTimeout(_cafeTimer);
+  document.getElementById('cafe-cup').style.setProperty('--level','92%');
+  document.getElementById('cafe-step').textContent='Sentate un momento. Lo tomamos en tres sorbos lentos.';
+  const b=document.getElementById('btn-cafe-sip'); b.disabled=false; b.textContent='Tomar un sorbo'; b.classList.remove('hidden');
+  document.getElementById('btn-cafe-done').classList.add('hidden');
+  openUiModal('cafe-modal');
+}
+function cafeSip(){
+  const b=document.getElementById('btn-cafe-sip');
+  if(_cafeSip>=CAFE_SIPS.length) return;
+  document.getElementById('cafe-step').textContent=CAFE_SIPS[_cafeSip];
+  _cafeSip++;
+  document.getElementById('cafe-cup').style.setProperty('--level',Math.round(92*(1-_cafeSip/CAFE_SIPS.length))+'%');
+  playUiTone(_cafeSip<CAFE_SIPS.length?'tap':'success');
+  if(_cafeSip>=CAFE_SIPS.length){
+    b.classList.add('hidden');
+    _cafeTimer=setTimeout(()=>{
+      document.getElementById('cafe-step').textContent='Listo. Te tomaste un momento para vos: eso también es parte del viaje.';
+      document.getElementById('btn-cafe-done').classList.remove('hidden');
+    },2200);
+    logInteraction('cafe','cafe');
+  } else {
+    // Pausa entre sorbos: marca un ritmo lento
+    b.disabled=true; b.textContent='…';
+    _cafeTimer=setTimeout(()=>{ b.disabled=false; b.textContent='Tomar otro sorbo'; },calmMode?3500:2600);
+  }
+}
+
+// ── Dispensers de agua caliente para el mate ────────────────
+function _buildMateDispenser(x,z,face){
+  const g=new THREE.Group(); g.name='mateDispenser';
+  g.position.set(x,0.09,z); g.rotation.y=face*Math.PI/2;   // el frente (+z local) mira al pasillo
+  const parts=new THREE.Group(); g.add(parts);
+  const B=(w,h,d,col,px,py,pz,r,m)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mkStd(col,r==null?0.4:r,m||0)); o.position.set(px,py+h/2,pz); o.castShadow=true; o.receiveShadow=true; parts.add(o); return o; };
+  B(0.56,0.08,0.46,0x5c6368,0,0,0,0.5,0.3);                 // base
+  B(0.5,1.38,0.4,0xc9d0d6,0,0.08,0,0.32,0.65);              // cuerpo de acero
+  B(0.52,0.1,0.42,0x8f979e,0,1.46,0,0.35,0.7);              // tapa
+  B(0.4,0.03,0.2,0x8f979e,0,0.62,0.24,0.4,0.6);             // bandeja de goteo
+  B(0.34,0.5,0.02,0x2a2f35,0,0.92,0.205,0.5,0.1);           // panel frontal
+  const tap=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.12,10),mkStd(0x2a2f35,0.4,0.3));
+  tap.position.set(0,0.76,0.25); tap.rotation.x=Math.PI/2; parts.add(tap);
+  const lever=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.07,0.05),mkStd(0xc0392b,0.5,0)); lever.position.set(0,0.83,0.29); parts.add(lever);
+  // Termo y mate apoyados al costado
+  const th=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.3,12),mkStd(0x3d6b4f,0.45,0.2)); th.position.set(0.36,0.23,0.08); parts.add(th);
+  const mate=new THREE.Mesh(new THREE.SphereGeometry(0.06,10,8),mkStd(0x8a5a2b,0.7,0)); mate.scale.set(1,1.1,1); mate.position.set(0.36,0.14,-0.08); parts.add(mate);
+  B(0.26,0.07,0.32,0x5c6368,0.36,0,0,0.5,0.3);              // repisa lateral baja
+  _optimizeCharacter(parts);
+  // Pantallita de temperatura (con brillo propio)
+  const dt=tex(128,64,(ctx)=>{ ctx.fillStyle='#120606'; ctx.fillRect(0,0,128,64); ctx.fillStyle='#ff6a3d'; ctx.font='bold 34px monospace'; ctx.textAlign='center'; ctx.fillText('78°C',64,44); });
+  dt.encoding=THREE.sRGBEncoding;
+  const disp=new THREE.Mesh(new THREE.PlaneGeometry(0.22,0.11),new THREE.MeshStandardMaterial({map:dt,emissive:0xffffff,emissiveMap:dt,emissiveIntensity:0.9}));
+  disp.position.set(0,1.12,0.217); g.add(disp);
+  // Cartel
+  const st=tex(256,96,(ctx)=>{ ctx.fillStyle='#1d4a3a'; ctx.fillRect(0,0,256,96); ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font='bold 26px Arial'; ctx.fillText('AGUA CALIENTE',128,40); ctx.fillStyle='#bfe9d4'; ctx.font='22px Arial'; ctx.fillText('para el mate',128,74); });
+  st.encoding=THREE.sRGBEncoding;
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(0.5,0.19),new THREE.MeshStandardMaterial({map:st,roughness:0.6}));
+  sg.position.set(0,1.32,0.206); g.add(sg);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(0.9,1.6,0.8),new THREE.MeshBasicMaterial({visible:false}));
+  hit.position.set(0,0.8,0); g.add(hit);
+  const mk=_markerSprite('♨️','Agua para el mate','#2f9e74');
+  mk.position.set(0,2.1,0.1); mk.scale.multiplyScalar(0.8); g.add(mk);
+  scene.add(g);
+  addInteractable({id:'mate',x:x+face*1.0,z,radius:2.2,icon:'♨️',label:'Cargar agua para el mate',
+    root:g,marker:mk,markerBaseY:2.1,onTrigger:openMateModal});
+}
+
+function buildMateDispensers(){
+  scene.updateMatrixWorld(true);
+  // Uno por tramo del hall: check-in, seguridad, sala de espera, embarque
+  const bands=[[34,30,38],[14,12,16,18],[-4,-2,-6],[-24,-22,-26]];
+  let n=0;
+  bands.forEach(zs=>{
+    for(const z of zs){
+      const sides=(n%2===0)?[-1,1]:[1,-1];          // alterna lados del hall
+      let placed=false;
+      for(const sd of sides){
+        for(const ax of [11.5,10.5,12.5]){
+          const x=sd*ax;
+          if(_floorIsFree(x,z,0.7)&&_floorIsFree(x-sd*1.0,z,0.4)){
+            _buildMateDispenser(x,z,-sd); placed=true; n++; break;
+          }
+        }
+        if(placed) break;
+      }
+      if(placed) break;
+    }
+  });
+  return n;
+}
+
+let _mateTimer=null;
+function openMateModal(){
+  clearTimeout(_mateTimer);
+  document.getElementById('mate-termo').style.setProperty('--level','8%');
+  document.getElementById('mate-step').textContent='Agua a 75–80 °C: caliente, pero sin hervir, para no quemar la yerba.';
+  const b=document.getElementById('btn-mate-fill'); b.disabled=false; b.classList.remove('hidden');
+  document.getElementById('mate-tip').classList.add('hidden');
+  document.getElementById('btn-mate-done').classList.add('hidden');
+  openUiModal('mate-modal');
+}
+function fillMate(){
+  const b=document.getElementById('btn-mate-fill'); b.disabled=true;
+  document.getElementById('mate-step').textContent='Cargando el termo…';
+  document.getElementById('mate-termo').style.setProperty('--level','92%');
+  playUiTone('tap');
+  _mateTimer=setTimeout(()=>{
+    b.classList.add('hidden');
+    document.getElementById('mate-step').textContent='Listo. Cebá despacio: el calor entre las manos y el ritual de cebar ayudan a bajar el ritmo.';
+    document.getElementById('mate-tip').classList.remove('hidden');
+    document.getElementById('btn-mate-done').classList.remove('hidden');
+    playUiTone('success');
+    logInteraction('mate','agua');
+  },2600);
 }
 
 // ─── FASE 36: OPTIMIZACIÓN DE GEOMETRÍA Y MATERIALES ───────
@@ -4948,7 +5100,7 @@ function setupMobileControls(){
       // Paneles con scroll -- no interceptar sus toques
       '#zone-panel, #breathing-modal, #pause-menu, ' +
       // Botones de rotación
-      '#mobile-rotate-btns'
+      '#mobile-rotate-btns, #approach-hint.is-inside, #interact-prompt, .overlay-dark'
     );
     return false;
   };
@@ -5099,7 +5251,14 @@ function checkZones(){
   const pos=camera.position; let ni=0,nd=Infinity;
   ZONE_DATA.forEach((zone,i)=>{ const dx=pos.x-zone.position.x,dz=pos.z-zone.position.z,d=Math.sqrt(dx*dx+dz*dz); if(d<nd){nd=d;ni=i;} });
   const hintEl=document.getElementById('approach-hint'),badgeEl=document.getElementById('zone-badge');
-  if(nd<18){ const zone=ZONE_DATA[ni]; document.getElementById('approach-text').textContent=nd<zone.radius?zone.name:`Avanza hacia: ${zone.name}`; hintEl.classList.remove('hidden'); badgeEl.textContent=`${zone.emoji} ${zone.name}`; badgeEl.classList.add('visible'); } else { hintEl.classList.add('hidden'); badgeEl.classList.remove('visible'); }
+  if(nd<18){ const zone=ZONE_DATA[ni]; const inside=nd<zone.radius;
+    document.getElementById('approach-text').textContent=inside?`${zone.emoji} ${zone.name}`:`Avanza hacia: ${zone.name}`;
+    if(hintEl.classList.contains('is-inside')!==inside){
+      hintEl.classList.toggle('is-inside',inside);
+      const cta=document.getElementById('approach-cta');
+      if(cta){ cta.textContent=isMobile?'Ver info ›':'E · Ver info'; cta.classList.toggle('hidden',!inside); }
+    }
+    hintEl.classList.remove('hidden'); badgeEl.textContent=`${zone.emoji} ${zone.name}`; badgeEl.classList.add('visible'); } else { hintEl.classList.add('hidden'); badgeEl.classList.remove('visible'); }
   if(nd<ZONE_DATA[ni].radius&&ni!==currentZoneIndex) enterZone(ni);
 }
 function enterZone(i){
@@ -5115,19 +5274,15 @@ function enterZone(i){
       _welcomeShown=true;
       // Bienvenida extendida en la primera zona
       const msg=isMobile
-        ? '✈ ¡Primera zona! Tocá 💡 Consejos para leer info, 🌬️ para respirar y 🔊 para escuchar la guía.'
-        : '✈ Primera zona alcanzada. Se abrirá el panel de información de cada zona al llegar. Podés usar E, B y 🔊 en cualquier momento.';
+        ? '✈ ¡Primera zona! Si querés más info, tocá el cartel de abajo. 🌬️ para respirar.'
+        : '✈ Primera zona. Si querés más info, presioná E (o tocá el cartel de abajo). B para respirar.';
       showToast(msg);
     }
     if(guidedMode){
-      if(isMobile){
-        if(!welcomeNow) showToast(`${zone.emoji} ${zone.name} -- tocá 💡 para info`);
-        narrateZone(i);
-      } else {
-        openZonePanel(i);
-        narrateZone(i);
-        if(!welcomeNow) showToast(`${zone.emoji} ${zone.name}`);
-      }
+      // Igual en todas las zonas y dispositivos: la guía se escucha y la
+      // información queda a mano en el cartel flotante (no se abre sola).
+      narrateZone(i);
+      if(!welcomeNow) showToast(`${zone.emoji} ${zone.name}`);
     } else {
       // Modo libre: solo toast suave, sin panel ni narración automática
       if(!welcomeNow) showToast(`${zone.emoji} ${zone.name}`);
@@ -5234,9 +5389,15 @@ function openZonePanel(i){
   // Resetear tabs al primero
   document.querySelectorAll('.tab-btn').forEach((b,j)=>b.classList.toggle('active',j===0));
   document.querySelectorAll('.tab-content').forEach((t,j)=>t.classList.toggle('active',j===0));
+  if(isGameActive){ uiModalOpen=true; releaseMovementKeys(); if(!isMobile&&controls.isLocked) controls.unlock(); }
   document.getElementById('zone-panel').classList.remove('hidden');
 }
-function closeZonePanel(){ document.getElementById('zone-panel').classList.add('hidden'); }
+function closeZonePanel(){
+  const zp=document.getElementById('zone-panel');
+  const wasOpen=!zp.classList.contains('hidden');
+  zp.classList.add('hidden');
+  if(wasOpen&&uiModalOpen){ uiModalOpen=false; if(!isMobile&&isGameActive&&!isPaused) controls.lock(); }
+}
 function openCurrentZonePanel(){ if(currentZoneIndex>=0) openZonePanel(currentZoneIndex); else showToast('Acércate a una zona del aeropuerto primero.'); }
 
 // ── GROUNDING MODAL ───────────────────────────────
@@ -5610,7 +5771,7 @@ function speak(text){
 const INTRO_NARRATION='Bienvenido a AeroCalma. Vas a recorrer un aeropuerto virtual, paso a paso, '+
   'desde la entrada hasta el avión y la llegada. En cada zona vas a encontrar qué esperar y consejos para manejar la ansiedad. '+
   'Podés moverte a tu ritmo y detenerte cuando quieras. '+
-  'Modo Calma reduce el movimiento y los estímulos. Modo Guiado abre la información de cada zona al llegar; si lo apagás, explorás libremente. '+
+  'Modo Calma reduce el movimiento y los estímulos. Modo Guiado te cuenta cada zona en voz alta al llegar; si querés más detalle, tocá el cartel de la zona. '+
   'Sonido activa un ambiente suave de fondo. '+
   'En computadora te movés con las teclas W, A, S y D y mirás con el mouse; en el celular, con el joystick y deslizando el dedo. '+
   'Este material es orientativo y no reemplaza la atención médica. Cuando quieras, tocá Iniciar Recorrido.';
