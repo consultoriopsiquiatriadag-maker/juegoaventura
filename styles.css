@@ -1823,3 +1823,11 @@ body.calm-mode #flight-hud.fh-swap .fh-body { animation: none; }
 #flight-hud .fh-belt.on { color: #1b1300; background: #ffcf5a; border-color: #ffcf5a; box-shadow: 0 0 12px rgba(255,207,90,0.55); }
 #flight-hud .fh-actions button { padding: 9px 6px; font-size: .8rem; }
 @media (max-width: 600px) { #flight-hud .fh-actions button { font-size: .74rem; } }
+
+/* ═══ FASE 48: DESEMBARCO ═══ */
+.fade-overlay { position: fixed; inset: 0; z-index: 120; background: #070d14; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; opacity: 0; transition: opacity .9s ease; pointer-events: none; color: #fff; }
+.fade-overlay.show { opacity: 1; pointer-events: auto; }
+.fade-overlay .fo-city { margin: 0; font: 700 2.4rem var(--ff-display, var(--ff-body)); letter-spacing: .02em; }
+.fade-overlay .fo-sub { margin: 6px 0 0; font: 600 .9rem var(--ff-body); letter-spacing: .14em; text-transform: uppercase; color: var(--accent2); }
+body.calm-mode .fade-overlay { transition-duration: 1.4s; }

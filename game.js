@@ -216,6 +216,7 @@ function init(){
   // Guardar densidad base de niebla (depende de si Three.Sky está disponible)
   if(scene.fog) _normalFogDensity=scene.fog.density;
   buildWorld();
+  _arrHideIntruders(); // FASE 48: la sala de llegadas queda limpia
   buildInteractiveSpots(); // FASE 37: mostrador B2 y kiosko de bienestar
   captureFloorReflections(); // después del mundo y antes de las personas
   spawnNPCs(isMobile); // en celular, versión liviana (5 caminantes + tripulación)
@@ -378,7 +379,7 @@ function buildWorld(){
   buildGround(); buildShell(); buildFloorTile(); buildCeiling();
   buildWalls(); buildPillars();
   buildEntrance(); buildCheckIn(); buildSecurity();
-  buildLounge(); buildBoarding(); buildPlane(); buildArrival();
+  buildLounge(); buildBoarding(); buildPlane(); buildArrivals(); // FASE 48: llegadas en Madrid (reemplaza la zona vieja)
   buildShops(); buildDirectionSigns(); buildFlightBoard(); // Fase 6: tiendas laterales enriquecidas
   // ── FASE 2: Estructuras base del hall ──────────
   buildTransitionBenches();
@@ -1010,7 +1011,7 @@ function coldWaterFace(){
   closeUiModal('restroom-modal');
   const ov=document.getElementById('cold-water'), drops=ov.querySelector('.cw-drops');
   if(!drops.childElementCount){ for(let i=0;i<46;i++){ const s=document.createElement('i'); s.style.left=(Math.random()*100)+'%'; s.style.animationDelay=(Math.random()*2.2)+'s'; s.style.animationDuration=(1.6+Math.random()*1.4)+'s'; drops.appendChild(s); } }
-  ov.classList.remove('hidden'); requestAnimationFrame(()=>ov.classList.add('show'));
+  ov.classList.remove('hidden'); setTimeout(()=>ov.classList.add('show'),30);
   uiModalOpen=true; releaseMovementKeys();
   playWaterSplash();
   setTimeout(()=>playVoice('agua-fria'),700);
@@ -3022,36 +3023,6 @@ function _cabinLighting(){
 }
 
 // ─── COCKPIT ─────────────────────────────────────
-// ─── ARRIVAL ─────────────────────────────────────
-function buildArrival(){
-  const x=0,z=-62;
-  zoneHeader(x,z+8,'🏁  LLEGADAS  ·  RECOGIDA DE EQUIPAJE  ·  ARRIVALS',0xf97316);
-  // Baggage carousel (torus)
-  const tg=new THREE.TorusGeometry(5.5,1.4,8,40);
-  const tm=new THREE.Mesh(tg,mkMat(0x374151)); tm.rotation.x=Math.PI/2; tm.position.set(x,0.8,z); scene.add(tm);
-  const beltT=new THREE.TorusGeometry(5.5,1.32,8,40);
-  const beltM=new THREE.Mesh(beltT,mkMat(0x555588)); beltM.rotation.x=Math.PI/2; beltM.position.set(x,0.82,z); scene.add(beltM);
-  luggageBelt=beltM; // animate this
-  cyl(x,0,z,0.6,0.7,1.1,16,0x555566);
-  // Suitcases on/around carousel
-  [0xcc3333,0x3355cc,0x33aa44,0xcc9900,0x993399,0x00aacc,0xcc6633,0x009966].forEach((c,i)=>{
-    const angle=(i/8)*Math.PI*2; addSuitcase(x+Math.cos(angle)*5.5,0.78,z+Math.sin(angle)*5.5,c);
-  });
-  // Claim screens (both sides)
-  const clt=tex(512,256,(ctx)=>{ ctx.fillStyle='#0a1628'; ctx.fillRect(0,0,512,256); ctx.fillStyle='#f97316'; ctx.font='bold 24px Arial'; ctx.textAlign='center'; ctx.fillText('RECOGIDA DE EQUIPAJE  ·  BAGGAGE CLAIM',256,38); ctx.strokeStyle='#f97316'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(30,52); ctx.lineTo(482,52); ctx.stroke(); [['IB 3421','Madrid','Cinta 1','✓ EN CINTA','#52b788'],['VY 1892','Barcelona','Cinta 2','✓ EN CINTA','#52b788'],['BA 0456','Londres','Cinta 3','⏳ EN PROCESO','#f59e0b']].forEach(([code,dest,belt,st,sc],i)=>{ ctx.fillStyle=sc; ctx.font='20px Arial'; ctx.textAlign='left'; ctx.fillText(`${code}  ${dest}  ${belt}  ${st}`,40,98+i*55); }); });
-  sign(x+13,6,z,0.1,4,8,clt,Math.PI/2,0x111111);
-  sign(x-13,6,z,0.1,4,8,clt,-Math.PI/2,0x111111);
-  // Exit door
-  box(x,0,z-9,12,5.5,0.35,0x374151);
-  const em=mkMat(0x88c8e8,{transparent:true,opacity:0.4});
-  [-2.5,2.5].forEach(dx=>{ const d=new THREE.Mesh(mkBox(4.5,5,0.1),em); d.position.set(x+dx,2.8,z-8.95); scene.add(d); });
-  const ext=tex(256,128,(ctx)=>{ ctx.fillStyle='#006600'; ctx.fillRect(0,0,256,128); ctx.fillStyle='#fff'; ctx.font='bold 40px Arial'; ctx.textAlign='center'; ctx.fillText('🚶 SALIDA · EXIT',128,80); });
-  sign(x,5.8,z-9,4,1.5,0.08,ext,0,0x003300);
-  // Arrival info screens
-  const art=tex(512,256,(ctx)=>{ ctx.fillStyle='#0a1628'; ctx.fillRect(0,0,512,256); ctx.fillStyle='#f97316'; ctx.font='bold 28px Arial'; ctx.textAlign='center'; ctx.fillText('✈ LLEGADAS · ARRIVALS',256,45); ctx.strokeStyle='#f97316'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(40,60); ctx.lineTo(472,60); ctx.stroke(); [['LH2234','Frankfurt','09:20','✓ ATERRIZÓ'],['BA0456','Londres','09:50','✓ ATERRIZÓ'],['AF1122','París','10:10','EN VUELO']].forEach(([code,dest,time,status],i)=>{ ctx.fillStyle=status==='EN VUELO'?'#4a9eff':'#52b788'; ctx.font='22px Arial'; ctx.textAlign='left'; ctx.fillText(`${code}  ${dest}  ${time}  ${status}`,40,105+i*55); }); });
-  sign(x,8,z+6,10,4,0.12,art,0,0x111111);
-}
-
 // ══════════════════════════════════════════════════
 // SHOPS
 // ══════════════════════════════════════════════════
@@ -3945,6 +3916,7 @@ function buildDetailedPlane(x,y,z,ry){
   const stripe=new THREE.Mesh(mkBox(30,0.4,1.2),bm); stripe.position.set(0,1.5,0); g.add(stripe);
   for(let wx=-8;wx<=10;wx+=2.2){ const wm=mkMat(0x88c8e8,{transparent:true,opacity:0.7}); [2.2,-2.2].forEach(wz=>{ const w=new THREE.Mesh(mkBox(0.1,0.9,1.1),wm); w.position.set(wx,1.8,wz); g.add(w); }); }
   scene.add(g);
+  return g;
 }
 
 function buildTower(x,y,z){
@@ -5772,7 +5744,7 @@ function enterZone(i){
       if(!welcomeNow) showToast(`${zone.emoji} ${zone.name}`);
     }
   }
-  if(visitedZones.size>=ZONE_DATA.length) setTimeout(()=>endGame(),2000);
+  if(visitedZones.size>=ZONE_DATA.length) _endWhenQuiet(); // FASE 48: deja terminar la voz
 }
 function updateProgress(i){
   document.getElementById('progress-fill').style.width=((i+1)/ZONE_DATA.length*100)+'%';
@@ -6307,6 +6279,7 @@ const PA_SETS={
 const _paBuffers={};
 let _paSrc=null, _paGain=null, _paNext=[], _paBag={}, _paLast='';
 function _paContext(){
+  if(_inArrivals()) return 'arrival';
   const id=currentZoneIndex>=0?ZONE_DATA[currentZoneIndex].id:'entrance';
   if(id==='plane') return null;                 // dentro del avión no se oyen los anuncios del aeropuerto
   if(id==='arrival') return 'arrival';
@@ -6536,7 +6509,7 @@ function endFlight(completed){
   if(_breathOpen()) closeBreathing();
   if(completed){
     logInteraction('vuelo','completo');
-    showToast('🏁 ¡Bienvenido a Madrid! Seguí por el pasillo hacia la salida trasera.');
+    deplaneToArrivals();          // FASE 48: fundido y desembarco en Madrid
   } else showToast('💺 Te levantaste. Podés volver a sentarte en el 14C cuando quieras.');
 }
 
@@ -6776,6 +6749,220 @@ function _updateService(delta){
   if(a){ a.position.set(CABIN.x,0,s.z+0.8); const r=s.phase==='back'?0:Math.PI; a.rotation.y=r; a.userData.baseRotY=r; }
 }
 function _breathOpen(){ const el=document.getElementById('breathing-modal'); return el&&!el.classList.contains('hidden'); }
+
+// ─── FASE 48: DESEMBARCO EN MADRID ──────────────────────────
+// Al terminar el vuelo, fundido a negro y aparecés en la puerta del avión ya
+// en Madrid: manga con ventanales (se ve el avión en el que llegaste) y un
+// pasillo de llegadas con cinta caminadora y carteles hacia Recogida de
+// equipajes. Es un edificio aparte (z < -100), sin luces puntuales nuevas
+// (en celular sumarían uniforms → pantalla blanca); los paneles del techo
+// brillan por sí mismos.
+const ARR={
+  regionZ:-100,                 // al sur de esto, estás en Llegadas
+  jetZ:-128, jetX0:-1.6, jetX1:12.5, jetW:2.2, jetH:2.4,
+  corX0:12.5, corX1:17.5, corZ0:-125, corZ1:-162, corH:3.8,
+  walkX0:15.4, walkX1:17.1, walkZ0:-131, walkZ1:-157,
+  startX:-0.9
+};
+let _arrWalkTex=null, _deplaning=false;
+
+function _arrTex(w,h,draw){ const t=tex(w,h,draw); t.anisotropy=4; t.encoding=THREE.sRGBEncoding; return t; } // colores tal cual se dibujan
+// Cartel aeroportuario: fondo oscuro, texto amarillo (como en los aeropuertos reales)
+function _arrSignTex(lines,opt={}){
+  return _arrTex(1024,opt.h||256,(ctx,c)=>{
+    ctx.fillStyle=opt.bg||'#1d2733'; ctx.fillRect(0,0,c.width,c.height);
+    ctx.fillStyle=opt.bar||'#f2c230'; ctx.fillRect(0,0,c.width,8); ctx.fillRect(0,c.height-8,c.width,8);
+    const n=lines.length;
+    lines.forEach((ln,i)=>{
+      const [txt,size,col]=ln;
+      let fs=size; ctx.font=`700 ${fs}px Arial`;
+      while(ctx.measureText(txt).width>c.width-60&&fs>18){ fs-=2; ctx.font=`700 ${fs}px Arial`; }
+      ctx.fillStyle=col||'#f2c230'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(txt,c.width/2,c.height*(i+1)/(n+1));
+    });
+  });
+}
+function _arrPanel(x,y,z,w,h,texture,ry){
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:texture,toneMapped:false,color:new THREE.Color(0.92,0.92,0.92)}));
+  m.position.set(x,y,z); m.rotation.y=ry||0; scene.add(m); return m;
+}
+function _arrBox(x0,x1,y0,y1,z0,z1,mat){
+  const m=new THREE.Mesh(new THREE.BoxGeometry(Math.abs(x1-x0),Math.abs(y1-y0),Math.abs(z1-z0)),mat);
+  m.position.set((x0+x1)/2,(y0+y1)/2,(z0+z1)/2); m.receiveShadow=true; scene.add(m); _staticProps.add(m); return m;
+}
+
+function buildArrivals(){
+  const A=ARR, jz=A.jetZ, hw=A.jetW/2;
+  const before=new Set(scene.children);
+  // Interior sin iluminación (MeshBasic): este edificio queda fuera del mapa de
+  // sombras y el sol lo atravesaría. Tonos fijos, livianos para el celular.
+  // Tono exacto en pantalla: el color se pasa a lineal (la salida lo vuelve a sRGB)
+  const B=(c,o={})=>{ const m=new THREE.MeshBasicMaterial({toneMapped:false,...o}); m.color.set(c).convertSRGBToLinear(); return m; };
+  const tileT=_arrTex(256,256,(ctx)=>{ ctx.fillStyle='#868d95'; ctx.fillRect(0,0,256,256); ctx.strokeStyle='rgba(60,70,80,0.25)'; ctx.lineWidth=3; ctx.strokeRect(0,0,256,256);
+    ctx.fillStyle='rgba(255,255,255,0.05)'; for(let i=0;i<40;i++) ctx.fillRect(Math.random()*256,Math.random()*256,30,2); });
+  tileT.wrapS=tileT.wrapT=THREE.RepeatWrapping; tileT.repeat.set(3,24);
+  const wallM=B(0x9aa1a9), ceilM=B(0xaeb4bb), trimM=B(0x5b636c), carpetM=B(0x2c3742);
+  const floorM=B(0xffffff,{map:tileT}), glassM=B(0x7fa9c4,{transparent:true,opacity:0.32,depthWrite:false}); // vidrio con tinte: el exterior no satura
+  const lightM=new THREE.MeshBasicMaterial({color:new THREE.Color(0.97,0.95,0.9)});
+  const darkM=B(0x31373e), railM=B(0xa9b0b8);
+
+  // ── Plataforma (pista) y el avión en el que llegaste ──
+  const apT=_arrTex(512,512,(ctx,c)=>{ ctx.fillStyle='#6d7277'; ctx.fillRect(0,0,512,512);
+    ctx.fillStyle='rgba(0,0,0,0.08)'; for(let i=0;i<300;i++) ctx.fillRect(Math.random()*512,Math.random()*512,2+Math.random()*30,1.5);
+    ctx.fillStyle='#e8c33a'; ctx.fillRect(250,0,8,512); ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.fillRect(0,250,512,5); });
+  apT.wrapS=apT.wrapT=THREE.RepeatWrapping; apT.repeat.set(8,8);
+  const ap=new THREE.Mesh(new THREE.PlaneGeometry(160,160),new THREE.MeshStandardMaterial({map:apT,roughness:0.9}));
+  ap.rotation.x=-Math.PI/2; ap.position.set(-10,-4.2,-140); ap.receiveShadow=true; scene.add(ap);
+  // Avión estacionado: mirando a +Z, su lado izquierdo (con la puerta) contra la manga
+  const myPlane=buildDetailedPlane(-4,0.9,-140,-Math.PI/2);
+  // Alas más cortas: la del lado de la terminal no debe atravesar el pasillo
+  myPlane.children.forEach(c=>{ if(c.geometry&&c.geometry.parameters&&c.geometry.parameters.depth===22){ c.scale.z=0.55; c.position.z=Math.sign(c.position.z)*7.5; } });
+  [[-4,-131],[-6.2,-141],[-1.8,-141]].forEach(([gx,gz])=>{ cyl(gx,-4.2,gz,0.12,0.12,3.6,8,0x9aa3ab); cyl(gx,-4.2,gz,0.45,0.45,0.35,12,0x222222); });
+  // Puerta abierta del avión: marco oscuro y un vistazo cálido a la cabina
+  _arrBox(-1.95,-1.8,-0.05,2.05,jz-0.55,jz+0.55,darkM);
+  const doorIn=new THREE.Mesh(new THREE.PlaneGeometry(0.95,1.9),new THREE.MeshBasicMaterial({color:new THREE.Color(1.0,0.93,0.8)}));
+  doorIn.position.set(-1.78,0.98,jz); doorIn.rotation.y=Math.PI/2; scene.add(doorIn);
+  // Otro avión más lejos y un tractor de equipaje
+  buildDetailedPlane(-34,0.9,-170,-Math.PI/2+0.25);
+  _arrBox(4,7,-4.2,-3.0,-150,-148.5,mkStd(0xe0a419,0.6,0.1));
+  _arrBox(7.6,11,-4.2,-3.3,-150.2,-148.3,mkStd(0x4a5560,0.7,0.2));
+
+  // ── Manga (jetway) ──
+  _arrBox(A.jetX0,A.jetX1,-0.12,0.07,jz-hw,jz+hw,carpetM);                  // piso (sobre la pista vieja y sus marcas)
+  _arrBox(A.jetX0,A.jetX1,A.jetH,A.jetH+0.12,jz-hw,jz+hw,ceilM);              // techo
+  cyl(6,-4.2,jz,0.35,0.45,4.1,10,0x8d96a0);                                   // columna de apoyo
+  [-1,1].forEach(sd=>{
+    const zw=jz+sd*hw;
+    _arrBox(A.jetX0,A.jetX1,0,0.9,zw-0.05,zw+0.05,wallM);
+    _arrBox(A.jetX0,A.jetX1,2.0,A.jetH,zw-0.05,zw+0.05,wallM);
+    const g=new THREE.Mesh(new THREE.PlaneGeometry(A.jetX1-A.jetX0,1.1),glassM); g.position.set((A.jetX0+A.jetX1)/2,1.45,zw); scene.add(g);
+    for(let x=A.jetX0+0.4;x<A.jetX1;x+=2.2) _arrBox(x-0.05,x+0.05,0.9,2.0,zw-0.06,zw+0.06,trimM);
+  });
+  // Fuelle de la unión con el avión: pliegues como marcos (dejan libre el paso)
+  for(let x=A.jetX0+0.2;x<A.jetX0+1.6;x+=0.28){
+    [-1,1].forEach(sd=>_arrBox(x,x+0.08,0,A.jetH+0.1,jz+sd*hw-0.1,jz+sd*hw+0.1,darkM));
+    _arrBox(x,x+0.08,A.jetH-0.02,A.jetH+0.1,jz-hw,jz+hw,darkM);
+  }
+  _arrBox(A.jetX0+0.3,A.jetX1-0.3,A.jetH-0.02,A.jetH-0.01,jz-0.06,jz+0.06,lightM);
+  // Cartel de bienvenida al final de la manga
+  _arrPanel(A.jetX1-0.08,2.17,jz,1.9,0.42,_arrSignTex([['Bienvenidos a Madrid',92,'#ffffff'],['Welcome to Madrid',64,'#f2c230']],{h:256}),-Math.PI/2);
+
+  // ── Pasillo de llegadas ──
+  const cx=(A.corX0+A.corX1)/2, cz=(A.corZ0+A.corZ1)/2, L=Math.abs(A.corZ1-A.corZ0);
+  _arrBox(A.corX0,A.corX1,-4.2,0.07,A.corZ1,A.corZ0,floorM);
+  _arrBox(A.corX0,A.corX1,A.corH,A.corH+0.15,A.corZ1,A.corZ0,ceilM);
+  for(let z=A.corZ0-2;z>A.corZ1+1;z-=3) _arrBox(cx-1.4,cx+1.4,A.corH-0.03,A.corH-0.01,z-0.3,z+0.3,lightM);
+  // Franja guía en el piso hacia las puertas
+  _arrBox(13.75,13.95,0.07,0.082,A.corZ1+1.2,A.corZ0-0.6,B(0x2bb8ae));
+  // Pared oeste: ventanal hacia el avión (con el vano de la manga)
+  _arrBox(A.corX0-0.1,A.corX0,0,A.corH,jz+hw+0.05,A.corZ0,wallM);
+  _arrBox(A.corX0-0.1,A.corX0,A.jetH+0.1,A.corH,jz-hw-0.05,jz+hw+0.05,wallM);
+  const wz0=jz-hw-0.05;
+  _arrBox(A.corX0-0.1,A.corX0,0,0.6,A.corZ1,wz0,wallM);
+  _arrBox(A.corX0-0.1,A.corX0,3.3,A.corH,A.corZ1,wz0,wallM);
+  const gw=new THREE.Mesh(new THREE.PlaneGeometry(Math.abs(A.corZ1-wz0),2.7),glassM);
+  gw.position.set(A.corX0-0.05,1.95,(A.corZ1+wz0)/2); gw.rotation.y=Math.PI/2; scene.add(gw);
+  for(let z=wz0-0.1;z>A.corZ1;z-=3) _arrBox(A.corX0-0.12,A.corX0+0.02,0.6,3.3,z-0.06,z+0.06,trimM);
+  // Pared este, extremos sur y norte
+  _arrBox(A.corX1,A.corX1+0.1,0,A.corH,A.corZ1,A.corZ0,wallM);
+  _arrBox(A.corX0,A.corX1,0,A.corH,A.corZ0,A.corZ0+0.1,wallM);
+  _arrBox(A.corX0,13.4,0,A.corH,A.corZ1-0.1,A.corZ1,wallM);
+  _arrBox(16.6,A.corX1,0,A.corH,A.corZ1-0.1,A.corZ1,wallM);
+  _arrBox(13.4,16.6,2.6,A.corH,A.corZ1-0.1,A.corZ1,wallM);
+  // Puertas esmeriladas hacia Recogida de equipajes
+  const frost=B(0xdfe9ef,{transparent:true,opacity:0.88});
+  _arrBox(13.42,14.98,0,2.58,A.corZ1-0.06,A.corZ1-0.02,frost);
+  _arrBox(15.02,16.58,0,2.58,A.corZ1-0.06,A.corZ1-0.02,frost);
+  _arrBox(14.98,15.02,0,2.58,A.corZ1-0.07,A.corZ1-0.01,trimM);
+  _arrPanel(15,3.15,A.corZ1+0.02,3.3,0.8,_arrSignTex([['🧳  Recogida de equipajes',84],['Baggage claim',60,'#ffffff']]),0);
+  // Carteles colgantes (doble faz) hacia equipajes y salida
+  [-136,-149].forEach(z=>{
+    const t=_arrSignTex([['🧳 Recogida de equipajes  ↑',76],['🚪 Salida · Exit  ↑',62,'#ffffff']]);
+    _arrPanel(cx,3.1,z,3.6,0.9,t,0); _arrPanel(cx,3.1,z-0.01,3.6,0.9,t,Math.PI);
+    [-1.5,1.5].forEach(dx=>_arrBox(cx+dx-0.02,cx+dx+0.02,3.55,A.corH,z-0.02,z+0.02,trimM));
+  });
+  // Pared este: bienvenida enfrente de la manga y mensajes de calma
+  _arrPanel(A.corX1-0.02,2.1,jz,5.2,1.5,_arrSignTex([['¡Bienvenidos a Madrid!',96,'#ffffff'],['Welcome · Bienvenue · Willkommen',52,'#9fe3dc']],{bg:'#17465e',bar:'#2bb8ae'}),-Math.PI/2);
+  _arrPanel(A.corX1-0.02,2.0,-141,2.6,1.3,_arrSignTex([['Ya llegaste.',88,'#ffffff'],['Respirá hondo y caminá a tu ritmo.',48,'#cfe9f5']],{bg:'#24506b',bar:'#7cc4e8',h:320}),-Math.PI/2);
+  _arrPanel(A.corX1-0.02,2.0,-153,2.6,1.3,_arrSignTex([['Tu valija te espera',72,'#ffffff'],['en la cinta 2 · Vuelo 3421',52,'#f2c230']],{h:320}),-Math.PI/2);
+  // Cinta caminadora (lado este)
+  _arrWalkTex=_arrTex(128,512,(ctx,c)=>{ ctx.fillStyle='#2a2f35'; ctx.fillRect(0,0,128,512);
+    ctx.strokeStyle='#d7dbe0'; ctx.lineWidth=7; for(let y=20;y<512;y+=64){ ctx.beginPath(); ctx.moveTo(30,y+26); ctx.lineTo(64,y); ctx.lineTo(98,y+26); ctx.stroke(); }
+    ctx.fillStyle='rgba(255,255,255,0.05)'; for(let x=0;x<128;x+=6) ctx.fillRect(x,0,2,512); });
+  _arrWalkTex.wrapS=_arrWalkTex.wrapT=THREE.RepeatWrapping; _arrWalkTex.repeat.set(1,Math.abs(A.walkZ1-A.walkZ0)/2.2);
+  const belt=new THREE.Mesh(new THREE.PlaneGeometry(A.walkX1-A.walkX0-0.2,Math.abs(A.walkZ1-A.walkZ0)),new THREE.MeshBasicMaterial({map:_arrWalkTex}));
+  belt.rotation.x=-Math.PI/2; belt.position.set((A.walkX0+A.walkX1)/2,0.085,(A.walkZ0+A.walkZ1)/2); scene.add(belt);
+  [A.walkX0,A.walkX1].forEach(x=>{
+    _arrBox(x-0.06,x+0.06,0,0.85,A.walkZ1,A.walkZ0,railM);
+    _arrBox(x-0.05,x+0.05,0.85,0.95,A.walkZ1,A.walkZ0,darkM);
+  });
+  _arrPanel((A.walkX0+A.walkX1)/2,1.2,A.walkZ0+0.05,1.4,0.35,_arrSignTex([['Cinta caminadora  ↑',80,'#ffffff']],{h:200}),0);
+  scene.children.forEach(o=>{ if(!before.has(o)) o.traverse(c=>{ c.userData.arr=true; }); });
+}
+// Oculta restos del mundo viejo (balizas de la pista, etc.) dentro de la manga y el pasillo
+function _arrHideIntruders(){
+  const A=ARR;
+  const vols=[new THREE.Box3(new THREE.Vector3(A.jetX0-0.4,0.09,A.jetZ-A.jetW/2),new THREE.Vector3(A.jetX1,A.jetH,A.jetZ+A.jetW/2)),
+              new THREE.Box3(new THREE.Vector3(A.corX0,0.09,A.corZ1),new THREE.Vector3(A.corX1,A.corH,A.corZ0))];
+  const bb=new THREE.Box3(), sz=new THREE.Vector3(); let n=0;
+  const drop=[];
+  scene.traverse(o=>{
+    if(!o.isMesh||o.userData.arr||o.isInstancedMesh) return;
+    bb.setFromObject(o); if(bb.isEmpty()||bb.getSize(sz).length()>40) return;
+    if(vols.some(v=>v.intersectsBox(bb))) drop.push(o);
+  });
+  // Se quitan (no solo se ocultan): la fusión de geometría posterior no los revive
+  drop.forEach(o=>{ if(o.parent) o.parent.remove(o); _staticProps.delete(o); n++; });
+  return n;
+}
+
+// Pasillo: límites (manga + pasillo) y la cinta que acompaña el paso
+function _clampArrivals(pos,delta){
+  const A=ARR, m=0.35;
+  const rects=[
+    [A.jetX0+0.4, A.jetX1+0.4, A.jetZ-A.jetW/2+m, A.jetZ+A.jetW/2-m],
+    [A.corX0+m, A.corX1-m, A.corZ1+m+0.1, A.corZ0-m]
+  ];
+  if(!rects.some(r=>pos.x>=r[0]&&pos.x<=r[1]&&pos.z>=r[2]&&pos.z<=r[3])){
+    let best=null,bd=Infinity;
+    rects.forEach(r=>{ const x=Math.max(r[0],Math.min(r[1],pos.x)), z=Math.max(r[2],Math.min(r[3],pos.z)); const d=(x-pos.x)**2+(z-pos.z)**2; if(d<bd){bd=d;best=[x,z];} });
+    pos.x=best[0]; pos.z=best[1];
+  }
+  if(pos.x>A.walkX0+0.1&&pos.x<A.walkX1-0.1&&pos.z<A.walkZ0&&pos.z>A.walkZ1) pos.z-=(calmMode?0.6:0.9)*delta;
+  pos.y=PLAYER_HEIGHT;
+}
+function _inArrivals(){ return camera.position.z<ARR.regionZ; }
+
+// Fundido a negro → Madrid, en la puerta del avión
+function deplaneToArrivals(){
+  if(_deplaning) return;
+  _deplaning=true;
+  const ov=document.getElementById('fade-overlay');
+  uiModalOpen=true; releaseMovementKeys();
+  ov.classList.remove('hidden'); setTimeout(()=>ov.classList.add('show'),30);
+  setTimeout(()=>{
+    camera.position.set(ARR.startX,PLAYER_HEIGHT,ARR.jetZ);
+    camera.rotation.order='YXZ';
+    if(isMobile){ mobileYaw=-Math.PI/2; mobilePitch=0; } else camera.rotation.set(0,-Math.PI/2,0); // mirando por la manga (+X)
+    queueAnnouncement('AP11-llegada',8);
+  },1100);
+  setTimeout(()=>{
+    ov.classList.remove('show'); uiModalOpen=false; _deplaning=false;
+    showToast('🧳 Bienvenido a Madrid. Seguí los carteles amarillos hacia Recogida de equipajes.');
+    setTimeout(()=>ov.classList.add('hidden'),900);
+  },3400);
+}
+// El final del recorrido espera a que termine la voz (no la corta)
+let _endPending=false;
+function _endWhenQuiet(){
+  if(_endPending) return; _endPending=true;
+  const tryEnd=()=>{
+    if(!isGameActive){ _endPending=false; return; }
+    if(isSpeaking||uiModalOpen){ setTimeout(tryEnd,600); return; }
+    _endPending=false; endGame();
+  };
+  setTimeout(tryEnd,2000);
+}
 
 function narrateZone(i){ if(i>=0&&i<ZONE_DATA.length) speak(ZONE_DATA[i].narration,ZONE_DATA[i].id); }
 function narrateCurrentZone(){ if(currentZoneIndex>=0) narrateZone(currentZoneIndex); else speak('Caminá hacia la entrada del aeropuerto para comenzar tu recorrido.','sin-zona'); }
@@ -7153,7 +7340,8 @@ function animate(){
     }
     const pos=camera.position;
     const inWC=pos.z>RESTROOM.z0+0.3&&pos.z<RESTROOM.z1-0.3&&pos.x<-15.5;
-    pos.x=Math.max(inWC?RESTROOM.x0+0.75:-16,Math.min(16,pos.x)); pos.z=Math.max(-70,Math.min(54,pos.z)); pos.y=PLAYER_HEIGHT;
+    if(pos.z<ARR.regionZ) _clampArrivals(pos,delta); // FASE 48: manga y pasillo de llegadas
+    else { pos.x=Math.max(inWC?RESTROOM.x0+0.75:-16,Math.min(16,pos.x)); pos.z=Math.max(-60.6,Math.min(54,pos.z)); pos.y=PLAYER_HEIGHT; } // -60.6: fondo de la cabina (a Madrid se llega volando)
     if(_flight) updateFlight(delta,t); // FASE 46: sentado en el 14C
     checkZones();
   }
@@ -7189,6 +7377,7 @@ function animate(){
   if(chargeLeds.length){ const k=0.6+Math.abs(Math.sin(t*1.6))*0.9; chargeLeds.forEach(l=>l.material.emissiveIntensity=k); }
   updateAutoWalk(delta);        // FASE 43: caminata guiada por la manga
   updateCabinSeq(delta);        // FASE 46: anuncios de a bordo
+  if(_arrWalkTex) _arrWalkTex.offset.y-=delta*(calmMode?0.22:0.33); // FASE 48: cinta caminadora
   _updateWindowFade(delta); _updateCabinDim(delta); if(!isPaused) _updateService(delta); // FASE 47
   updateAmbientChimes(delta);   // avisos sonoros suaves (si el sonido está activo)
   // Tablero de salidas: redibujar cuando cambia algún vuelo o cada 30 s (reloj)
