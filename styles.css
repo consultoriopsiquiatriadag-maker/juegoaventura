@@ -1781,7 +1781,7 @@ body.calm-mode .steam i { animation-duration: 5s; }
 body.calm-mode .cw-drops i { animation-duration: 3.4s !important; }
 
 /* ═══ FASE 46: VUELO SIMULADO ═══ */
-#flight-hud {
+#flight-hud, #bag-hud {
   position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%);
   width: min(460px, calc(100vw - 32px));
   background: rgba(13,30,48,0.82); backdrop-filter: blur(12px);
@@ -1831,3 +1831,19 @@ body.calm-mode #flight-hud.fh-swap .fh-body { animation: none; }
 .fade-overlay .fo-city { margin: 0; font: 700 2.4rem var(--ff-display, var(--ff-body)); letter-spacing: .02em; }
 .fade-overlay .fo-sub { margin: 6px 0 0; font: 600 .9rem var(--ff-body); letter-spacing: .14em; text-transform: uppercase; color: var(--accent2); }
 body.calm-mode .fade-overlay { transition-duration: 1.4s; }
+
+/* ═══ FASE 49: SALA DE EQUIPAJES ═══ */
+#bag-hud .fh-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#bag-hud .fh-flight { font: 600 0.72rem var(--ff-body); letter-spacing: .06em; text-transform: uppercase; color: var(--accent2); }
+#bag-hud .bh-tag { font: 700 .7rem var(--ff-body); padding: 3px 9px; border-radius: 20px; color: #fff; background: #2457a6; border: 2px solid #f08a24; }
+#bag-hud .fh-body { display: flex; gap: 12px; align-items: center; margin: 6px 0 8px; }
+#bag-hud .fh-ico { font-size: 2rem; line-height: 1; }
+#bag-hud .fh-title { margin: 0; font: 700 1.02rem var(--ff-body); }
+#bag-hud .fh-text { margin: 2px 0 0; font-size: .88rem; line-height: 1.35; color: rgba(255,255,255,0.85); }
+#bag-hud .fh-actions { display: flex; }
+#bag-hud .fh-actions button { flex: 1; padding: 9px 10px; border-radius: 12px; font: 600 .85rem var(--ff-body); color: #fff; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.18); }
+#bag-hud .fh-key { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-right: 4px; border-radius: 6px; background: rgba(78,205,196,0.35); font-size: .75rem; }
+body.is-touch #bag-hud .fh-key { display: none; }
+#bag-hud:not(.hidden) ~ #interact-prompt, body:has(#bag-hud:not(.hidden)) #interact-prompt { bottom: 210px; }
+@media (max-width: 600px) { #bag-hud { bottom: 16px; padding: 10px 12px; } #bag-hud .bh-tag { display: none; } }
+body:has(#bag-hud:not(.hidden)) #approach-hint { display: none !important; }

@@ -1306,6 +1306,7 @@ function setupInteractionUI(){
   on('btn-hud-sound',toggleAmbientSound);
   on('btn-flight-skip',skipToLanding);
   on('btn-flight-breath',()=>{ if(_flight) openBreathing(); });
+  on('btn-bag-breath',()=>openBreathing());
   on('btn-flight-stand',()=>endFlight(false));
   syncSoundButtons();
   on('btn-gate-walk',walkToAircraft);
@@ -5655,6 +5656,8 @@ function startGame(){
   isGameActive=true; isPaused=false; currentZoneIndex=-1;
   visitedZones.clear(); breathCount=0;
   _unlockVoice();                                         // FASE 45: habilita la voz grabada (gesto del usuario)
+  _resetBaggageHall();                                    // FASE 49: la cinta vuelve a empezar
+  document.body.classList.toggle('is-touch',!!isMobile);
   _paNext=['AP01-bienvenida']; _paBag={}; _chimeTimer=12;  // primer anuncio: bienvenida
   document.getElementById('breath-count-stat').textContent='0';
   // Inicio: centro del pasillo, justo antes de la zona de check-in (entrega de
@@ -5744,7 +5747,8 @@ function enterZone(i){
       if(!welcomeNow) showToast(`${zone.emoji} ${zone.name}`);
     }
   }
-  if(visitedZones.size>=ZONE_DATA.length) _endWhenQuiet(); // FASE 48: deja terminar la voz
+  // FASE 49: el recorrido termina cuando retirás tu valija (y deja terminar la voz)
+  if(visitedZones.size>=ZONE_DATA.length&&(!_bh||_bh.state==='done')) _endWhenQuiet();
 }
 function updateProgress(i){
   document.getElementById('progress-fill').style.width=((i+1)/ZONE_DATA.length*100)+'%';
@@ -6870,10 +6874,7 @@ function buildArrivals(){
   _arrBox(16.6,A.corX1,0,A.corH,A.corZ1-0.1,A.corZ1,wallM);
   _arrBox(13.4,16.6,2.6,A.corH,A.corZ1-0.1,A.corZ1,wallM);
   // Puertas esmeriladas hacia Recogida de equipajes
-  const frost=B(0xdfe9ef,{transparent:true,opacity:0.88});
-  _arrBox(13.42,14.98,0,2.58,A.corZ1-0.06,A.corZ1-0.02,frost);
-  _arrBox(15.02,16.58,0,2.58,A.corZ1-0.06,A.corZ1-0.02,frost);
-  _arrBox(14.98,15.02,0,2.58,A.corZ1-0.07,A.corZ1-0.01,trimM);
+  // (las puertas esmeriladas son automáticas: ver buildBaggageHall)
   _arrPanel(15,3.15,A.corZ1+0.02,3.3,0.8,_arrSignTex([['🧳  Recogida de equipajes',84],['Baggage claim',60,'#ffffff']]),0);
   // Carteles colgantes (doble faz) hacia equipajes y salida
   [-136,-149].forEach(z=>{
@@ -6897,13 +6898,15 @@ function buildArrivals(){
     _arrBox(x-0.05,x+0.05,0.85,0.95,A.walkZ1,A.walkZ0,darkM);
   });
   _arrPanel((A.walkX0+A.walkX1)/2,1.2,A.walkZ0+0.05,1.4,0.35,_arrSignTex([['Cinta caminadora  ↑',80,'#ffffff']],{h:200}),0);
+  buildBaggageHall();   // FASE 49
   scene.children.forEach(o=>{ if(!before.has(o)) o.traverse(c=>{ c.userData.arr=true; }); });
 }
 // Oculta restos del mundo viejo (balizas de la pista, etc.) dentro de la manga y el pasillo
 function _arrHideIntruders(){
   const A=ARR;
   const vols=[new THREE.Box3(new THREE.Vector3(A.jetX0-0.4,0.09,A.jetZ-A.jetW/2),new THREE.Vector3(A.jetX1,A.jetH,A.jetZ+A.jetW/2)),
-              new THREE.Box3(new THREE.Vector3(A.corX0,0.09,A.corZ1),new THREE.Vector3(A.corX1,A.corH,A.corZ0))];
+              new THREE.Box3(new THREE.Vector3(A.corX0,0.09,A.corZ1),new THREE.Vector3(A.corX1,A.corH,A.corZ0)),
+              new THREE.Box3(new THREE.Vector3(HALL.x0,0.09,HALL.z1),new THREE.Vector3(HALL.x1,HALL.H,HALL.z0))];
   const bb=new THREE.Box3(), sz=new THREE.Vector3(); let n=0;
   const drop=[];
   scene.traverse(o=>{
@@ -6921,7 +6924,9 @@ function _clampArrivals(pos,delta){
   const A=ARR, m=0.35;
   const rects=[
     [A.jetX0+0.4, A.jetX1+0.4, A.jetZ-A.jetW/2+m, A.jetZ+A.jetW/2-m],
-    [A.corX0+m, A.corX1-m, A.corZ1+m+0.1, A.corZ0-m]
+    [A.corX0+m, A.corX1-m, A.corZ1+m+0.1, A.corZ0-m],
+    [13.7, 16.3, HALL.z0-0.7, HALL.z0+0.7],                       // vano de las puertas
+    [HALL.x0+0.45, HALL.x1-0.45, HALL.z1+0.45, HALL.z0-0.45]       // sala de equipajes
   ];
   if(!rects.some(r=>pos.x>=r[0]&&pos.x<=r[1]&&pos.z>=r[2]&&pos.z<=r[3])){
     let best=null,bd=Infinity;
@@ -6929,6 +6934,7 @@ function _clampArrivals(pos,delta){
     pos.x=best[0]; pos.z=best[1];
   }
   if(pos.x>A.walkX0+0.1&&pos.x<A.walkX1-0.1&&pos.z<A.walkZ0&&pos.z>A.walkZ1) pos.z-=(calmMode?0.6:0.9)*delta;
+  if(pos.z<HALL.z0) _bagHallBlock(pos);   // las cintas no se atraviesan
   pos.y=PLAYER_HEIGHT;
 }
 function _inArrivals(){ return camera.position.z<ARR.regionZ; }
@@ -6962,6 +6968,248 @@ function _endWhenQuiet(){
     _endPending=false; endGame();
   };
   setTimeout(tryEnd,2000);
+}
+
+// ─── FASE 49: SALA DE RECOGIDA DE EQUIPAJES ─────────────────
+// Detrás de las puertas esmeriladas: dos cintas (la 1 ya terminó; la 2 es la
+// de tu vuelo). Al entrar, la cinta 2 arranca con luz y aviso; salen valijas
+// de a una y, después de una espera breve, aparece la tuya (azul con cinta
+// naranja). Practica la espera con incertidumbre: consejos en pantalla y
+// botón para respirar. Si no la agarrás, da la vuelta y vuelve a pasar.
+const HALL={ x0:0, x1:30, z0:-162, z1:-192, H:5, doorX:15 };
+const BELTS=[ {cx:7, cz:-177, Ls:6, r:1.55, rOut:2.1, rIn:1.0},     // Cinta 1 (Londres, terminada)
+              {cx:21,cz:-177, Ls:6, r:1.55, rOut:2.1, rIn:1.0} ];    // Cinta 2 (tu vuelo)
+const MY_BAG={ color:0x2457a6, ribbon:0xf08a24, label:'Azul con cinta naranja' };
+let _bh=null;    // estado de la sala
+
+function _beltPerim(b){ return 2*b.Ls+2*Math.PI*b.r; }
+// Punto del recorrido a la distancia s (x, z y ángulo de avance)
+function _beltPoint(b,s){
+  const P=_beltPerim(b); s=((s%P)+P)%P;
+  const L=b.Ls, h=L/2, arc=Math.PI*b.r;
+  if(s<L) return {x:b.cx-h+s, z:b.cz+b.r, a:0};                                   // tramo cercano (hacia +x)
+  s-=L; if(s<arc){ const t=s/b.r; return {x:b.cx+h+Math.sin(t)*b.r, z:b.cz+Math.cos(t)*b.r, a:-t}; }
+  s-=arc; if(s<L) return {x:b.cx+h-s, z:b.cz-b.r, a:Math.PI};                      // tramo lejano (hacia -x)
+  s-=L; const t=s/b.r; return {x:b.cx-h-Math.sin(t)*b.r, z:b.cz-Math.cos(t)*b.r, a:Math.PI-t};
+}
+function _stadiumShape(L,r){
+  const sh=new THREE.Shape(), h=L/2;
+  sh.moveTo(-h,-r); sh.lineTo(h,-r); sh.absarc(h,0,r,-Math.PI/2,Math.PI/2,false);
+  sh.lineTo(-h,r); sh.absarc(-h,0,r,Math.PI/2,Math.PI*1.5,false);
+  return sh;
+}
+function _stadiumPath(L,r){ const p=new THREE.Path(), h=L/2;
+  p.moveTo(-h,-r); p.lineTo(h,-r); p.absarc(h,0,r,-Math.PI/2,Math.PI/2,false); p.lineTo(-h,r); p.absarc(-h,0,r,Math.PI/2,Math.PI*1.5,false); return p; }
+
+function _buildCarousel(b,B,num,active){
+  const g=new THREE.Group(); g.position.set(b.cx,0,b.cz); scene.add(g);
+  // Base (borde de acero) y cinta de goma en anillo
+  const ring=_stadiumShape(b.Ls,b.rOut+0.12); ring.holes.push(_stadiumPath(b.Ls,b.rIn-0.05));
+  const base=new THREE.Mesh(new THREE.ExtrudeGeometry(ring,{depth:0.42,bevelEnabled:false}),B(0x8f979f));
+  base.rotation.x=-Math.PI/2; base.position.y=0.07; g.add(base);
+  const beltT=_arrTex(512,64,(ctx)=>{ ctx.fillStyle='#1f2328'; ctx.fillRect(0,0,512,64); ctx.fillStyle='#3a4048'; for(let x=0;x<512;x+=32) ctx.fillRect(x,0,3,64); });
+  beltT.wrapS=beltT.wrapT=THREE.RepeatWrapping; beltT.repeat.set(0.25,0.25);
+  const bring=_stadiumShape(b.Ls,b.rOut); bring.holes.push(_stadiumPath(b.Ls,b.rIn));
+  const belt=new THREE.Mesh(new THREE.ShapeGeometry(bring,24),B(0xffffff,{map:beltT}));
+  belt.rotation.x=-Math.PI/2; belt.position.y=0.5; g.add(belt);
+  // Isla central de acero y la boca con cortina de goma por donde salen las valijas
+  const isl=new THREE.Mesh(new THREE.ExtrudeGeometry(_stadiumShape(b.Ls,b.rIn),{depth:0.75,bevelEnabled:false}),B(0xb3bac1));
+  isl.rotation.x=-Math.PI/2; isl.position.y=0.07; g.add(isl);
+  const mouth=new THREE.Mesh(new THREE.BoxGeometry(1.4,1.2,1.0),B(0x3a4149)); mouth.position.set(-b.Ls/2+0.4,1.3,0); g.add(mouth);
+  for(let i=0;i<7;i++){ const f=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.62,0.02),B(0x15181c)); f.position.set(-b.Ls/2-0.2+i*0.19,0.92,0.51); g.add(f); }
+  // Baliza ámbar (parpadea al arrancar)
+  const bea=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,0.2,12),new THREE.MeshBasicMaterial({color:new THREE.Color(0.35,0.22,0.05)}));
+  bea.material.userData.dyn=true;   // material propio: no se comparte al optimizar
+  bea.position.set(-b.Ls/2+0.4,2.0,0); g.add(bea);
+  // Pantalla colgante doble
+  const scr=_arrTex(512,192,()=>{}); const sm=new THREE.MeshBasicMaterial({map:scr,toneMapped:false});
+  [0,Math.PI].forEach(ry=>{ const p=new THREE.Mesh(new THREE.PlaneGeometry(2.4,0.9),sm); p.position.set(0,3.6,0); p.rotation.y=ry; g.add(p); });
+  _arrBox(b.cx-0.03,b.cx+0.03,4.05,HALL.H,b.cz-0.03,b.cz+0.03,B(0x5b636c));
+  return {g,belt,beltT,bea,scr,num,active,b};
+}
+function _drawBeltScreen(c,state){
+  const ctx=c.scr.image.getContext('2d'), W=512,H=192;
+  ctx.fillStyle='#0d1a26'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#f2c230'; ctx.font='bold 92px Arial'; ctx.textAlign='left'; ctx.textBaseline='middle'; ctx.fillText(String(c.num),26,H/2);
+  ctx.fillStyle='#ffffff'; ctx.font='bold 38px Arial';
+  if(c.num===1){ ctx.fillText('AF 1022 · LONDRES',120,64); ctx.fillStyle='#9fb3c4'; ctx.font='30px Arial'; ctx.fillText('Finalizado · Completed',120,128); }
+  else {
+    ctx.fillText('3421 · BUENOS AIRES',120,64);
+    const txt={wait:['Equipaje en breve','#9fb3c4'],run:['● En cinta · On belt','#5fe08a'],done:['Tu valija: retirada ✓','#5fe08a']}[state]||['','#fff'];
+    ctx.fillStyle=txt[1]; ctx.font='bold 32px Arial'; ctx.fillText(txt[0],120,128);
+  }
+  c.scr.needsUpdate=true;
+}
+function _buildBag(color,ribbon){
+  const g=new THREE.Group();
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.28,0.44),mkStd(color,0.55,0.05)); body.position.y=0.14; g.add(body);
+  const hd=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.04,0.04),mkStd(0x222222,0.6,0)); hd.position.set(0,0.3,0); g.add(hd);
+  if(ribbon!=null){ const rb=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.29,0.45),mkStd(ribbon,0.5,0)); rb.position.set(0.12,0.14,0); g.add(rb);
+    const tag=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.06,0.01),mkStd(0xffffff,0.6,0)); tag.position.set(-0.24,0.26,0.225); g.add(tag); }
+  g.traverse(c=>{ c.userData.arr=true; });
+  scene.add(g); return g;
+}
+
+function buildBaggageHall(){
+  const Hh=HALL, B=(c,o={})=>{ const m=new THREE.MeshBasicMaterial({toneMapped:false,...o}); m.color.set(c).convertSRGBToLinear(); return m; };
+  const wallM=B(0xa4abb3), ceilM=B(0xb4bac1), trimM=B(0x5b636c), darkM=B(0x30363d);
+  const tileT=_arrTex(256,256,(ctx)=>{ ctx.fillStyle='#8f969e'; ctx.fillRect(0,0,256,256); ctx.strokeStyle='rgba(50,60,70,0.25)'; ctx.lineWidth=3; ctx.strokeRect(0,0,256,256); });
+  tileT.wrapS=tileT.wrapT=THREE.RepeatWrapping; tileT.repeat.set(15,15);
+  const cxH=(Hh.x0+Hh.x1)/2, czH=(Hh.z0+Hh.z1)/2;
+  _arrBox(Hh.x0,Hh.x1,-4.2,0.07,Hh.z1,Hh.z0,B(0xffffff,{map:tileT}));
+  _arrBox(Hh.x0,Hh.x1,Hh.H,Hh.H+0.2,Hh.z1,Hh.z0,ceilM);
+  const lightM=new THREE.MeshBasicMaterial({color:new THREE.Color(0.95,0.93,0.88)});
+  for(let x=Hh.x0+3;x<Hh.x1;x+=6) for(let z=Hh.z0-3;z>Hh.z1;z-=5) _arrBox(x-1.2,x+1.2,Hh.H-0.03,Hh.H-0.01,z-0.5,z+0.5,lightM);
+  // Paredes (la sur deja el vano de las puertas que vienen del pasillo)
+  _arrBox(Hh.x0-0.15,Hh.x0,0,Hh.H,Hh.z1,Hh.z0,wallM);
+  _arrBox(Hh.x1,Hh.x1+0.15,0,Hh.H,Hh.z1,Hh.z0,wallM);
+  _arrBox(Hh.x0,Hh.x1,0,Hh.H,Hh.z1-0.15,Hh.z1,wallM);
+  _arrBox(Hh.x0,13.4,0,Hh.H,Hh.z0-0.05,Hh.z0+0.1,wallM);
+  _arrBox(16.6,Hh.x1,0,Hh.H,Hh.z0-0.05,Hh.z0+0.1,wallM);
+  _arrBox(13.4,16.6,2.6,Hh.H,Hh.z0-0.05,Hh.z0+0.1,wallM);
+  _arrBox(Hh.x0,Hh.x1,0,0.12,Hh.z0-0.2,Hh.z0-0.05,trimM);   // zócalo
+  // Puertas esmeriladas automáticas (dos hojas que se corren)
+  const frost=B(0xdfe9ef,{transparent:true,opacity:0.88});
+  const leaves=[-1,1].map(sd=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(1.58,2.58,0.05),frost); m.position.set(Hh.doorX+sd*0.8,1.36,Hh.z0); m.userData.home=m.position.x; m.userData.sd=sd; scene.add(m); return m; });
+  _arrPanel(Hh.doorX,3.15,Hh.z0-0.08,3.3,0.8,_arrSignTex([['🧳  Recogida de equipajes',84],['Baggage claim',60,'#ffffff']]),Math.PI);
+  // Cintas
+  const carousels=BELTS.map((b,i)=>_buildCarousel(b,B,i+1,i===1));
+  carousels.forEach(c=>_drawBeltScreen(c,'wait'));
+  // Cinta 1: algunas valijas que nadie retiró todavía (quietas)
+  [[0.15,0xcc3333],[0.42,0x33aa44],[0.71,0x777777]].forEach(([f,col])=>{ const p=_beltPoint(BELTS[0],_beltPerim(BELTS[0])*f); const bg=_buildBag(col); bg.position.set(p.x,0.5,p.z); bg.rotation.y=p.a; });
+  // Tablero de llegadas → cinta (colgante, frente a la entrada)
+  const fids=_arrTex(1024,512,(ctx,c)=>{
+    ctx.fillStyle='#0d1a26'; ctx.fillRect(0,0,1024,512);
+    ctx.fillStyle='#f2c230'; ctx.font='bold 44px Arial'; ctx.textAlign='left'; ctx.fillText('🧳 RECOGIDA DE EQUIPAJES · BAGGAGE CLAIM',30,64);
+    ctx.fillStyle='#5b6b7c'; ctx.fillRect(30,88,964,3);
+    [['3421','BUENOS AIRES','2','En cinta','#5fe08a'],['1022','LONDRES','1','Finalizado','#9fb3c4'],['0577','LISBOA','3','En breve','#f2c230'],['6203','ROMA','4','En breve','#f2c230']].forEach((r,i)=>{
+      const y=150+i*86; ctx.font='bold 40px Arial'; ctx.fillStyle='#ffffff'; ctx.fillText(r[0],30,y); ctx.fillText(r[1],190,y);
+      ctx.fillStyle='#f2c230'; ctx.fillText(r[2],620,y); ctx.fillStyle=r[4]; ctx.font='36px Arial'; ctx.fillText(r[3],720,y); });
+  });
+  [0,Math.PI].forEach(ry=>_arrPanel(8.5,3.5,-165.5+(ry?-0.01:0),4.2,2.1,fids,ry));
+  _arrBox(8.5-1.8,8.5-1.76,4.55,Hh.H,-165.52,-165.48,trimM); _arrBox(8.5+1.76,8.5+1.8,4.55,Hh.H,-165.52,-165.48,trimM);
+  // Mostrador de equipaje perdido (pared este): tranquiliza saber que existe
+  _arrBox(27.4,29.6,0,1.05,-187.5,-184.5,B(0x3d6b8c)); _arrBox(27.3,29.7,1.05,1.12,-187.6,-184.4,B(0xd9dde1));
+  _arrPanel(Hh.x1-0.03,2.6,-186,3.6,1.2,_arrSignTex([['Equipaje perdido · Lost & found',64,'#ffffff'],['Si tu valija no aparece, acá te ayudamos.',44,'#cfe9f5']],{bg:'#24506b',bar:'#7cc4e8',h:300}),-Math.PI/2);
+  // Carritos portaequipajes (pared oeste) y bancos (pared este)
+  for(let i=0;i<5;i++){ const z=-168-i*0.55;
+    _arrBox(0.5,1.5,0.15,0.2,z-0.22,z+0.22,trimM); _arrBox(0.5,0.56,0.2,1.0,z-0.22,z+0.22,trimM); _arrBox(1.44,1.5,0.2,0.7,z-0.2,z+0.2,darkM); }
+  _arrPanel(Hh.x0+0.03,2.2,-169.2,1.8,0.6,_arrSignTex([['🛒 Carritos · Trolleys',80,'#ffffff']],{h:200}),Math.PI/2);
+  [-170,-174].forEach(z=>{ _arrBox(28.6,29.5,0.42,0.5,z-1.2,z+1.2,B(0x6f7d8a)); _arrBox(29.4,29.55,0.5,1.0,z-1.2,z+1.2,B(0x6f7d8a)); [-1,1].forEach(d=>_arrBox(28.7,29.4,0.07,0.42,z+d*1.0-0.04,z+d*1.0+0.04,trimM)); });
+  // Salida (Fase 4): puertas cerradas al norte
+  _arrBox(13.4,16.6,0,2.6,Hh.z1+0.02,Hh.z1+0.08,B(0x7d8b97));
+  _arrPanel(15,3.2,Hh.z1+0.18,4.4,0.9,_arrSignTex([['🚪 Salida · Exit',86],['Nada que declarar · Nothing to declare',46,'#ffffff']]),0);
+  // Personas esperando en la cinta 2 (de pie, mirando la cinta)
+  const people=[];
+  [[18.2,-173.9,0.2],[22.6,-173.8,-0.3],[25.6,-176.4,-1.3],[17.6,-180.3,2.9]].forEach(([x,z,ry],i)=>{
+    const p=buildCharacter({skin:SKINS[(i*2)%SKINS.length],hair:HAIRS[(i+2)%HAIRS.length],top:[0x445566,0x8a3b3b,0x2f6b4f,0x6b5a8a][i],pants:[0x2a2a35,0x3a3226,0x1f2a3a,0x333333][i],role:'civilian'});
+    p.position.set(x,0.07,z); p.rotation.y=ry; scene.add(p); people.push(p);
+  });
+  const it=addInteractable({id:'my-bag',x:9999,z:9999,radius:1.9,icon:'🧳',label:'Retirar tu valija',root:null,onTrigger:pickMyBag});
+  _bh={ state:'idle', t:0, leaves, carousels, belt:carousels[1], bags:[], spawned:0, mine:null, mineIdx:0, it, tipT:0, tipI:0, people, beep:0 };
+}
+
+// ── Lógica de la sala ──
+const BAG_TIPS=[
+  'Es normal que tarde: las valijas salen de a una.',
+  'Probá nombrar 5 cosas que ves y 4 que escuchás.',
+  'Respirá lento: inhalá en 4… exhalá en 8.',
+  'Si no aparece, el mostrador de Equipaje perdido te ayuda.',
+  'Nadie se va a llevar tu valija: tiene tu etiqueta 3421-14C.'
+];
+function _inBagHall(){ const p=camera.position; return p.z<HALL.z0-0.3&&p.z>HALL.z1&&p.x>HALL.x0&&p.x<HALL.x1; }
+function _bagHud(ico,title,text,showBreath){
+  const h=document.getElementById('bag-hud'); if(!h) return;
+  h.classList.remove('hidden');
+  h.querySelector('.bh-ico').textContent=ico; h.querySelector('.bh-title').textContent=title; h.querySelector('.bh-text').textContent=text;
+  h.querySelector('#btn-bag-breath').classList.toggle('hidden',!showBreath);
+}
+function _startBelt(){
+  const s=_bh; s.state='beacon'; s.t=0;
+  // Aviso sonoro corto (tres tonos suaves) y luz ámbar
+  const out=_uiOut(); if(out){ const t=audioCtx.currentTime+0.05; [0,0.55,1.1].forEach(d=>_tone(out,523.25,t+d,0.35,0.05,'triangle')); }
+  _bagHud('🟠','La cinta 2 arranca','Fijate la luz ámbar: ya empiezan a salir las valijas.',false);
+}
+function _spawnBag(isMine){
+  const s=_bh, b=s.belt.b;
+  const cols=[0xcc3333,0x33aa44,0x999999,0x222222,0x7a3fa0,0xd4a017,0x1e8c8c,0x8b5a2b,0xb03060,0x3355cc];
+  const g=isMine?_buildBag(MY_BAG.color,MY_BAG.ribbon):_buildBag(cols[(s.spawned*3)%cols.length]);
+  const startS=_beltPerim(b)-0.9;  // sale por la boca de la isla
+  g.scale.setScalar(0.2);
+  const bag={g,s:startS,age:0,mine:!!isMine,laps:0};
+  s.bags.push(bag); s.spawned++;
+  if(isMine) s.mine=bag;
+}
+function updateBaggageHall(delta,t){
+  const s=_bh; if(!s) return;
+  const p=camera.position;
+  // Puertas automáticas
+  const near=Math.hypot(p.x-HALL.doorX,p.z-HALL.z0)<4.2;
+  s.leaves.forEach(l=>{ const tx=l.userData.home+(near?l.userData.sd*1.5:0); l.position.x+=(tx-l.position.x)*Math.min(1,delta*3); });
+  // Cintas: textura que corre
+  const running=s.state==='run'||s.state==='mine'||s.state==='done';
+  const speed=calmMode?0.35:0.45;
+  if(running) s.belt.beltT.offset.x-=delta*speed*0.25;
+  const inHall=_inBagHall();
+  if(s.state==='idle'&&inHall){ s.state='wait'; s.t=0; _bagHud('🧳','Cinta 2 · Vuelo 3421','Tu valija: '+MY_BAG.label.toLowerCase()+'. La cinta arranca en unos segundos.',false); }
+  if(isPaused) return;
+  s.t+=delta;
+  if(s.state==='wait'&&s.t>(calmMode?5:8)) _startBelt();
+  if(s.state==='beacon'){
+    s.belt.bea.material.color.setRGB(...(Math.sin(t*9)>0?[1.6,0.9,0.15]:[0.35,0.22,0.05]));
+    if(s.t>3.5){ s.state='run'; s.t=0; s.nextSpawn=0; _drawBeltScreen(s.belt,'run'); s.mineIdx=calmMode?3:6;
+      _bagHud('⏳','La espera de la valija',BAG_TIPS[0],true); s.tipT=0; s.tipI=0; }
+  }
+  if(running){
+    if(s.state==='run'){
+      s.belt.bea.material.color.setRGB(1.4,0.8,0.12);
+      s.nextSpawn-=delta;
+      if(s.nextSpawn<=0&&s.spawned<=s.mineIdx+4&&s.bags.length<11){ _spawnBag(s.spawned===s.mineIdx); s.nextSpawn=calmMode?2.6:3.4; }
+      s.tipT+=delta; if(s.tipT>8&&!s.mine){ s.tipT=0; s.tipI=(s.tipI+1)%BAG_TIPS.length; _bagHud('⏳','La espera de la valija',BAG_TIPS[s.tipI],true); }
+    }
+    const b=s.belt.b, P=_beltPerim(b);
+    s.bags.forEach(bag=>{
+      bag.age+=delta; const prev=bag.s; bag.s+=delta*speed; if(bag.s>=P){ bag.s-=P; bag.laps++; }
+      const k=Math.min(1,0.2+bag.age*1.6); bag.g.scale.setScalar(k);
+      const q=_beltPoint(b,bag.s); bag.g.position.set(q.x,0.5,q.z); bag.g.rotation.y=q.a;
+    });
+    // Otros pasajeros retiran valijas de vez en cuando (la cinta no se llena)
+    if(s.bags.length>5&&Math.random()<delta*0.12){ const k=s.bags.findIndex(x=>!x.mine&&x.age>12); if(k>=0){ scene.remove(s.bags[k].g); s.bags.splice(k,1); } }
+    // Tu valija: aviso al aparecer, interacción mientras pasa cerca
+    if(s.mine&&s.state==='run'&&s.mine.age>1.2){ s.state='mine'; playUiTone('success');
+      _bagHud('👀','¡Ahí viene tu valija!',MY_BAG.label+'. Acercate a la cinta y '+(isMobile?'tocá el aviso 🧳.':'presioná E.'),false); }
+    if(s.state==='mine'&&s.mine){ s.it.x=s.mine.g.position.x; s.it.z=s.mine.g.position.z;
+      if(s.mine.laps>0&&!s.mine._lapMsg){ s.mine._lapMsg=true; showToast('🔄 No pasa nada: la cinta da la vuelta y tu valija vuelve a pasar.'); } }
+  }
+  // Fuera de la sala, el cartel se oculta
+  const hud=document.getElementById('bag-hud');
+  if(hud&&!inHall&&!hud.classList.contains('hidden')) hud.classList.add('hidden');
+  else if(hud&&inHall&&s.state!=='idle'&&s.state!=='done'&&hud.classList.contains('hidden')) hud.classList.remove('hidden');
+}
+function pickMyBag(){
+  const s=_bh; if(!s||!s.mine||s.state!=='mine') return;
+  scene.remove(s.mine.g); s.bags.splice(s.bags.indexOf(s.mine),1); s.mine=null;
+  s.state='done'; s.it.x=s.it.z=9999;
+  playUiTone('success'); logInteraction('equipaje','retirada');
+  _drawBeltScreen(s.belt,'done');
+  _bagHud('✅','¡Valija retirada!','Lo lograste: esperaste con calma y la reconociste. Ahora, la salida.',false);
+  setTimeout(()=>{ const h=document.getElementById('bag-hud'); if(h&&_bh.state==='done') h.classList.add('hidden'); },6000);
+  document.body.classList.add('has-bag');
+  if(visitedZones.size>=ZONE_DATA.length) _endWhenQuiet();
+}
+function _resetBaggageHall(){
+  const s=_bh; if(!s) return;
+  s.bags.forEach(b=>scene.remove(b.g)); s.bags=[]; s.mine=null; s.spawned=0; s.state='idle'; s.t=0;
+  s.it.x=s.it.z=9999; _drawBeltScreen(s.belt,'wait'); s.belt.bea.material.color.setRGB(0.35,0.22,0.05);
+  const h=document.getElementById('bag-hud'); if(h) h.classList.add('hidden');
+  document.body.classList.remove('has-bag');
+}
+// Sala: límites (rectángulo) y las cintas como obstáculos
+function _bagHallBlock(pos){
+  BELTS.forEach(b=>{
+    const qx=Math.max(b.cx-b.Ls/2,Math.min(b.cx+b.Ls/2,pos.x)), dx=pos.x-qx, dz=pos.z-b.cz, d=Math.hypot(dx,dz), R=b.rOut+0.42;
+    if(d<R){ const k=d>1e-4?R/d:0; pos.x=qx+(d>1e-4?dx*k:0); pos.z=b.cz+(d>1e-4?dz*k:R); }
+  });
 }
 
 function narrateZone(i){ if(i>=0&&i<ZONE_DATA.length) speak(ZONE_DATA[i].narration,ZONE_DATA[i].id); }
@@ -7378,6 +7626,7 @@ function animate(){
   updateAutoWalk(delta);        // FASE 43: caminata guiada por la manga
   updateCabinSeq(delta);        // FASE 46: anuncios de a bordo
   if(_arrWalkTex) _arrWalkTex.offset.y-=delta*(calmMode?0.22:0.33); // FASE 48: cinta caminadora
+  updateBaggageHall(delta,t);   // FASE 49: sala de equipajes
   _updateWindowFade(delta); _updateCabinDim(delta); if(!isPaused) _updateService(delta); // FASE 47
   updateAmbientChimes(delta);   // avisos sonoros suaves (si el sonido está activo)
   // Tablero de salidas: redibujar cuando cambia algún vuelo o cada 30 s (reloj)
