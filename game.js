@@ -2435,6 +2435,7 @@ function buildCheckIn(){
   // 10 counters in 2 rows
   [-1,1].forEach(side=>{
     for(let i=-2;i<=2;i++){
+      if(i===0) continue;           // pasillo central libre hacia Seguridad
       const cx=x+i*5.5,cz=z+side*2.8;
       box(cx,0,cz,4.6,1.1,1.6,0x2d4a63);
       box(cx,1.1,cz,4.6,0.12,1.6,0x9fb3c8);
@@ -2444,19 +2445,25 @@ function buildCheckIn(){
     }
   });
   // Queue barrier
-  for(let i=-12;i<=12;i+=4){ box(x+i,0,z+5.5,0.12,1.1,0.12,0xcc9933); if(i<12) box(x+i+2,0.55,z+5.5,4,0.06,0.06,0xcc9933,false); }
+  // Barandas de la fila: dos tramos laterales (el centro queda abierto para pasar)
+  [-1,1].forEach(sd=>{ for(let k=0;k<=3;k++){ const px=x+sd*(3.6+k*2.9); box(px,0,z+5.5,0.12,1.1,0.12,0xcc9933); if(k<3) box(px+sd*1.45,0.55,z+5.5,2.9,0.06,0.06,0xcc9933,false); } });
   // Baggage belt
-  box(x,0.45,z-5.5,28,0.5,2.4,0x333344);
-  luggageBelt=new THREE.Mesh(mkBox(27.5,0.12,2.0),mkMat(0x555588));
-  luggageBelt.position.set(x,0.72,z-5.5); scene.add(luggageBelt);
-  [0xcc3333,0x3355cc,0x33aa44,0xcc9900,0x993399,0x00aacc,0xcc6633].forEach((c,i)=>addSuitcase(x-12+i*4,0.75,z-5.5,c));
+  // Cinta de equipaje en dos tramos (detrás de los mostradores), con paso libre al centro
+  [-1,1].forEach(sd=>{ box(x+sd*8.7,0.45,z-5.5,10.6,0.5,2.4,0x333344); box(x+sd*8.7,0.95,z-5.5,10.4,0.06,2.0,0x555588); });
+  [0xcc3333,0x3355cc,0x33aa44,0xcc9900,0x993399,0x00aacc,0xcc6633].forEach((c,i)=>{ if(i!==3) addSuitcase(x-12+i*4,1.42,z-5.5,c); });
   // Overhead open/closed signs
   for(let i=-2;i<=2;i++){
-    const open=i!==0;
+    if(i===0) continue;                 // el centro es el pasillo (cartel hacia Seguridad abajo)
+    const open=true;
     const ot=tex(128,64,(ctx)=>{ ctx.fillStyle=open?'#1a4032':'#4a1a1a'; ctx.fillRect(0,0,128,64); ctx.fillStyle=open?'#52b788':'#ef4444'; ctx.font='bold 28px Arial'; ctx.textAlign='center'; ctx.fillText(open?'ABIERTO':'CERRADO',64,42); });
     sign(x+i*5.5,8.5,z-0.4,1.2,0.45,0.08,ot,0,0x113300);
     box(x+i*5.5,7.5,z-0.4,0.04,2.5,0.04,0x888888,false,false);
   }
+  // Cartel colgante sobre el pasillo central: hacia el Control de Seguridad
+  const secT=tex(512,160,(ctx)=>{ ctx.fillStyle='#1d2733'; ctx.fillRect(0,0,512,160); ctx.fillStyle='#f2c230'; ctx.fillRect(0,0,512,6); ctx.fillRect(0,154,512,6);
+    ctx.font='bold 44px Arial'; ctx.textAlign='center'; ctx.fillText('↑  Control de Seguridad',256,72); ctx.fillStyle='#ffffff'; ctx.font='30px Arial'; ctx.fillText('Security · Por el pasillo central',256,122); });
+  sign(x,4.6,z+1.5,4.4,1.4,0.08,secT,0,0x111111);
+  [-1.9,1.9].forEach(dx=>box(x+dx,5.3,z+1.5,0.04,4,0.04,0x888888,false,false));
   // Big IBERIA/airline logo area (left wall)
   const at=tex(512,256,(ctx)=>{ ctx.fillStyle='#c8102e'; ctx.fillRect(0,0,512,256); ctx.fillStyle='#fff'; ctx.font='bold 80px Arial'; ctx.textAlign='center'; ctx.fillText('IBERIA',256,140); ctx.font='28px Arial'; ctx.fillText('Aerolíneas Españolas',256,200); });
   sign(-17.5,7,z,0.12,3,5,at,Math.PI/2,0x440011);
@@ -2468,20 +2475,19 @@ function buildSecurity(){
   zoneHeader(x,z+7,'CONTROL DE SEGURIDAD  ·  SECURITY  🔍',0xf59e0b);
   // 3 lanes
   [-8,0,8].forEach(dx=>{
-    // X-ray machine
-    box(x+dx-4.5,0,z,3.8,1.6,5.2,0x374151);
-    box(x+dx-4.5,1.6,z,3.4,0.15,4.8,0x4a9eff,false);
-    // X-ray screen
-    const xt=tex(256,128,(ctx)=>{ ctx.fillStyle='#001a33'; ctx.fillRect(0,0,256,128); ctx.fillStyle='rgba(0,200,255,0.25)'; ctx.fillRect(40,20,40,80); ctx.fillRect(100,30,30,60); ctx.fillStyle='rgba(0,255,100,0.2)'; ctx.fillRect(160,15,60,90); ctx.fillStyle='rgba(255,100,0,0.15)'; ctx.fillRect(200,40,25,50); ctx.fillStyle='#00eeff'; ctx.font='10px monospace'; ctx.fillText('SCAN OK',10,120); });
-    sign(x+dx-6.5,1.4,z-1,1.3,0.85,0.05,xt,Math.PI/2,0x002244);
-    // Metal detector arch
-    box(x+dx,0,z,0.3,3,0.3,0x607d8b); box(x+dx+3.5,0,z,0.3,3,0.3,0x607d8b);
-    box(x+dx+1.75,3,z,3.9,0.3,0.3,0x607d8b);
+    // Carril: arco centrado (la franja guía pasa justo por el del medio) y,
+    // a la izquierda, mesa de bandejas → rayos X → mesa de retiro.
+    const lc=x+dx;
+    box(lc-2.6,0,z,1.6,1.6,4.6,0x374151);
+    box(lc-2.6,1.6,z,1.4,0.15,4.2,0x4a9eff,false);
+    const xt=tex(256,128,(ctx)=>{ ctx.fillStyle='#001a33'; ctx.fillRect(0,0,256,128); ctx.fillStyle='rgba(0,200,255,0.25)'; ctx.fillRect(40,20,40,80); ctx.fillRect(100,30,30,60); ctx.fillStyle='rgba(0,255,150,0.4)'; ctx.fillRect(150,40,50,50); });
+    sign(lc-3.45,1.4,z-1.4,1.0,0.7,0.05,xt,-Math.PI/2,0x002244);
+    box(lc-1.1,0,z,0.25,2.6,0.3,0x607d8b); box(lc+1.1,0,z,0.25,2.6,0.3,0x607d8b);
+    box(lc,2.6,z,2.45,0.28,0.3,0x607d8b);
     const ledM=mkMat(0x00cc44,{emissive:0x00aa33,emissiveIntensity:0.9});
-    const led=new THREE.Mesh(mkBox(0.2,0.2,0.2),ledM); led.position.set(x+dx+3.6,2.1,z); scene.add(led);
-    // Tray table
-    box(x+dx+6,0,z,3.2,0.9,1.5,0x607d8b); box(x+dx+6,0.9,z,3,0.12,1.3,0x9fb3c8);
-    [-0.7,0.6].forEach(dz=>box(x+dx+6,0.97,z+dz,1.9,0.08,0.55,0x888899));
+    const led=new THREE.Mesh(mkBox(0.16,0.16,0.16),ledM); led.position.set(lc+1.1,2.05,z+0.2); scene.add(led);
+    [[z+4.1,'in'],[z-4.1,'out']].forEach(([tz])=>{ box(lc-2.6,0,tz,1.6,0.85,3.4,0x607d8b); box(lc-2.6,0.85,tz,1.5,0.1,3.2,0x9fb3c8); });
+    [-0.6,0.6].forEach(dz=>box(lc-2.6,0.95,z+4.1+dz,1.1,0.08,0.5,0x888899));
   });
   // Lane dividers
   [-4,4].forEach(dx=>box(x+dx,0,z,0.15,1.6,14,0x607d8b));
@@ -4844,7 +4850,7 @@ function spawnStaffNPCs(){
   // Fase 8: En móvil se reducen agentes de check-in (3 en vez de 5)
   // y se omite 1 policía -- mantiene presencia sin sobrecargar el render
   // ── CHECK-IN AGENTS (behind counters at z=24, facing player z+)
-  const agentX=isMobile?[-11,5.5,11]:[-11,-5.5,0,5.5,11]; // 5.5 = mostrador B2 (práctica de check-in)
+  const agentX=isMobile?[-11,5.5,11]:[-11,-5.5,5.5,11];   // (el centro es el pasillo) // 5.5 = mostrador B2 (práctica de check-in)
   const agentTops=[0x1a3060,0x1a3060,0x25408a,0x1a3060,0x25408a];
   agentX.forEach((ax,i)=>{
     const skin=SKINS[i%SKINS.length];
@@ -4862,7 +4868,7 @@ function spawnStaffNPCs(){
   const policeSlots=isMobile?[{x:-12,z:10,ry:Math.PI*0.15},{x:12,z:10,ry:-Math.PI*0.15}]:[
     {x:-12,z:10,ry: Math.PI*0.15},
     {x: 12,z:10,ry:-Math.PI*0.15},
-    {x: 0, z:14, ry:Math.PI}
+    {x: 3.0, z:12.6, ry:-Math.PI*0.35}   // al costado del arco central (no en el paso)
   ];
   policeSlots.forEach((d,i)=>{
     const npc=buildCharacter({skin:SKINS[i%3],hair:HAIRS[0],top:0x0d1f3c,pants:0x0d1f3c,shoes:0x0a0a0a,role:'police',hatCol:0x0d1f3c});
@@ -7758,7 +7764,6 @@ function animate(){
   });
 
   // Luggage belt rotate
-  if(luggageBelt) luggageBelt.rotation.z+=delta*0.45;
 
   // Flight board refresh every 30s
   boardTimer+=delta;
