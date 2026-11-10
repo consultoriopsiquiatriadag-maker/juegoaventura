@@ -1847,3 +1847,9 @@ body.is-touch #bag-hud .fh-key { display: none; }
 #bag-hud:not(.hidden) ~ #interact-prompt, body:has(#bag-hud:not(.hidden)) #interact-prompt { bottom: 210px; }
 @media (max-width: 600px) { #bag-hud { bottom: 16px; padding: 10px 12px; } #bag-hud .bh-tag { display: none; } }
 body:has(#bag-hud:not(.hidden)) #approach-hint { display: none !important; }
+
+/* ═══ FASE 50: valija retirada (indicador) ═══ */
+#bag-chip { display: none; position: absolute; top: 74px; right: 20px; padding: 5px 12px; border-radius: 20px;
+  font: 700 .78rem var(--ff-body); color: #fff; background: #2457a6; border: 2px solid #f08a24; box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
+body.has-bag #bag-chip { display: block; }
+@media (max-width: 600px) { #bag-chip { top: 64px; right: 12px; } }

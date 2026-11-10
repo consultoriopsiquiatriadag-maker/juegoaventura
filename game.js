@@ -5748,7 +5748,7 @@ function enterZone(i){
     }
   }
   // FASE 49: el recorrido termina cuando retirás tu valija (y deja terminar la voz)
-  if(visitedZones.size>=ZONE_DATA.length&&(!_bh||_bh.state==='done')) _endWhenQuiet();
+  if(visitedZones.size>=ZONE_DATA.length&&!_bh) _endWhenQuiet(); // FASE 50: con Llegadas, el final es el encuentro en el hall
 }
 function updateProgress(i){
   document.getElementById('progress-fill').style.width=((i+1)/ZONE_DATA.length*100)+'%';
@@ -6899,6 +6899,7 @@ function buildArrivals(){
   });
   _arrPanel((A.walkX0+A.walkX1)/2,1.2,A.walkZ0+0.05,1.4,0.35,_arrSignTex([['Cinta caminadora  ↑',80,'#ffffff']],{h:200}),0);
   buildBaggageHall();   // FASE 49
+  buildExitHall();      // FASE 50
   scene.children.forEach(o=>{ if(!before.has(o)) o.traverse(c=>{ c.userData.arr=true; }); });
 }
 // Oculta restos del mundo viejo (balizas de la pista, etc.) dentro de la manga y el pasillo
@@ -6906,7 +6907,8 @@ function _arrHideIntruders(){
   const A=ARR;
   const vols=[new THREE.Box3(new THREE.Vector3(A.jetX0-0.4,0.09,A.jetZ-A.jetW/2),new THREE.Vector3(A.jetX1,A.jetH,A.jetZ+A.jetW/2)),
               new THREE.Box3(new THREE.Vector3(A.corX0,0.09,A.corZ1),new THREE.Vector3(A.corX1,A.corH,A.corZ0)),
-              new THREE.Box3(new THREE.Vector3(HALL.x0,0.09,HALL.z1),new THREE.Vector3(HALL.x1,HALL.H,HALL.z0))];
+              new THREE.Box3(new THREE.Vector3(HALL.x0,0.09,HALL.z1),new THREE.Vector3(HALL.x1,HALL.H,HALL.z0)),
+              new THREE.Box3(new THREE.Vector3(EXITH.x0,0.09,EXITH.z1),new THREE.Vector3(EXITH.x1,EXITH.H,EXITH.cz0))];
   const bb=new THREE.Box3(), sz=new THREE.Vector3(); let n=0;
   const drop=[];
   scene.traverse(o=>{
@@ -6926,8 +6928,10 @@ function _clampArrivals(pos,delta){
     [A.jetX0+0.4, A.jetX1+0.4, A.jetZ-A.jetW/2+m, A.jetZ+A.jetW/2-m],
     [A.corX0+m, A.corX1-m, A.corZ1+m+0.1, A.corZ0-m],
     [13.7, 16.3, HALL.z0-0.7, HALL.z0+0.7],                       // vano de las puertas
-    [HALL.x0+0.45, HALL.x1-0.45, HALL.z1+0.45, HALL.z0-0.45]       // sala de equipajes
+    [HALL.x0+0.45, HALL.x1-0.45, HALL.z1+0.45, HALL.z0-0.45],      // sala de equipajes
+    [EXITH.x0+0.45, EXITH.x1-0.45, EXITH.z1+0.6, EXITH.z0-0.45]    // hall de llegadas
   ];
+  if(_hasBag()) rects.push([13.7, 16.3, EXITH.cz1-0.4, EXITH.cz0+0.7]); // aduana: solo con la valija
   if(!rects.some(r=>pos.x>=r[0]&&pos.x<=r[1]&&pos.z>=r[2]&&pos.z<=r[3])){
     let best=null,bd=Infinity;
     rects.forEach(r=>{ const x=Math.max(r[0],Math.min(r[1],pos.x)), z=Math.max(r[2],Math.min(r[3],pos.z)); const d=(x-pos.x)**2+(z-pos.z)**2; if(d<bd){bd=d;best=[x,z];} });
@@ -7063,7 +7067,7 @@ function buildBaggageHall(){
   // Paredes (la sur deja el vano de las puertas que vienen del pasillo)
   _arrBox(Hh.x0-0.15,Hh.x0,0,Hh.H,Hh.z1,Hh.z0,wallM);
   _arrBox(Hh.x1,Hh.x1+0.15,0,Hh.H,Hh.z1,Hh.z0,wallM);
-  _arrBox(Hh.x0,Hh.x1,0,Hh.H,Hh.z1-0.15,Hh.z1,wallM);
+  _arrBox(Hh.x0,13.4,0,Hh.H,Hh.z1-0.15,Hh.z1,wallM); _arrBox(16.6,Hh.x1,0,Hh.H,Hh.z1-0.15,Hh.z1,wallM); _arrBox(13.4,16.6,2.6,Hh.H,Hh.z1-0.15,Hh.z1,wallM); // vano de la salida
   _arrBox(Hh.x0,13.4,0,Hh.H,Hh.z0-0.05,Hh.z0+0.1,wallM);
   _arrBox(16.6,Hh.x1,0,Hh.H,Hh.z0-0.05,Hh.z0+0.1,wallM);
   _arrBox(13.4,16.6,2.6,Hh.H,Hh.z0-0.05,Hh.z0+0.1,wallM);
@@ -7097,7 +7101,8 @@ function buildBaggageHall(){
   _arrPanel(Hh.x0+0.03,2.2,-169.2,1.8,0.6,_arrSignTex([['🛒 Carritos · Trolleys',80,'#ffffff']],{h:200}),Math.PI/2);
   [-170,-174].forEach(z=>{ _arrBox(28.6,29.5,0.42,0.5,z-1.2,z+1.2,B(0x6f7d8a)); _arrBox(29.4,29.55,0.5,1.0,z-1.2,z+1.2,B(0x6f7d8a)); [-1,1].forEach(d=>_arrBox(28.7,29.4,0.07,0.42,z+d*1.0-0.04,z+d*1.0+0.04,trimM)); });
   // Salida (Fase 4): puertas cerradas al norte
-  _arrBox(13.4,16.6,0,2.6,Hh.z1+0.02,Hh.z1+0.08,B(0x7d8b97));
+  // FASE 50: puertas de salida automáticas (se abren con la valija)
+  const exitLeaves=[-1,1].map(sd=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(1.58,2.58,0.06),B(0x8796a3)); m.position.set(Hh.doorX+sd*0.8,1.36,Hh.z1-0.07); m.userData.home=m.position.x; m.userData.sd=sd; scene.add(m); return m; });
   _arrPanel(15,3.2,Hh.z1+0.18,4.4,0.9,_arrSignTex([['🚪 Salida · Exit',86],['Nada que declarar · Nothing to declare',46,'#ffffff']]),0);
   // Personas esperando en la cinta 2 (de pie, mirando la cinta)
   const people=[];
@@ -7106,7 +7111,7 @@ function buildBaggageHall(){
     p.position.set(x,0.07,z); p.rotation.y=ry; scene.add(p); people.push(p);
   });
   const it=addInteractable({id:'my-bag',x:9999,z:9999,radius:1.9,icon:'🧳',label:'Retirar tu valija',root:null,onTrigger:pickMyBag});
-  _bh={ state:'idle', t:0, leaves, carousels, belt:carousels[1], bags:[], spawned:0, mine:null, mineIdx:0, it, tipT:0, tipI:0, people, beep:0 };
+  _bh={ exitLeaves, state:'idle', t:0, leaves, carousels, belt:carousels[1], bags:[], spawned:0, mine:null, mineIdx:0, it, tipT:0, tipI:0, people, beep:0 };
 }
 
 // ── Lógica de la sala ──
@@ -7195,7 +7200,7 @@ function pickMyBag(){
   _bagHud('✅','¡Valija retirada!','Lo lograste: esperaste con calma y la reconociste. Ahora, la salida.',false);
   setTimeout(()=>{ const h=document.getElementById('bag-hud'); if(h&&_bh.state==='done') h.classList.add('hidden'); },6000);
   document.body.classList.add('has-bag');
-  if(visitedZones.size>=ZONE_DATA.length) _endWhenQuiet();
+  setTimeout(()=>{ if(_bh&&_bh.state==='done'&&isGameActive) showToast('🚪 Seguí hacia la Salida: con tu valija, la puerta se abre.'); },6500);
 }
 function _resetBaggageHall(){
   const s=_bh; if(!s) return;
@@ -7203,6 +7208,7 @@ function _resetBaggageHall(){
   s.it.x=s.it.z=9999; _drawBeltScreen(s.belt,'wait'); s.belt.bea.material.color.setRGB(0.35,0.22,0.05);
   const h=document.getElementById('bag-hud'); if(h) h.classList.add('hidden');
   document.body.classList.remove('has-bag');
+  if(_ex) _ex.final=false;
 }
 // Sala: límites (rectángulo) y las cintas como obstáculos
 function _bagHallBlock(pos){
@@ -7210,6 +7216,121 @@ function _bagHallBlock(pos){
     const qx=Math.max(b.cx-b.Ls/2,Math.min(b.cx+b.Ls/2,pos.x)), dx=pos.x-qx, dz=pos.z-b.cz, d=Math.hypot(dx,dz), R=b.rOut+0.42;
     if(d<R){ const k=d>1e-4?R/d:0; pos.x=qx+(d>1e-4?dx*k:0); pos.z=b.cz+(d>1e-4?dz*k:R); }
   });
+}
+
+// ─── FASE 50: SALIDA Y HALL DE LLEGADAS ─────────────────────
+// Con la valija retirada se abre la puerta "Nada que declarar": un pasillo
+// corto de aduana (canal verde) lleva al hall de llegadas, con gente que
+// espera detrás de las barandas y alguien con un cartel "VIAJERO/A AEROCALMA".
+// Al llegar hasta esa persona termina el recorrido.
+const EXITH={ cz0:-192, cz1:-198, x0:0, x1:30, z0:-198, z1:-224, H:6, cx0:12.9, cx1:17.1, meet:{x:15,z:-209.6} };
+let _ex=null;
+
+function _greeterSign(text,sub,w,h){
+  return _arrTex(512,Math.round(512*h/w),(ctx,c)=>{
+    ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,c.width,c.height);
+    ctx.strokeStyle='#2457a6'; ctx.lineWidth=10; ctx.strokeRect(5,5,c.width-10,c.height-10);
+    ctx.fillStyle='#14304f'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    let fs=Math.round(c.height*(sub?0.36:0.5)); ctx.font=`900 ${fs}px Arial`;
+    while(ctx.measureText(text).width>c.width-40&&fs>14){ fs-=2; ctx.font=`900 ${fs}px Arial`; }
+    ctx.fillText(text,c.width/2,c.height*(sub?0.4:0.52));
+    if(sub){ let fz=Math.round(c.height*0.2); ctx.font=`700 ${fz}px Arial`; while(ctx.measureText(sub).width>c.width-50&&fz>12){ fz-=2; ctx.font=`700 ${fz}px Arial`; } ctx.fillStyle='#f08a24'; ctx.fillText(sub,c.width/2,c.height*0.76); }
+  });
+}
+function _cityBackdrop(){
+  return _arrTex(2048,512,(ctx,c)=>{
+    const W=c.width,H=c.height;
+    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#5b9bd8'); g.addColorStop(0.7,'#cfe3f2'); g.addColorStop(1,'#e8eef2');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // Silueta de ciudad: edificios, torres y una cúpula
+    let x=0; while(x<W){ const w=50+Math.random()*120, h=60+Math.random()*170; ctx.fillStyle=`rgb(${120+Math.random()*40|0},${130+Math.random()*40|0},${150+Math.random()*35|0})`; ctx.fillRect(x,H*0.78-h,w,h);
+      ctx.fillStyle='rgba(255,255,255,0.18)'; for(let yy=H*0.78-h+12;yy<H*0.76;yy+=18) for(let xx=x+8;xx<x+w-8;xx+=16) ctx.fillRect(xx,yy,7,9); x+=w+4; }
+    [[W*0.3,250],[W*0.33,230],[W*0.36,265],[W*0.39,240]].forEach(([tx,th])=>{ ctx.fillStyle='#7d8da3'; ctx.fillRect(tx,H*0.78-th,46,th); });
+    ctx.fillStyle='#a08f76'; ctx.beginPath(); ctx.arc(W*0.7,H*0.78-110,60,Math.PI,0); ctx.fill(); ctx.fillRect(W*0.7-70,H*0.78-110,140,110);
+    // Calle con taxis blancos
+    ctx.fillStyle='#62666b'; ctx.fillRect(0,H*0.78,W,H*0.22);
+    for(let i=0;i<9;i++){ const tx=80+i*230; ctx.fillStyle='#f4f4f4'; ctx.fillRect(tx,H*0.84,120,34); ctx.fillStyle='#c0392b'; ctx.fillRect(tx+10,H*0.84+12,100,5); ctx.fillStyle='#222'; ctx.fillRect(tx+15,H*0.84+32,22,10); ctx.fillRect(tx+83,H*0.84+32,22,10); }
+  });
+}
+
+function buildExitHall(){
+  const E=EXITH, B=(c,o={})=>{ const m=new THREE.MeshBasicMaterial({toneMapped:false,...o}); m.color.set(c).convertSRGBToLinear(); return m; };
+  const wallM=B(0xa9b0b7), ceilM=B(0xbac0c6), trimM=B(0x5b636c), darkM=B(0x30363d);
+  const lightM=new THREE.MeshBasicMaterial({color:new THREE.Color(0.95,0.93,0.88)});
+  const tileT=_arrTex(256,256,(ctx)=>{ ctx.fillStyle='#9aa1a8'; ctx.fillRect(0,0,256,256); ctx.strokeStyle='rgba(50,60,70,0.22)'; ctx.lineWidth=3; ctx.strokeRect(0,0,256,256); });
+  tileT.wrapS=tileT.wrapT=THREE.RepeatWrapping; tileT.repeat.set(15,13);
+  const corT=tileT.clone(); corT.needsUpdate=true; corT.repeat.set(2,3);
+
+  // ── Pasillo de aduana (canal verde) ──
+  _arrBox(E.cx0,E.cx1,-4.2,0.07,E.cz1,E.cz0,B(0xffffff,{map:corT}));
+  _arrBox(E.cx0,E.cx1,3.0,3.15,E.cz1,E.cz0,ceilM);
+  _arrBox(E.cx0-0.12,E.cx0,0,3.0,E.cz1,E.cz0,wallM); _arrBox(E.cx1,E.cx1+0.12,0,3.0,E.cz1,E.cz0,wallM);
+  _arrBox(14.4,15.6,2.98,2.99,-195.5,-194.5,lightM);
+  _arrBox(14.6,15.4,0.07,0.08,E.cz1+0.3,E.cz0-0.3,B(0x2fae5f));             // franja verde en el piso
+  _arrPanel(E.cx0+0.02,1.9,-195,2.4,0.9,_arrSignTex([['● Nada que declarar',72,'#ffffff'],['Nothing to declare',52,'#d8f5e2']],{bg:'#1f7a45',bar:'#5fe08a'}),Math.PI/2);
+  _arrPanel(E.cx1-0.02,1.9,-195,2.4,0.9,_arrSignTex([['Aduana · Customs',72,'#ffffff'],['Control aleatorio · Random check',46,'#cfe9f5']],{bg:'#24506b',bar:'#7cc4e8'}),-Math.PI/2);
+  const officer=buildCharacter({skin:SKINS[2],hair:HAIRS[0],top:0x1f2f4a,pants:0x1a2233,role:'police'});
+  officer.position.set(E.cx0+0.45,0.07,-196.6); officer.rotation.y=Math.PI*0.5; scene.add(officer);
+
+  // ── Hall de llegadas ──
+  _arrBox(E.x0,E.x1,-4.2,0.07,E.z1,E.z0,B(0xffffff,{map:tileT}));
+  _arrBox(E.x0,E.x1,E.H,E.H+0.2,E.z1,E.z0,ceilM);
+  for(let x=E.x0+3;x<E.x1;x+=6) for(let z=E.z0-3;z>E.z1+1;z-=5) _arrBox(x-1.3,x+1.3,E.H-0.03,E.H-0.01,z-0.55,z+0.55,lightM);
+  _arrBox(E.x0-0.15,E.x0,0,E.H,E.z1,E.z0,wallM); _arrBox(E.x1,E.x1+0.15,0,E.H,E.z1,E.z0,wallM);
+  _arrBox(E.x0,E.cx0,0,E.H,E.z0-0.05,E.z0+0.1,wallM); _arrBox(E.cx1,E.x1,0,E.H,E.z0-0.05,E.z0+0.1,wallM); _arrBox(E.cx0,E.cx1,3.0,E.H,E.z0-0.05,E.z0+0.1,wallM);
+  // Fachada vidriada al norte y la ciudad detrás
+  _arrBox(E.x0,E.x1,0,0.4,E.z1-0.1,E.z1,trimM); _arrBox(E.x0,E.x1,E.H-0.5,E.H,E.z1-0.1,E.z1,trimM);
+  const glass=B(0x9cc3da,{transparent:true,opacity:0.22,depthWrite:false});
+  const gl=new THREE.Mesh(new THREE.PlaneGeometry(E.x1-E.x0,E.H-0.9),glass); gl.position.set((E.x0+E.x1)/2,0.4+(E.H-0.9)/2,E.z1-0.05); scene.add(gl);
+  for(let x=E.x0+2.5;x<E.x1;x+=2.5) _arrBox(x-0.06,x+0.06,0.4,E.H-0.5,E.z1-0.12,E.z1+0.02,trimM);
+  const city=new THREE.Mesh(new THREE.PlaneGeometry(90,22),new THREE.MeshBasicMaterial({map:_cityBackdrop(),toneMapped:false,fog:false}));
+  city.position.set(15,7,E.z1-24); scene.add(city);
+  _arrBox(-20,50,-0.3,0.05,E.z1-24,E.z1-0.2,B(0x8a8f95));                  // vereda exterior
+  // Carteles: bienvenida, transporte, café
+  _arrPanel(15,4.6,E.z0-0.2,8,1.6,_arrSignTex([['¡Bienvenidos a Madrid!',100,'#ffffff'],['Llegadas · Arrivals',56,'#f2c230']],{bg:'#17465e',bar:'#2bb8ae'}),Math.PI);
+  _arrPanel(15,4.4,E.z1+0.3,9,1.3,_arrSignTex([['🚕 Taxis   🚆 Tren   🚇 Metro   🚌 Bus  →',80]]),0);
+  _arrPanel(E.x0+0.03,2.6,-214,3.2,1.2,_arrSignTex([['☕ Café · Coffee',84,'#ffffff'],['Un momento para festejar',46,'#cfe9f5']],{bg:'#5a3b2a',bar:'#d9a066',h:300}),Math.PI/2);
+  _arrBox(E.x0,2.2,0,1.05,-216,-212,B(0x6b4a35)); _arrBox(E.x0,2.3,1.05,1.12,-216.1,-211.9,B(0xd9d2c8));
+  _arrPanel(E.x1-0.03,2.6,-214,3.2,1.2,_arrSignTex([['ℹ Información',84,'#ffffff'],['Information · Tourist info',46,'#cfe9f5']],{bg:'#24506b',bar:'#7cc4e8',h:300}),-Math.PI/2);
+  _arrBox(27.8,E.x1,0,1.05,-216,-212,B(0x3d6b8c)); _arrBox(27.7,E.x1,1.05,1.12,-216.1,-211.9,B(0xd9dde1));
+  // Barandas del pasillo de salida (la gente espera detrás)
+  const railM=B(0xb9c0c7);
+  [12.6,17.4].forEach(x=>{ _arrBox(x-0.04,x+0.04,0.95,1.02,-207.5,E.z0-0.4,railM); for(let z=E.z0-0.4;z>-207.6;z-=1.8) _arrBox(x-0.05,x+0.05,0.07,1.0,z-0.05,z+0.05,railM); });
+  // Personas esperando, algunas con carteles; una espera a quien recorrió AeroCalma
+  const people=[];
+  const add=(x,z,ry,i,sign)=>{
+    const p=buildCharacter({skin:SKINS[i%SKINS.length],hair:HAIRS[(i*3)%HAIRS.length],top:[0x8a3b3b,0x2f6b4f,0x445566,0xc9a227,0x6b5a8a,0x2f4f6b,0xb05a2a][i%7],pants:[0x2a2a35,0x3a3226,0x1f2a3a,0x333333][i%4],role:'civilian'});
+    p.position.set(x,0.07,z); p.rotation.y=ry; scene.add(p); people.push(p);
+    if(sign){ const t=_greeterSign(sign[0],sign[1],sign[2]||0.7,sign[3]||0.4); const m=new THREE.Mesh(new THREE.PlaneGeometry(sign[2]||0.7,sign[3]||0.4),new THREE.MeshBasicMaterial({map:t,toneMapped:false,side:THREE.DoubleSide}));
+      m.position.set(x+Math.sin(ry)*0.42,1.3,z+Math.cos(ry)*0.42); m.rotation.y=ry; scene.add(m); }
+    return p;
+  };
+  add(11.7,-200.5,Math.PI/2,0,['GARCÍA']); add(11.6,-203.2,Math.PI/2,1); add(11.8,-205.8,Math.PI/2,2,['HOTEL PRADO']);
+  add(18.3,-201.2,-Math.PI/2,3,['¡Bienvenida, Sofi!']); add(18.2,-204.4,-Math.PI/2,4); add(18.4,-206.6,-Math.PI/2,5,['M. LÓPEZ']);
+  const greeter=add(E.meet.x,E.meet.z,0,6,['VIAJERO/A AEROCALMA','¡Bienvenido/a! · Dr. Dagnino',1.1,0.6]);
+  // Brillo suave en el piso donde te esperan
+  const ring=new THREE.Mesh(new THREE.RingGeometry(0.9,1.15,40),new THREE.MeshBasicMaterial({color:0x2bb8ae,transparent:true,opacity:0.55,side:THREE.DoubleSide}));
+  ring.rotation.x=-Math.PI/2; ring.position.set(E.meet.x,0.09,E.meet.z+1.1); scene.add(ring);
+  _ex={ greeter, ring, final:false, warnT:0 };
+}
+
+// Puerta de salida: se abre solo con la valija retirada
+function _hasBag(){ return !!(_bh&&_bh.state==='done'); }
+function updateExitHall(delta,t){
+  if(!_ex||!_bh) return;
+  const p=camera.position, near=Math.hypot(p.x-HALL.doorX,p.z-HALL.z1)<4;
+  const open=near&&_hasBag();
+  (_bh.exitLeaves||[]).forEach(l=>{ const tx=l.userData.home+(open?l.userData.sd*1.5:0); l.position.x+=(tx-l.position.x)*Math.min(1,delta*3); });
+  _ex.warnT=Math.max(0,_ex.warnT-delta);
+  if(near&&!_hasBag()&&_ex.warnT<=0&&p.z<HALL.z1+2.2){ _ex.warnT=8; showToast('🧳 Primero retirá tu valija en la cinta 2. La salida te espera.'); }
+  _ex.ring.material.opacity=0.35+Math.abs(Math.sin(t*2))*(calmMode?0.15:0.35);
+  if(!_ex.final&&_hasBag()&&Math.hypot(p.x-EXITH.meet.x,p.z-(EXITH.meet.z+1.1))<1.8){
+    _ex.final=true;
+    logInteraction('llegada','encuentro');
+    playUiTone('success');
+    showToast('🤗 ¡Llegaste! Hiciste todo el viaje, paso a paso.');
+    _endWhenQuiet();                        // felicitación final del doctor y resumen
+  }
 }
 
 function narrateZone(i){ if(i>=0&&i<ZONE_DATA.length) speak(ZONE_DATA[i].narration,ZONE_DATA[i].id); }
@@ -7627,6 +7748,7 @@ function animate(){
   updateCabinSeq(delta);        // FASE 46: anuncios de a bordo
   if(_arrWalkTex) _arrWalkTex.offset.y-=delta*(calmMode?0.22:0.33); // FASE 48: cinta caminadora
   updateBaggageHall(delta,t);   // FASE 49: sala de equipajes
+  updateExitHall(delta,t);      // FASE 50: salida y encuentro
   _updateWindowFade(delta); _updateCabinDim(delta); if(!isPaused) _updateService(delta); // FASE 47
   updateAmbientChimes(delta);   // avisos sonoros suaves (si el sonido está activo)
   // Tablero de salidas: redibujar cuando cambia algún vuelo o cada 30 s (reloj)
