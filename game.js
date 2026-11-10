@@ -6225,7 +6225,11 @@ const VOICE_CLIPS={
   lounge:'05-zona-sala-espera', boarding:'06-zona-embarque', plane:'07-zona-avion', arrival:'08-zona-llegada',
   felicitaciones:'09-felicitaciones', 'sin-zona':'10-sin-zona', consultorio:'11-consultorio',
   inhale:'12-respiracion-inhala', hold:'13-respiracion-reten', exhale:'14-respiracion-exhala',
-  'agua-fria':'15-agua-fria', cafe:'16-cafe'
+  'agua-fria':'15-agua-fria', cafe:'16-cafe',
+  // FASE 51: sala de equipajes, salida y encuentro
+  'bag-entrada':'17-equipaje-entrada', 'bag-espera':'18-equipaje-espera', 'bag-espera-larga':'19-equipaje-espera-larga',
+  'bag-aparece':'20-equipaje-aparece', 'bag-vuelta':'21-equipaje-vuelta', 'bag-retirada':'22-equipaje-retirada',
+  'salida-aduana':'23-salida-aduana', encuentro:'24-encuentro-final'
 };
 // Un solo elemento de audio: se "desbloquea" con el clic de Iniciar
 // (iOS solo deja reproducir después de un gesto) y se reutiliza.
@@ -6278,7 +6282,7 @@ const PA_LEVEL=0.32, PA_DUCK=0.07;  // muy por debajo de la voz del doctor
 const PA_SETS={
   terminal:['AP01-bienvenida','AP02-facturacion-abierta','AP03-documentos','AP04-vuelo-en-horario','AP07-otros-vuelos','AP08-servicios','AP09-consultorio','AP10-calma'],
   gate:['AP04-vuelo-en-horario','AP06-embarque-grupo-2','AP07-otros-vuelos','AP08-servicios','AP09-consultorio','AP10-calma'],
-  arrival:['AP11-llegada']
+  arrival:['AP11-llegada','AP12-cinta-2']
 };
 const _paBuffers={};
 let _paSrc=null, _paGain=null, _paNext=[], _paBag={}, _paLast='';
@@ -7134,6 +7138,8 @@ function _startBelt(){
   // Aviso sonoro corto (tres tonos suaves) y luz ámbar
   const out=_uiOut(); if(out){ const t=audioCtx.currentTime+0.05; [0,0.55,1.1].forEach(d=>_tone(out,523.25,t+d,0.35,0.05,'triangle')); }
   _bagHud('🟠','La cinta 2 arranca','Fijate la luz ámbar: ya empiezan a salir las valijas.',false);
+  if(audioEnabled&&audioCtx&&!_paSrc) playAnnouncement('AP12-cinta-2'); else queueAnnouncement('AP12-cinta-2',3);
+  s.voice=0; s.readyMine=false;
 }
 function _spawnBag(isMine){
   const s=_bh, b=s.belt.b;
@@ -7159,7 +7165,12 @@ function updateBaggageHall(delta,t){
   if(s.state==='idle'&&inHall){ s.state='wait'; s.t=0; _bagHud('🧳','Cinta 2 · Vuelo 3421','Tu valija: '+MY_BAG.label.toLowerCase()+'. La cinta arranca en unos segundos.',false); }
   if(isPaused) return;
   s.t+=delta;
-  if(s.state==='wait'&&s.t>(calmMode?5:8)) _startBelt();
+  if(s.state==='wait'){
+    const arrIdx=ZONE_DATA.findIndex(z=>z.id==='arrival');
+    if(!s.entrada&&s.t>2&&!isSpeaking&&visitedZones.has(arrIdx)){ s.entrada=true; s.tEntrada=s.t; playVoice('bag-entrada'); }
+    if(s.entrada&&!isSpeaking&&s.t>s.tEntrada+(calmMode?2:3)) _startBelt();
+    if(!s.entrada&&s.t>14) s.entrada=true, s.tEntrada=s.t;   // por si no se activó la zona: igual avanza
+  }
   if(s.state==='beacon'){
     s.belt.bea.material.color.setRGB(...(Math.sin(t*9)>0?[1.6,0.9,0.15]:[0.35,0.22,0.05]));
     if(s.t>3.5){ s.state='run'; s.t=0; s.nextSpawn=0; _drawBeltScreen(s.belt,'run'); s.mineIdx=calmMode?3:6;
@@ -7169,7 +7180,16 @@ function updateBaggageHall(delta,t){
     if(s.state==='run'){
       s.belt.bea.material.color.setRGB(1.4,0.8,0.12);
       s.nextSpawn-=delta;
-      if(s.nextSpawn<=0&&s.spawned<=s.mineIdx+4&&s.bags.length<11){ _spawnBag(s.spawned===s.mineIdx); s.nextSpawn=calmMode?2.6:3.4; }
+      // Voz durante la espera: 5-4-3, luego (no en Modo Calma) respiración; recién después sale tu valija
+      if(s.voice===0&&s.t>4&&!_paSrc&&!isSpeaking){ s.voice=1; playVoice('bag-espera'); }
+      else if(s.voice===1&&!isSpeaking){ if(calmMode){ s.voice=3; s.readyMine=true; } else { s.voice=2; playVoice('bag-espera-larga'); } }
+      else if(s.voice===2&&!isSpeaking){ s.voice=3; s.readyMine=true; }
+      if(s.voice===0&&s.t>24) s.voice=1;            // si el anuncio no terminó, no esperar más
+      if(s.nextSpawn<=0&&s.bags.length<10&&(s.mine?s.spawned<s.mineSpawn+4:true)){
+        const mineNow=!s.mine&&s.readyMine;
+        _spawnBag(mineNow); if(mineNow) s.mineSpawn=s.spawned;
+        s.nextSpawn=calmMode?2.6:3.4;
+      }
       s.tipT+=delta; if(s.tipT>8&&!s.mine){ s.tipT=0; s.tipI=(s.tipI+1)%BAG_TIPS.length; _bagHud('⏳','La espera de la valija',BAG_TIPS[s.tipI],true); }
     }
     const b=s.belt.b, P=_beltPerim(b);
@@ -7182,9 +7202,10 @@ function updateBaggageHall(delta,t){
     if(s.bags.length>5&&Math.random()<delta*0.12){ const k=s.bags.findIndex(x=>!x.mine&&x.age>12); if(k>=0){ scene.remove(s.bags[k].g); s.bags.splice(k,1); } }
     // Tu valija: aviso al aparecer, interacción mientras pasa cerca
     if(s.mine&&s.state==='run'&&s.mine.age>1.2){ s.state='mine'; playUiTone('success');
+      playVoice('bag-aparece');
       _bagHud('👀','¡Ahí viene tu valija!',MY_BAG.label+'. Acercate a la cinta y '+(isMobile?'tocá el aviso 🧳.':'presioná E.'),false); }
     if(s.state==='mine'&&s.mine){ s.it.x=s.mine.g.position.x; s.it.z=s.mine.g.position.z;
-      if(s.mine.laps>0&&!s.mine._lapMsg){ s.mine._lapMsg=true; showToast('🔄 No pasa nada: la cinta da la vuelta y tu valija vuelve a pasar.'); } }
+      if(s.mine.laps>0&&!s.mine._lapMsg){ s.mine._lapMsg=true; showToast('🔄 No pasa nada: la cinta da la vuelta y tu valija vuelve a pasar.'); if(!isSpeaking) playVoice('bag-vuelta'); } }
   }
   // Fuera de la sala, el cartel se oculta
   const hud=document.getElementById('bag-hud');
@@ -7196,6 +7217,7 @@ function pickMyBag(){
   scene.remove(s.mine.g); s.bags.splice(s.bags.indexOf(s.mine),1); s.mine=null;
   s.state='done'; s.it.x=s.it.z=9999;
   playUiTone('success'); logInteraction('equipaje','retirada');
+  playVoice('bag-retirada');
   _drawBeltScreen(s.belt,'done');
   _bagHud('✅','¡Valija retirada!','Lo lograste: esperaste con calma y la reconociste. Ahora, la salida.',false);
   setTimeout(()=>{ const h=document.getElementById('bag-hud'); if(h&&_bh.state==='done') h.classList.add('hidden'); },6000);
@@ -7205,10 +7227,11 @@ function pickMyBag(){
 function _resetBaggageHall(){
   const s=_bh; if(!s) return;
   s.bags.forEach(b=>scene.remove(b.g)); s.bags=[]; s.mine=null; s.spawned=0; s.state='idle'; s.t=0;
+  s.entrada=false; s.voice=0; s.readyMine=false; s.mineSpawn=0;
   s.it.x=s.it.z=9999; _drawBeltScreen(s.belt,'wait'); s.belt.bea.material.color.setRGB(0.35,0.22,0.05);
   const h=document.getElementById('bag-hud'); if(h) h.classList.add('hidden');
   document.body.classList.remove('has-bag');
-  if(_ex) _ex.final=false;
+  if(_ex){ _ex.final=false; _ex.aduana=false; }
 }
 // Sala: límites (rectángulo) y las cintas como obstáculos
 function _bagHallBlock(pos){
@@ -7324,11 +7347,13 @@ function updateExitHall(delta,t){
   _ex.warnT=Math.max(0,_ex.warnT-delta);
   if(near&&!_hasBag()&&_ex.warnT<=0&&p.z<HALL.z1+2.2){ _ex.warnT=8; showToast('🧳 Primero retirá tu valija en la cinta 2. La salida te espera.'); }
   _ex.ring.material.opacity=0.35+Math.abs(Math.sin(t*2))*(calmMode?0.15:0.35);
+  if(!_ex.aduana&&_hasBag()&&p.z<EXITH.cz0-0.6&&p.z>EXITH.cz1){ _ex.aduana=true; playVoice('salida-aduana'); }
   if(!_ex.final&&_hasBag()&&Math.hypot(p.x-EXITH.meet.x,p.z-(EXITH.meet.z+1.1))<1.8){
     _ex.final=true;
     logInteraction('llegada','encuentro');
     playUiTone('success');
     showToast('🤗 ¡Llegaste! Hiciste todo el viaje, paso a paso.');
+    playVoice('encuentro');                 // FASE 51: cierre con tu voz
     _endWhenQuiet();                        // felicitación final del doctor y resumen
   }
 }
