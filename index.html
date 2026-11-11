@@ -504,13 +504,23 @@
     <div id="mag-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="mag-title">
         <div class="interact-box mag-box">
             <button id="btn-close-mag" class="close-btn" type="button" aria-label="Cerrar">✕</button>
-            <p class="ib-eyebrow">📚 Revistas y lecturas de bienestar</p>
-            <h2 id="mag-title">Elegí una lectura</h2>
-            <p class="ib-sub">Se abre en una pestaña nueva. Cuando termines, volvés al aeropuerto donde estabas.</p>
+            <p class="ib-eyebrow">📚 Revistas, reels y lecturas de bienestar</p>
+            <h2 id="mag-title">Elegí qué mirar</h2>
+            <!-- FASE 53: reels del Dr. Dagnino, se ven acá mismo -->
+            <div id="mag-lists">
+            <p class="mag-section">🎬 Reels del Dr. Dagnino <small>· se ven acá, sin salir del aeropuerto</small></p>
+            <div id="reel-list" class="reel-list"></div>
+            <p class="mag-section">📖 Lecturas <small>· se abren en una pestaña nueva</small></p>
             <div class="mag-grid">
                 <a class="mag-cover mag-1" data-mag="ansiedad" href="https://www.instagram.com/doctor.dagnino/" target="_blank" rel="noopener noreferrer"><span class="mag-brand">AeroCalma</span><span class="mag-title">Claves para entender la ansiedad antes de volar</span><span class="mag-cta">Ver en Instagram ↗</span></a>
                 <a class="mag-cover mag-2" data-mag="respiracion" href="https://www.instagram.com/doctor.dagnino/reels/" target="_blank" rel="noopener noreferrer"><span class="mag-brand">AeroCalma</span><span class="mag-title">Ejercicios prácticos de respiración y regulación</span><span class="mag-cta">Ver reels ↗</span></a>
                 <a class="mag-cover mag-3" data-mag="faq" href="https://juegosconsultoriodagnino.netlify.app/turnos" target="_blank" rel="noopener noreferrer"><span class="mag-brand">Consultorio</span><span class="mag-title">Preguntas frecuentes sobre el proceso terapéutico</span><span class="mag-cta">Ver en el sitio ↗</span></a>
+            </div>
+            </div>
+            <div id="reel-viewer" class="reel-viewer hidden">
+                <div class="rv-bar"><button id="btn-reel-back" class="btn-ghost" type="button">← Volver</button><b id="reel-title"></b></div>
+                <div class="rv-frame"><iframe id="reel-frame" title="Reel de Instagram del Dr. Dagnino" allow="autoplay; encrypted-media; picture-in-picture; clipboard-write" allowfullscreen></iframe></div>
+                <p class="rv-note">Tocá el video para reproducirlo con sonido. <a id="reel-open" href="#" target="_blank" rel="noopener noreferrer">Abrir en Instagram ↗</a></p>
             </div>
         </div>
     </div>

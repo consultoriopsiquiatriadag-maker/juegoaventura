@@ -896,6 +896,44 @@ function buildMagazineStand(){
     root:g,marker:mk,markerBaseY:2.95,onTrigger:()=>openUiModal('mag-modal')});
 }
 
+// ── FASE 53: reels del Dr. Dagnino dentro del juego ──────────
+// Se ven en el mismo panel (Instagram los permite incrustar). Para sumar uno,
+// agregá su código (lo que va después de /reel/ en el link) y un título.
+const MAG_REELS=[
+  { id:'DersC38Pt1K', title:'¿Humedad y ansiedad?', tag:'Ansiedad' },
+];
+let _reelOpen=false;
+function renderReels(){
+  const list=document.getElementById('reel-list'); if(!list) return;
+  list.innerHTML='';
+  MAG_REELS.forEach(r=>{
+    const b=document.createElement('button'); b.type='button'; b.className='reel-card';
+    b.innerHTML='<span class="rc-play" aria-hidden="true">▶</span><span class="rc-tag"></span><span class="rc-title"></span>';
+    b.querySelector('.rc-tag').textContent=r.tag||'Reel'; b.querySelector('.rc-title').textContent=r.title;
+    b.setAttribute('aria-label','Ver el reel: '+r.title);
+    b.addEventListener('click',()=>openReel(r));
+    list.appendChild(b);
+  });
+}
+function openReel(r){
+  stopSpeech(); suspendAmbientAudio(); _reelOpen=true;      // silencio de fondo para escucharlo bien
+  document.getElementById('reel-title').textContent=r.title;
+  document.getElementById('reel-open').href='https://www.instagram.com/reel/'+r.id+'/';
+  document.getElementById('reel-frame').src='https://www.instagram.com/reel/'+r.id+'/embed/';
+  document.getElementById('mag-lists').classList.add('hidden');
+  document.getElementById('reel-viewer').classList.remove('hidden');
+  logInteraction('reel',r.id);
+}
+function closeReel(){
+  if(!_reelOpen) return;
+  _reelOpen=false;
+  document.getElementById('reel-frame').src='about:blank';   // corta el video y el audio
+  document.getElementById('reel-viewer').classList.add('hidden');
+  document.getElementById('mag-lists').classList.remove('hidden');
+  if(isGameActive&&!isPaused) resumeAmbientAudioIfEnabled();
+}
+function closeMagModal(){ closeReel(); closeUiModal('mag-modal'); }
+
 // ── Estaciones de carga de teléfonos ─────────────────────────
 const chargeLeds=[];
 function _buildChargeColumn(x,z,face){
@@ -1296,7 +1334,9 @@ function setupInteractionUI(){
   on('btn-close-kiosk',()=>closeUiModal('kiosk-modal'));
   on('btn-close-office',()=>closeUiModal('office-modal'));
   on('btn-gate-scan',scanBoardingPass);
-  on('btn-close-mag',()=>closeUiModal('mag-modal'));
+  on('btn-close-mag',closeMagModal);
+  on('btn-reel-back',closeReel);
+  renderReels();
   document.querySelectorAll('#mag-modal .mag-cover').forEach(a=>a.addEventListener('click',()=>logInteraction('revista',a.dataset.mag)));
   on('btn-close-charge',()=>{ clearInterval(_chargeTimer); closeUiModal('charge-modal'); });
   on('btn-charge-done',()=>{ closeUiModal('charge-modal'); showToast('⚡ Teléfono cargado. Buen momento para mirar alrededor.'); });
@@ -1337,7 +1377,7 @@ function setupInteractionUI(){
     if(!document.getElementById('checkin-modal').classList.contains('hidden')) document.getElementById('btn-close-checkin').click();
     else if(!document.getElementById('kiosk-modal').classList.contains('hidden')) closeUiModal('kiosk-modal');
     else if(!document.getElementById('office-modal').classList.contains('hidden')) closeUiModal('office-modal');
-    else if(!document.getElementById('mag-modal').classList.contains('hidden')) closeUiModal('mag-modal');
+    else if(!document.getElementById('mag-modal').classList.contains('hidden')){ if(_reelOpen) closeReel(); else closeMagModal(); }
     else if(!document.getElementById('charge-modal').classList.contains('hidden')){ clearInterval(_chargeTimer); closeUiModal('charge-modal'); }
     else if(!document.getElementById('restroom-modal').classList.contains('hidden')) closeUiModal('restroom-modal');
     else if(!document.getElementById('gate-modal').classList.contains('hidden')){ clearTimeout(_gateTimer); closeUiModal('gate-modal'); }
@@ -3856,13 +3896,18 @@ function buildServiceDesk(x,z,ry,cfg){
   scene.add(g);
 }
 
+function _keepOutsideHall(g){
+  if(!g) return;
+  const hall=new THREE.Box3(new THREE.Vector3(-18,-2,-73),new THREE.Vector3(18,15,57));
+  const dir=g.position.x>=0?1:-1, bb=new THREE.Box3();
+  g.updateMatrixWorld(true); bb.setFromObject(g);
+  for(let i=0;i<40&&bb.intersectsBox(hall);i++){ g.position.x+=dir*2; g.updateMatrixWorld(true); bb.setFromObject(g); }
+}
 function buildExterior(){
   // Detailed planes at runway positions
-  buildDetailedPlane(-28,0,-44,0.12);
-  buildDetailedPlane(26,0,-30,-0.15);
-  buildDetailedPlane(-18,0,-12,0.05);
-  buildDetailedPlane(5,0,-55,Math.PI);
-  buildDetailedPlane(-35,0,-65,0.3);
+  // Aviones estacionados afuera: si alguno toca el hall, se corre hacia afuera
+  // (antes atravesaban la sala de espera y se veían como manchas blancas)
+  [[-28,-44,0.12],[26,-30,-0.15],[-18,-12,0.05],[5,-55,Math.PI],[-35,-65,0.3]].forEach(([px,pz,ry])=>_keepOutsideHall(buildDetailedPlane(px,0,pz,ry)));
   // Ground service vehicles
   buildGroundVehicle(-10,0,-48,0.4,0xcccccc);
   buildGroundVehicle(15,0,-42,Math.PI*0.5,0xdd4400);
@@ -6347,7 +6392,7 @@ function queueAnnouncement(name,inSeconds){
   _chimeTimer=Math.min(_chimeTimer,inSeconds);
 }
 function _paBlocked(){
-  if(isSpeaking||_paSrc||_flight||_cabinSeq) return true;
+  if(isSpeaking||_paSrc||_flight||_cabinSeq||_reelOpen) return true;
   const quiet=['breathing-modal','cold-water'];
   return quiet.some(id=>{ const el=document.getElementById(id); return el&&!el.classList.contains('hidden'); });
 }

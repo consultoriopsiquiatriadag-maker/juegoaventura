@@ -1853,3 +1853,22 @@ body:has(#bag-hud:not(.hidden)) #approach-hint { display: none !important; }
   font: 700 .78rem var(--ff-body); color: #fff; background: #2457a6; border: 2px solid #f08a24; box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
 body.has-bag #bag-chip { display: block; }
 @media (max-width: 600px) { #bag-chip { top: 64px; right: 12px; } }
+
+/* ═══ FASE 53: REELS EN EL PUESTO DE REVISTAS ═══ */
+.mag-section { margin: 14px 0 8px; font: 700 .92rem var(--ff-body); color: #14304f; }
+.mag-section small { font-weight: 500; color: #5b6b7c; }
+.reel-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.reel-card { position: relative; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; aspect-ratio: 9 / 12;
+  padding: 12px; border-radius: 12px; border: none; text-align: left; color: #fff; cursor: pointer;
+  background: linear-gradient(165deg, #833ab4 0%, #c13584 45%, #f77737 100%); box-shadow: 0 10px 24px rgba(20,40,64,0.28); transition: transform .2s; }
+.reel-card:hover, .reel-card:focus-visible { transform: translateY(-4px); }
+.reel-card .rc-play { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-62%); width: 54px; height: 54px; border-radius: 50%;
+  background: rgba(255,255,255,0.92); color: #c13584; display: grid; place-items: center; font-size: 1.5rem; }
+.reel-card .rc-tag { align-self: flex-start; font: 700 .68rem var(--ff-body); text-transform: uppercase; letter-spacing: .06em; padding: 2px 8px; border-radius: 20px; background: rgba(0,0,0,0.25); }
+.reel-card .rc-title { font: 700 1rem/1.25 Georgia, serif; }
+.reel-viewer .rv-bar { display: flex; align-items: center; gap: 12px; margin: 8px 0 10px; }
+.reel-viewer .rv-frame { width: min(400px, 100%); margin: 0 auto; height: min(640px, 66vh); border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+.reel-viewer iframe { width: 100%; height: 100%; border: 0; }
+.reel-viewer .rv-note { text-align: center; font-size: .82rem; color: #5b6b7c; margin: 10px 0 0; }
+.reel-viewer .rv-note a { color: #c13584; font-weight: 700; }
+@media (max-width: 600px) { .reel-list { grid-template-columns: repeat(2, 1fr); } .reel-viewer .rv-frame { height: 62vh; } }
