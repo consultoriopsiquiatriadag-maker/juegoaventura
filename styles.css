@@ -1872,3 +1872,13 @@ body.has-bag #bag-chip { display: block; }
 .reel-viewer .rv-note { text-align: center; font-size: .82rem; color: #5b6b7c; margin: 10px 0 0; }
 .reel-viewer .rv-note a { color: #c13584; font-weight: 700; }
 @media (max-width: 600px) { .reel-list { grid-template-columns: repeat(2, 1fr); } .reel-viewer .rv-frame { height: 62vh; } }
+
+/* ═══ FASE 54: PÍLDORAS DE SALUD MENTAL (mate y café) ═══ */
+.pildora { display: flex; gap: 12px; align-items: flex-start; margin: 12px 0 4px; padding: 12px 14px; border-radius: 14px;
+  background: linear-gradient(135deg, #eaf4fb, #f3eefb); border: 1px solid #cfe0ee; text-align: left; animation: ipIn .4s ease; }
+.pildora .pl-ico { font-size: 1.6rem; line-height: 1; }
+.pildora small { display: block; color: #5b6b7c; font-size: .75rem; }
+.pildora b { display: block; color: #14304f; font-size: .98rem; margin: 2px 0 8px; }
+.pildora .pl-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pildora .pl-stop { padding: 6px 12px; font-size: .8rem; }
+.pildora .pl-link { font-size: .82rem; font-weight: 700; color: #2457a6; }

@@ -1548,6 +1548,7 @@ const CAFE_SIPS=[
 ];
 let _cafeSip=0, _cafeTimer=null;
 function openCafeModal(){
+  _hidePildora('cafe-pildora');
   _cafeSip=0; clearTimeout(_cafeTimer);
   document.getElementById('cafe-cup').style.setProperty('--level','92%');
   document.getElementById('cafe-step').textContent='Sentate un momento. Lo tomamos en tres sorbos lentos.';
@@ -1568,6 +1569,7 @@ function cafeSip(){
     _cafeTimer=setTimeout(()=>{
       document.getElementById('cafe-step').textContent='Listo. Te tomaste un momento para vos: eso también es parte del viaje.';
       document.getElementById('btn-cafe-done').classList.remove('hidden');
+      if(!document.getElementById('cafe-modal').classList.contains('hidden')) playPildora('cafe-pildora');
     },2200);
     logInteraction('cafe','cafe');
   } else {
@@ -1575,6 +1577,38 @@ function cafeSip(){
     b.disabled=true; b.textContent='…';
     _cafeTimer=setTimeout(()=>{ b.disabled=false; b.textContent='Tomar otro sorbo'; },calmMode?3500:2600);
   }
+}
+
+// ── FASE 54: píldoras de salud mental con la voz del doctor ──
+// Suenan al terminar el mate o el café (la persona eligió frenar y escuchar).
+// Rotan: cada pausa reproduce la siguiente, también entre sesiones.
+const SITE_URL='https://juegosconsultoriodagnino.netlify.app/';
+const PILDORAS=[
+  { key:'pildora-1', title:'Ansiedad: qué es y cómo bajarla', link:'Más en el sitio del consultorio', url:SITE_URL },
+  { key:'pildora-2', title:'Ansiedad: los "¿y si…?"', link:'Más en el sitio del consultorio', url:SITE_URL },
+  { key:'pildora-3', title:'Angustia: hacerle lugar', link:'Más en el sitio del consultorio', url:SITE_URL },
+  { key:'pildora-4', title:'Depresión: reconocerla', link:'Psicoeducación en el sitio', url:SITE_URL },
+  { key:'pildora-5', title:'Pequeños pasos y pedir ayuda', link:'Escribir a la Central de Turnos', wa:true }
+];
+function _nextPildora(){
+  let i=0; try{ i=parseInt(localStorage.getItem('aerocalma_pildora')||'0',10)||0; }catch(e){}
+  const p=PILDORAS[i%PILDORAS.length];
+  try{ localStorage.setItem('aerocalma_pildora',String((i+1)%PILDORAS.length)); }catch(e){}
+  return p;
+}
+function _hidePildora(id){ const el=document.getElementById(id); if(el) el.classList.add('hidden'); }
+function playPildora(id){
+  const el=document.getElementById(id); if(!el) return;
+  const p=_nextPildora();
+  el.querySelector('.pl-title').textContent=p.title;
+  const a=el.querySelector('.pl-link');
+  a.textContent=p.link+' ↗';
+  a.href=p.wa?'https://wa.me/'+CONSULTORIO_WHATSAPP+'?text='+encodeURIComponent(CONSULTORIO_MSG):p.url;
+  const stop=el.querySelector('.pl-stop'); stop.classList.remove('hidden'); stop.textContent='⏹ Detener';
+  stop.onclick=()=>{ stopSpeech(); stop.classList.add('hidden'); };
+  el.classList.remove('hidden');
+  playVoice(p.key);
+  logInteraction('pildora',p.key);
 }
 
 // ── Dispensers de agua caliente para el mate ────────────────
@@ -1641,6 +1675,7 @@ function buildMateDispensers(){
 
 let _mateTimer=null;
 function openMateModal(){
+  _hidePildora('mate-pildora');
   clearTimeout(_mateTimer);
   document.getElementById('mate-termo').style.setProperty('--level','8%');
   document.getElementById('mate-step').textContent='Agua a 75–80 °C: caliente, pero sin hervir, para no quemar la yerba.';
@@ -1661,6 +1696,7 @@ function fillMate(){
     document.getElementById('btn-mate-done').classList.remove('hidden');
     playUiTone('success');
     logInteraction('mate','agua');
+    setTimeout(()=>{ if(!document.getElementById('mate-modal').classList.contains('hidden')) playPildora('mate-pildora'); },900);
   },2600);
 }
 
@@ -6280,7 +6316,10 @@ const VOICE_CLIPS={
   // FASE 51: sala de equipajes, salida y encuentro
   'bag-entrada':'17-equipaje-entrada', 'bag-espera':'18-equipaje-espera', 'bag-espera-larga':'19-equipaje-espera-larga',
   'bag-aparece':'20-equipaje-aparece', 'bag-vuelta':'21-equipaje-vuelta', 'bag-retirada':'22-equipaje-retirada',
-  'salida-aduana':'23-salida-aduana', encuentro:'24-encuentro-final'
+  'salida-aduana':'23-salida-aduana', encuentro:'24-encuentro-final',
+  // FASE 54: píldoras de salud mental (tótems de mate y café)
+  'pildora-1':'25-pildora-ansiedad', 'pildora-2':'26-pildora-ansiedad-pensamientos', 'pildora-3':'27-pildora-angustia',
+  'pildora-4':'28-pildora-depresion', 'pildora-5':'29-pildora-pasos-pequenos'
 };
 // Un solo elemento de audio: se "desbloquea" con el clic de Iniciar
 // (iOS solo deja reproducir después de un gesto) y se reutiliza.
