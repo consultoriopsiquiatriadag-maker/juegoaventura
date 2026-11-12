@@ -1412,8 +1412,9 @@ let officeDoor=null, officeDoorTarget=0, officeDoctor=null, _officeCloseT=0;
 
 function buildConsultorio(){
   const g=new THREE.Group(); g.name='consultorioDagnino';
-  // Local sobre la pared izquierda, entre z=37 y z=43; frente hacia el pasillo (+x)
-  const OX=-17.4, OZ=40, D=4.1, W=6, H=3.6;
+  // FASE 56: en la Sala de Embarque (pared izquierda, entre z=-10 y z=-4): es donde
+  // la ansiedad anticipatoria suele ser mayor. Frente hacia el pasillo (+x).
+  const OX=-17.4, OZ=-7, D=4.1, W=6, H=3.6;
   g.position.set(OX,0.09,OZ);
   const parts=new THREE.Group(); g.add(parts);     // piezas fijas (se fusionan)
   const B=(w,h,d,col,px,py,pz,r,m)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mkStd(col,r==null?0.7:r,m||0)); o.position.set(px,py+h/2,pz); o.castShadow=true; o.receiveShadow=true; parts.add(o); return o; };
@@ -1853,12 +1854,11 @@ function submitReview(e){
 
 // ── Tótem de aporte voluntario (Mercado Pago) ───────────────
 function buildDonationTotem(){
-  scene.updateMatrixWorld(true);
-  const spots=[{x:-13.6,z:46.5},{x:13.6,z:33},{x:-13.6,z:27}];
-  const spot=spots.find(p=>_floorIsFree(p.x,p.z,0.6)&&_floorIsFree(p.x+(p.x<0?1:-1)*1.2,p.z,0.4))||spots[0];
-  const face=spot.x<0?1:-1;
+  // FASE 56: en la sala de equipajes, al lado de la puerta de salida: es el
+  // final del recorrido, cuando la persona ya vivió lo que AeroCalma ofrece.
+  const spot={x:18.4,z:HALL.z1+1.1};
   const g=new THREE.Group(); g.name='donationTotem';
-  g.position.set(spot.x,0.09,spot.z); g.rotation.y=face*Math.PI/2;
+  g.position.set(spot.x,0.07,spot.z); g.rotation.y=0;   // mira hacia la sala (+z)
   const parts=new THREE.Group(); g.add(parts);
   const B=(w,h,d,col,px,py,pz,r,m)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mkStd(col,r==null?0.4:r,m||0)); o.position.set(px,py+h/2,pz); o.castShadow=true; o.receiveShadow=true; parts.add(o); return o; };
   B(0.8,0.06,0.5,0x5c6368,0,0,0,0.5,0.3);                 // base
@@ -1882,7 +1882,7 @@ function buildDonationTotem(){
   const hit=new THREE.Mesh(new THREE.BoxGeometry(0.9,2.1,0.6),new THREE.MeshBasicMaterial({visible:false})); hit.position.set(0,1.05,0); g.add(hit);
   const mk=_markerSprite('💙','Aporte voluntario','#009ee3'); mk.position.set(0,2.65,0.1); mk.scale.multiplyScalar(0.85); g.add(mk);
   scene.add(g);
-  addInteractable({id:'donation',x:spot.x+face*1.3,z:spot.z,radius:2.4,icon:'💙',label:'Aporte voluntario',
+  addInteractable({id:'donation',x:spot.x,z:spot.z+1.3,radius:2.4,icon:'💙',label:'Aporte voluntario',
     root:g,marker:mk,markerBaseY:2.65,onTrigger:openDonationModal});
 }
 function openDonationModal(){
@@ -2611,9 +2611,9 @@ function buildLounge(){
     sign(x+dx,5.6,z+6.5,5.4,5,0.08,wint,0,0x224466);
   });
   // Plants
-  [-16,16].forEach(dx=>{ addPlantLarge(x+dx,z); addPlantLarge(x+dx,z-5); });
-  // Vending machines
-  addVending(x-16.5,z-2); addVending(x-16.5,z+2);
+  addPlantLarge(x+16,z); addPlantLarge(x+16,z-5); addPlantLarge(x-16,z-5);
+  // Vending machines (FASE 56: corridas detrás del consultorio, que ocupa z -10…-4)
+  addVending(x-16.5,z-1.1); addVending(x-16.5,z-2.4);
   // Charging station
   box(x+15.5,0,z-4,1.2,2.2,0.8,0x374151);
   const ct=tex(256,256,(ctx)=>{ ctx.fillStyle='#1a2e42'; ctx.fillRect(0,0,256,256); ctx.fillStyle='#4ecdc4'; ctx.font='bold 32px Arial'; ctx.textAlign='center'; ctx.fillText('⚡ CARGA',128,90); ctx.fillText('FREE WiFi',128,148); ctx.fillStyle='#aaa'; ctx.font='20px Arial'; ctx.fillText('AeroCalma_Free',128,200); });
@@ -3127,7 +3127,7 @@ function _cabinLighting(){
 // ══════════════════════════════════════════════════
 function buildShops(){
   buildCafe(-15.5,20);
-  buildConvenienceStore(-15.5,-2);
+  buildConvenienceStore(-15.5,40);   // FASE 56: pasa al lugar que dejó el consultorio
   buildNewsstand(-15.5,-22);
   buildPharmacy(15.5,15);
   buildRestaurant(15.5,-5);
@@ -7446,6 +7446,7 @@ function _collectBag(viaDesk){
   setTimeout(()=>{ const h=document.getElementById('bag-hud'); if(h&&_bh.state==='done') h.classList.add('hidden'); },6000);
   document.body.classList.add('has-bag');
   setTimeout(()=>{ if(_bh&&_bh.state==='done'&&isGameActive) showToast('🚪 Seguí hacia la Salida: con tu valija, la puerta se abre.'); },6500);
+  setTimeout(()=>{ if(_bh&&_bh.state==='done'&&isGameActive&&_inBagHall()&&!uiModalOpen) showToast('💙 Si AeroCalma te ayudó, junto a la salida podés hacer un aporte voluntario.'); },13000);
 }
 // ── FASE 55: Asistencia de equipaje (modal guiado) ──
 // Verifica la etiqueta contra el ticket. Si la valija todavía no salió,
