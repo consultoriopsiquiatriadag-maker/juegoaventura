@@ -673,6 +673,12 @@ function buildBoarding(){
   agent.userData.idlePhase=0.7; agent.userData.baseRotY=0; npcs.push(agent); scene.add(agent);
   const gt=tex(512,256,(ctx)=>{ ctx.fillStyle='#0a1628'; ctx.fillRect(0,0,512,256); ctx.fillStyle='#4a9eff'; ctx.font='bold 34px Arial'; ctx.textAlign='center'; ctx.fillText('A7 · IB 3421 · MADRID',256,52); ctx.strokeStyle='#4a9eff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(40,70); ctx.lineTo(472,70); ctx.stroke(); ctx.fillStyle='#fff'; ctx.font='24px Arial'; ctx.fillText('Salida 08:15  ·  Embarque 07:45',256,118); ctx.fillStyle='#4ecdc4'; ctx.font='bold 38px Arial'; ctx.fillText('✓ EMBARQUE EN CURSO',256,190); ctx.fillStyle='#9fb3c8'; ctx.font='22px Arial'; ctx.fillText('Escaneá tu tarjeta en el tótem',256,232); });
   sign(-4.4,4.0,Z+0.15,3.8,1.9,0.1,gt,0,0x001122);
+  // FASE 57: la sala de equipajes está "del otro lado" del vuelo: lo decimos acá
+  const lt=tex(768,160,(ctx)=>{ ctx.fillStyle='#f2c230'; ctx.fillRect(0,0,768,160); ctx.fillStyle='#14202c'; ctx.textAlign='center';
+    ctx.font='bold 46px Arial'; ctx.fillText('🧳 Llegadas y Equipajes · Madrid',384,64);
+    ctx.font='32px Arial'; ctx.fillText('Se llega volando: sentate en el asiento 14C',384,122); });
+  lt.encoding=THREE.sRGBEncoding;
+  sign(4.8,2.35,Z+0.1,3.6,0.75,0.05,lt,0,0x332200);
   addInteractable({id:'gate',x:1.1,z:Z+2.3,radius:2.6,icon:'🎫',label:'Escanear tarjeta de embarque',
     root:tg,onTrigger:openGateModal});
   buildJetway();
@@ -5622,6 +5628,7 @@ function setupEvents(){
   document.getElementById('btn-start-from-info').addEventListener('click',startGame);
   document.getElementById('btn-pause').addEventListener('click',pauseGame);
   document.getElementById('btn-resume').addEventListener('click',resumeGame);
+  document.getElementById('btn-to-arrivals').addEventListener('click',goToArrivals);
   document.getElementById('btn-to-menu').addEventListener('click',returnToMenu);
   document.getElementById('btn-breathe').addEventListener('click',openBreathing);
   document.getElementById('btn-narrate').addEventListener('click',narrateCurrentZone);
@@ -5892,6 +5899,13 @@ function startGame(){
   resumeAmbientAudioIfEnabled();
 }
 function pauseGame(){ isPaused=true; if(!isMobile)controls.unlock(); document.getElementById('pause-menu').classList.remove('hidden'); suspendAmbientAudio(); _voicePause(true); }
+// FASE 57: atajo "Ir a Llegadas" (pausa): termina el vuelo o desembarca directo en Madrid
+function goToArrivals(){
+  resumeGame();
+  if(_flight){ endFlight(true); return; }
+  if(_breathOpen&&_breathOpen()) closeBreathing();
+  deplaneToArrivals();
+}
 function resumeGame(){ isPaused=false; document.getElementById('pause-menu').classList.add('hidden'); if(!isMobile)controls.lock(); resumeAmbientAudioIfEnabled(); _voicePause(false); }
 function returnToMenu(){ if(_flight) endFlight(false); _cabinSeq=null; isGameActive=false; isPaused=false; stopSpeech(); stopAmbientAudio(); if(!isMobile)controls.unlock(); closeZonePanel(); closeGrounding(); closeBreathing(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('pause-menu').classList.add('hidden'); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); showScreen('main-menu'); startMenuAnimation(); updateDiaryDisplay(); }
 function restartGame(){ showScreen(null); startGame(); }
