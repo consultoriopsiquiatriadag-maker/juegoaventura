@@ -550,6 +550,28 @@
         </div>
     </div>
 
+    <!-- FASE 55: Asistencia de equipaje (sala de equipajes) -->
+    <div id="bagdesk-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="bagdesk-title">
+        <div class="interact-box ritual-box">
+            <button id="btn-close-bagdesk" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">🛄 Asistencia de equipaje</p>
+            <h2 id="bagdesk-title">Hola, soy Lucía</h2>
+            <div class="bd-match" aria-hidden="true">
+                <div class="bd-card"><span class="bd-k">Etiqueta de la valija</span><b>3421-14C</b><span>EZE → MAD</span></div>
+                <div class="bd-link"><span class="bd-dot"></span><span class="bd-dot"></span><span class="bd-dot"></span><span class="bd-ok">✓</span></div>
+                <div class="bd-card"><span class="bd-k">Tu ticket de vuelo</span><b>Vuelo 3421</b><span>Asiento 14C</span></div>
+            </div>
+            <div class="bd-bar"><div id="bd-fill"></div></div>
+            <p id="bagdesk-step" class="ritual-step" aria-live="polite"></p>
+            <p id="bagdesk-note" class="ritual-tip hidden"></p>
+            <div class="ib-actions bd-actions">
+                <button id="btn-bagdesk-verify" class="btn-primary" type="button">Verificar mi equipaje</button>
+                <button id="btn-bagdesk-give" class="btn-ghost hidden" type="button">Prefiero que me la entreguen acá</button>
+                <button id="btn-bagdesk-done" class="btn-primary hidden" type="button">Seguir</button>
+            </div>
+        </div>
+    </div>
+
     <!-- FASE 44: Baños -- pausa de regulación -->
     <div id="restroom-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="restroom-title">
         <div class="interact-box">

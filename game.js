@@ -1341,6 +1341,10 @@ function setupInteractionUI(){
   on('btn-close-charge',()=>{ clearInterval(_chargeTimer); closeUiModal('charge-modal'); });
   on('btn-charge-done',()=>{ closeUiModal('charge-modal'); showToast('⚡ Teléfono cargado. Buen momento para mirar alrededor.'); });
   on('btn-close-restroom',()=>closeUiModal('restroom-modal'));
+  on('btn-bagdesk-verify',verifyBagDesk);
+  on('btn-bagdesk-give',_bagDeskSuccess);
+  on('btn-bagdesk-done',closeBagDesk);
+  on('btn-close-bagdesk',closeBagDesk);
   on('btn-reg-water',coldWaterFace);
   on('btn-reg-breath',restroomBreathing);
   on('btn-hud-sound',toggleAmbientSound);
@@ -1380,6 +1384,7 @@ function setupInteractionUI(){
     else if(!document.getElementById('mag-modal').classList.contains('hidden')){ if(_reelOpen) closeReel(); else closeMagModal(); }
     else if(!document.getElementById('charge-modal').classList.contains('hidden')){ clearInterval(_chargeTimer); closeUiModal('charge-modal'); }
     else if(!document.getElementById('restroom-modal').classList.contains('hidden')) closeUiModal('restroom-modal');
+    else if(!document.getElementById('bagdesk-modal').classList.contains('hidden')) closeBagDesk();
     else if(!document.getElementById('gate-modal').classList.contains('hidden')){ clearTimeout(_gateTimer); closeUiModal('gate-modal'); }
     else if(!document.getElementById('reviews-modal').classList.contains('hidden')) closeUiModal('reviews-modal');
     else if(!document.getElementById('donation-modal').classList.contains('hidden')) closeUiModal('donation-modal');
@@ -1468,10 +1473,13 @@ function buildConsultorio(){
   const knob=new THREE.Mesh(new THREE.SphereGeometry(0.04,10,8),mkStd(0xd4b25a,0.25,0.8)); knob.position.set(0.06,1.05,DW-0.16); officeDoor.add(knob);
 
   // El doctor, sentado y de frente a la puerta
-  officeDoctor=buildCharacter({skin:0xf1c9a5,hair:0x3a2a20,top:0xf4f6f8,pants:0x2b3442,shoes:0x1a1a1a,role:'civilian'});
+  // El doctor es Pedro Dagnino: pelo corto canoso peinado hacia atrás, anteojos
+  // rectangulares oscuros, barba corta canosa, saco azul marino, camisa blanca y estetoscopio.
+  officeDoctor=buildCharacter({skin:0xedc4a4,hair:0x8f8b86,top:0x1f2a44,pants:0x232b3a,shoes:0x1a1a1a,role:'civilian',
+    female:false,hairStyle:'swept',glasses:true,glassesStyle:'rect',stubble:0x6f6a66,doctorOutfit:true,seed:7});
   officeDoctor.position.set(0.85,-0.36,0); officeDoctor.rotation.y=Math.PI/2;
   officeDoctor.children.forEach(c=>{
-    if(c.userData.isLeg) c.rotation.x=-Math.PI/2;      // piernas hacia adelante: sentado
+    if(c.userData.isLeg){ c.rotation.x=-Math.PI/2; const j=c.children.find(o=>o.userData.isJoint); if(j) j.rotation.x=Math.PI/2; }  // sentado: muslos adelante, rodillas dobladas
     if(c.userData.isArm) c.rotation.x=-0.75;           // manos sobre el escritorio
   });
   g.add(officeDoctor);
@@ -4072,7 +4080,9 @@ function addSuitcase(x,y,z,color){
 // ══════════════════════════════════════════════════
 const SKINS=[0xfde0bd,0xf5c8a0,0xe8b88a,0xc88a52,0x9a6438,0xfad6a5];
 const HAIRS=[0x0f0b08,0x3b1f0f,0x6b4226,0xd4a832,0x888888,0xcc4400,0x1a0f08];
-const TOPS =[0x1a4a99,0xbb2211,0x1a7744,0x6622aa,0xbb7711,0x1199bb,0x775522,0x991144];
+// FASE 55: paleta de ropa suave (pasteles y tonos corporativos apagados): baja estimulación visual
+const TOPS =[0x7fa3c6,0xc98f8f,0x8fb59a,0xb2a2c9,0xd8b77c,0x7fb5b3,0x9c8572,0xc6a0b2,0x5f7a95,0xe2d8c6,0x8d9fb0,0xa7b98a];
+const PANTS=[0x2f3a4a,0x4a4438,0x3b3f46,0x5a5f6a,0x6b6153,0x2e3440,0x7a7f88];
 
 function buildCharacter(opts){
   const{skin=0xf5c8a0,hair=0x1a1008,top=0x1a4a99,pants=0x1a2a3a,shoes=0x0a0a0a,
@@ -4106,65 +4116,89 @@ function buildCharacter(opts){
     o.position.set(px,py,pz); o.castShadow=true; return o;
   };
 
-  // ── ZAPATOS con puntera redondeada y suela diferenciada
+  // ── FASE 55: rasgos variados por persona (semilla estable) ──
+  // Silueta femenina/masculina, peinado y anteojos: deja de ser "la misma
+  // persona repetida" sin texturas pesadas.
+  const seed=(opts.seed!=null)?opts.seed:Math.floor(Math.random()*1e6);
+  const rnd=(k)=>{ const x=Math.sin(seed*12.9898+k*78.233)*43758.5453; return x-Math.floor(x); };
+  const female=(opts.female!=null)?opts.female:(role==='civilian'&&rnd(1)<0.5);
+  const glasses=(opts.glasses!=null)?opts.glasses:(role==='civilian'&&rnd(2)<0.3);
+  const HAIR_STYLES=female?['long','bob','bun','ponytail']:['short','short','side','bald','cap'];
+  const hairStyle=opts.hairStyle||HAIR_STYLES[Math.floor(rnd(3)*HAIR_STYLES.length)];
+  const shW=female?0.94:1.06;   // ancho de hombros
+  const hipW=female?1.08:1.0;   // ancho de cadera
+
+  // ── PIERNAS ARTICULADAS: cadera (muslo) → rodilla (pierna + zapato)
+  // El zapato viaja con la pierna: antes quedaba "pegado" al piso al caminar.
+  const legPivotY=0.85;
   const soleM=mkStd(0x050505,0.6,0.0);
   const shoeM=mkStd(shoes,0.32,0.18);
-  [-0.145,0.145].forEach(sx=>{
-    // Suela
-    g.add(BX(0.23,0.04,0.36,soleM,sx,0.02,0.04));
-    // Cuerpo zapato
-    g.add(BX(0.21,0.08,0.33,shoeM,sx,0.07,0.03));
-    // Puntera ligeramente saliente
-    const pt=new THREE.Mesh(new THREE.SphereGeometry(0.105,8,6),shoeM);
-    pt.scale.set(1,0.55,1.2); pt.position.set(sx,0.075,0.175);
-    pt.castShadow=true; g.add(pt);
-  });
-
-  // ── CALCETINES (visible entre zapato y pantalón)
-  [-0.145,0.145].forEach(sx=>g.add(BX(0.175,0.08,0.2,mkStd(0xdddddd,0.9,0),sx,0.13,-0.02)));
-
-  // ── PIERNAS con muslo cónico (más ancho arriba) y espinilla más delgada
-  const legPivotY=0.85;
+  const sockM=mkStd(0xdddddd,0.9,0);
   [-1,1].forEach(s=>{
-    const lg=new THREE.Group(); lg.position.set(s*0.135,legPivotY,0);
-    // Muslo -- CylinderGeometry más realista
-    lg.add(new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.095,0.40,8),pM)); // thigh
-    lg.children[0].position.set(0,-0.20,0); lg.children[0].castShadow=true;
-    // Rodilla -- esfera aplanada
-    const knee=SP(0.098,7,mkStd(pants,0.9,0),0,-0.42,0.02); knee.scale.set(1,0.75,0.95); lg.add(knee);
+    const lg=new THREE.Group(); lg.position.set(s*0.135*hipW,legPivotY,0);
+    // Muslo cónico (más ancho arriba)
+    lg.add(new THREE.Mesh(new THREE.CylinderGeometry(0.112*hipW,0.093,0.42,9),pM));
+    lg.children[0].position.set(0,-0.21,0); lg.children[0].castShadow=true;
+    // Rodilla -- pivote de la pierna inferior
+    const kg=new THREE.Group(); kg.position.set(0,-0.42,0); lg.add(kg);   // lg.children[1] (ver _joint)
+    const knee=SP(0.094,7,mkStd(pants,0.9,0),0,0,0.01); knee.scale.set(1,0.8,0.95); kg.add(knee);
     // Pantorrilla
-    lg.add(new THREE.Mesh(new THREE.CylinderGeometry(0.087,0.082,0.36,8),pM));
-    lg.children[2].position.set(0,-0.63,0); lg.children[2].castShadow=true;
+    const calf=new THREE.Mesh(new THREE.CylinderGeometry(0.088,0.068,0.33,9),pM); calf.position.set(0,-0.19,0); calf.castShadow=true; kg.add(calf);
+    // Calcetín, zapato (suela + cuerpo + puntera redondeada)
+    const sx=s*0.01;
+    kg.add(BX(0.15,0.07,0.17,sockM,sx,-0.31,-0.01));
+    kg.add(BX(0.21,0.04,0.34,soleM,sx,-0.41,0.05));
+    kg.add(BX(0.19,0.08,0.30,shoeM,sx,-0.36,0.04));
+    const pt=new THREE.Mesh(new THREE.SphereGeometry(0.098,8,6),shoeM);
+    pt.scale.set(1,0.55,1.2); pt.position.set(sx,-0.357,0.17); pt.castShadow=true; kg.add(pt);
+    kg.userData.isJoint=true;
     lg.userData={isLeg:true,side:-s}; g.add(lg);
   });
 
   // ── CINTURA y cadera
-  { const h=new THREE.Mesh(new THREE.CylinderGeometry(0.155,0.18,0.12,10),pM); h.position.set(0,0.88,0); h.castShadow=true; g.add(h); }
+  { const h=new THREE.Mesh(new THREE.CylinderGeometry(0.155*hipW,0.18*hipW,0.12,10),pM); h.position.set(0,0.88,0); h.castShadow=true; g.add(h); }
 
   // ── TORSO en cápsula: perfil de revolución (cintura → pecho → hombros
-  // redondeados), aplanado en profundidad. Más limpio y humano que las cajas.
-  { const prof=[[0,0.84],[0.15,0.845],[0.172,0.9],[0.18,1.0],[0.196,1.12],[0.228,1.26],[0.24,1.35],[0.232,1.42],[0.19,1.475],[0.11,1.505],[0,1.51]]
+  // redondeados), aplanado en profundidad. Silueta en V (FASE 55): cintura
+  // más fina y hombros más anchos; en la silueta femenina, cadera más marcada.
+  { const prof=(female
+        ?[[0,0.84],[0.165,0.845],[0.18,0.9],[0.165,1.0],[0.168,1.1],[0.2,1.24],[0.215,1.34],[0.215,1.42],[0.18,1.475],[0.105,1.505],[0,1.51]]
+        :[[0,0.84],[0.15,0.845],[0.166,0.9],[0.17,1.0],[0.19,1.12],[0.232,1.26],[0.25,1.35],[0.244,1.42],[0.2,1.478],[0.11,1.507],[0,1.512]])
       .map(([r,y])=>new THREE.Vector2(r,y));
     const torso=new THREE.Mesh(new THREE.LatheGeometry(prof,16),tM);
-    torso.scale.set(1,1,0.6); torso.castShadow=true; torso.receiveShadow=true; g.add(torso); }
+    torso.scale.set(shW,1,0.6); torso.castShadow=true; torso.receiveShadow=true; g.add(torso); }
+  // Cuello de la prenda (civiles): remate claro u oscuro según la prenda
+  if(role==='civilian'){
+    const col=new THREE.Mesh(new THREE.TorusGeometry(0.1,0.025,6,14),mkStd(rnd(4)<0.5?0xf2efe8:new THREE.Color(top).multiplyScalar(0.7).getHex(),0.8,0));
+    col.rotation.x=Math.PI/2; col.position.set(0,1.5,0.005); col.scale.set(1,0.85,1); g.add(col);
+    // Bandolera/mochila para algunos pasajeros
+    if(!opts.doctorOutfit&&rnd(5)<0.35){
+      const strapM=mkStd([0x3b3a3a,0x6b4a2f,0x2f4a5e][Math.floor(rnd(6)*3)],0.7,0);
+      const st=BX(0.05,0.62,0.02,strapM,0,1.2,0.142); st.rotation.z=0.62; g.add(st);
+      const st2=BX(0.05,0.62,0.02,strapM,0,1.2,-0.142); st2.rotation.z=-0.62; g.add(st2);
+      g.add(BX(0.08,0.24,0.30,strapM,0.215*hipW,0.9,0));   // bolso al costado
+    }
+  }
   // Hombros redondeados -- esferas
-  [-0.27,0.27].forEach(sx=>{
-    const sh=SP(0.115,8,tM,sx,1.43,0); sh.scale.set(1,0.8,0.9); g.add(sh);
+  [-0.28*shW,0.28*shW].forEach(sx=>{
+    const sh=SP(0.112,8,tM,sx,1.43,0); sh.scale.set(1,0.8,0.9); g.add(sh);
   });
 
-  // ── BRAZOS -- forma más cilíndrica y natural
+  // ── BRAZOS ARTICULADOS: hombro (brazo) → codo (antebrazo + mano)
   [-1,1].forEach(s=>{
-    const ag=new THREE.Group(); ag.position.set(s*0.315,1.43,0);
+    const ag=new THREE.Group(); ag.position.set(s*0.33*shW,1.43,0);
+    ag.rotation.z=s*0.06;   // brazos apenas separados del cuerpo (postura relajada)
     // Brazo superior
-    ag.add(new THREE.Mesh(new THREE.CylinderGeometry(0.092,0.082,0.34,8),tM));
+    ag.add(new THREE.Mesh(new THREE.CylinderGeometry(female?0.082:0.092,0.078,0.34,8),tM));
     ag.children[0].position.set(0,-0.18,0); ag.children[0].castShadow=true;
-    // Codo
-    const elb=SP(0.082,7,mkStd(top,0.9,0),0,-0.37,0); elb.scale.set(1,0.75,1); ag.add(elb);
-    // Antebrazo
-    ag.add(new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.065,0.30,8),sM));
-    ag.children[2].position.set(0,-0.54,0); ag.children[2].castShadow=true;
+    // Codo -- pivote del antebrazo
+    const eg=new THREE.Group(); eg.position.set(0,-0.37,0); ag.add(eg);
+    const elb=SP(0.078,7,mkStd(top,0.9,0),0,0,0); elb.scale.set(1,0.75,1); eg.add(elb);
+    // Antebrazo (manga hasta el codo, piel después)
+    const fa=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.058,0.30,8),sM); fa.position.set(0,-0.17,0); fa.castShadow=true; eg.add(fa);
     // Mano: forma simple y redondeada
-    { const hand=SP(0.07,9,sM,0,-0.73,0.01); hand.scale.set(0.95,1.3,0.75); ag.add(hand); }
+    { const hand=SP(0.066,9,sM,0,-0.36,0.01); hand.scale.set(0.9,1.3,0.72); eg.add(hand); }
+    eg.userData.isJoint=true;
     ag.userData={isArm:true,side:s}; g.add(ag);
   });
 
@@ -4175,51 +4209,44 @@ function buildCharacter(opts){
   const hg=new THREE.Group(); hg.position.set(0,1.72,0);
 
   // Cráneo -- elipsoide
-  const headSph=new THREE.Mesh(new THREE.SphereGeometry(0.195,12,10),sM);
+  const headSph=new THREE.Mesh(new THREE.SphereGeometry(0.195,14,12),sM);
   headSph.scale.set(1,1.08,0.95); hg.add(headSph);
-  // Mandíbula -- trapecio
-  hg.add(BX(0.34,0.14,0.28,sM,0,-0.155,0.01));
-  // Mentón redondeado
-  const chin=SP(0.085,7,sM,0,-0.185,0.08); chin.scale.set(1,0.7,0.9); hg.add(chin);
-  // Mejillas
-  hg.add(SP(0.09,6,mkStd(Math.min(skin+0x0c0808,0xffffff),0.65,0),-0.165,-0.02,0.12));
-  hg.add(SP(0.09,6,mkStd(Math.min(skin+0x0c0808,0xffffff),0.65,0), 0.165,-0.02,0.12));
-  // Frente -- supercilios
-  hg.add(BX(0.34,0.07,0.07,mkStd(Math.max(skin-0x0a0606,0x100808),0.7,0),0,0.085,0.17));
+  // FASE 55: rostro simplificado y limpio -- mandíbula redondeada (no caja),
+  // ojos chicos y serenos, nariz simple, sonrisa suave y rubor apenas marcado.
+  const shade=(hex,k)=>new THREE.Color(hex).multiplyScalar(k).getHex();
+  const jaw=SP(0.175,12,sM,0,-0.1,0.015); jaw.scale.set(0.92,0.78,0.9); hg.add(jaw);
+  const chin=SP(0.06,8,sM,0,-0.19,0.1); chin.scale.set(1.1,0.7,0.8); hg.add(chin);
+  const blushM=mkStd(new THREE.Color(skin).lerp(new THREE.Color(0xe39a8c),0.35).getHex(),0.7,0);
+  [-0.105,0.105].forEach(ex=>{ const ck=SP(0.036,6,blushM,ex,-0.045,0.158); ck.scale.set(1.2,0.7,0.6); hg.add(ck); });
 
-  // Ojos -- estructura en capas
-  const eyeWhiteM=mkStd(0xfafafa,0.05,0.0);
-  const irisColors=[0x2244aa,0x1a6632,0x6b3a18,0x4a4a55,0x1a3066];
-  const irisMat=mkStd(irisColors[Math.floor(Math.random()*irisColors.length)],0.3,0.05);
-  [-0.085,0.085].forEach(ex=>{
-    hg.add(SP(0.062,8,eyeWhiteM,ex,0.022,0.175));  // blanco
-    hg.add(SP(0.043,7,irisMat,ex,0.022,0.208));     // iris
-    hg.add(SP(0.028,6,dM,ex,0.022,0.218));           // pupila
-    hg.add(SP(0.011,5,wM,ex+0.014,0.032,0.222));     // brillo
-    // Párpado superior
-    const lid=BX(0.11,0.025,0.02,mkStd(Math.max(skin-0x080404,0),0.8,0),ex,0.042,0.182);
-    lid.rotation.x=-0.15; hg.add(lid);
+  // Ojos -- pequeños, con iris, pupila y brillo
+  const eyeWhiteM=mkStd(0xf6f4f0,0.2,0.0);
+  const irisColors=[0x3a5a8a,0x3f6a45,0x5a3a20,0x4a4a55,0x2e3f66];
+  const irisMat=mkStd(irisColors[Math.floor(rnd(9)*irisColors.length)],0.3,0.05);
+  const lidM=mkStd(shade(skin,0.9),0.8,0);
+  [-0.075,0.075].forEach(ex=>{
+    const ew=SP(0.036,8,eyeWhiteM,ex,0.02,0.168); ew.scale.set(1.15,0.85,0.7); hg.add(ew);  // blanco
+    hg.add(SP(0.023,7,irisMat,ex,0.018,0.187));     // iris
+    hg.add(SP(0.014,6,dM,ex,0.018,0.197));          // pupila
+    hg.add(SP(0.006,4,wM,ex+0.008,0.026,0.206));    // brillo
+    const lid=BX(0.085,0.016,0.02,lidM,ex,0.045,0.184); lid.rotation.x=-0.25; hg.add(lid); // párpado
   });
 
-  // Cejas más definidas con ángulo
-  const browM=mkStd(Math.max(hair-0x050505,0),0.9,0);
-  [[-0.085,0.092,0.188,-0.12],[ 0.085,0.092,0.188, 0.12]].forEach(([ex,ey,ez,rz])=>{
-    const br=BX(0.095,0.022,0.018,browM,ex,ey,ez); br.rotation.z=rz; hg.add(br);
+  // Cejas finas con leve ángulo
+  const browM=mkStd(shade(hair,0.85),0.9,0);
+  [[-0.075,0.084,0.19,0.07],[0.075,0.084,0.19,-0.07]].forEach(([ex,ey,ez,rz])=>{
+    const br=BX(0.08,0.016,0.016,browM,ex,ey,ez); br.rotation.z=rz; hg.add(br);
   });
 
-  // Nariz -- cono + aletas
-  const noseM=mkStd(Math.max(skin-0x060404,0),0.7,0);
-  hg.add(CO(0.032,0.09,6,noseM,0,-0.025,0.205));
-  hg.add(SP(0.038,6,noseM,0,-0.055,0.215));
-  hg.add(SP(0.028,5,noseM,-0.040,-0.063,0.205));
-  hg.add(SP(0.028,5,noseM, 0.040,-0.063,0.205));
+  // Nariz -- tabique y punta
+  const noseM=mkStd(shade(skin,0.94),0.7,0);
+  hg.add(CO(0.024,0.07,6,noseM,0,-0.025,0.196));
+  hg.add(SP(0.028,6,noseM,0,-0.056,0.2));
 
-  // Boca -- labio superior e inferior diferenciados
-  const lipUpM=mkStd(Math.max(skin-0x200a0a,0),0.6,0.02);
-  const lipLoM=mkStd(Math.max(skin-0x160606,0),0.55,0.02);
-  hg.add(BX(0.10,0.022,0.012,mkStd(0x8a2a1a,0.5,0.01),0,-0.118,0.206)); // raya boca
-  hg.add(BX(0.095,0.025,0.018,lipUpM,0,-0.108,0.208));  // labio sup
-  hg.add(BX(0.090,0.030,0.020,lipLoM,0,-0.133,0.206));  // labio inf
+  // Boca -- sonrisa suave (medio toro)
+  const lipM=mkStd(new THREE.Color(skin).multiply(new THREE.Color(0.82,0.5,0.46)).getHex(),0.6,0.02);
+  const smile=new THREE.Mesh(new THREE.TorusGeometry(0.036,0.008,5,12,Math.PI),lipM);
+  smile.rotation.z=Math.PI; smile.position.set(0,-0.092,0.176); smile.scale.set(1,0.55,1); smile.castShadow=false; hg.add(smile);
 
   // Orejas con hélix insinuado
   [-0.21,0.21].forEach(ex=>{
@@ -4253,16 +4280,82 @@ function buildCharacter(opts){
     hg.add(BX(0.09,0.20,0.36,hrM,-0.18,0.13,0));
     hg.add(BX(0.09,0.20,0.36,hrM, 0.18,0.13,0));
   } else {
-    // Pelo civil -- más realista con capas
-    hg.add(BX(0.40,0.13,0.38,hrM,0,0.195,0.01));  // capa base arriba
-    hg.add(BX(0.40,0.20,0.09,hrM,0,0.08,-0.165));  // nuca
-    hg.add(BX(0.40,0.09,0.12,hrM,0,0.10,0.175));   // flequillo
-    hg.add(BX(0.09,0.22,0.38,hrM,-0.195,0.07,0));  // lado L
-    hg.add(BX(0.09,0.22,0.38,hrM, 0.195,0.07,0));  // lado R
-    // Brillo de pelo
-    const shineStrip=BX(0.25,0.035,0.22,hShineM,0.06,0.235,0.04); shineStrip.rotation.z=0.15; hg.add(shineStrip);
+    // FASE 55: peinados con casquete esférico + semicilindros (sin texturas)
+    const hairDS=mkStd(hair,0.85,0.02,{side:THREE.DoubleSide});
+    const cap=(m,r,tilt,y,thL)=>{ const o=new THREE.Mesh(new THREE.SphereGeometry(r,16,9,0,Math.PI*2,0,thL||Math.PI*0.5),m);
+      o.position.set(0,y,0); o.rotation.x=tilt; o.castShadow=true; return o; };
+    const back=(r0,r1,h,y,th0,thL)=>{ const o=new THREE.Mesh(new THREE.CylinderGeometry(r0,r1,h,14,1,true,th0,thL),hairDS);
+      o.position.set(0,y,-0.005); o.castShadow=true; return o; };
+    if(hairStyle==='swept'){
+      hg.add(cap(hrM,0.218,-0.36,0.055));                                        // casquete
+      const top=SP(0.17,10,hrM,0,0.17,0.02); top.scale.set(1.12,0.42,1.12); top.rotation.x=-0.2; hg.add(top); // volumen peinado hacia atrás
+      hg.add(BX(0.3,0.14,0.06,mkStd(shade(hair,0.75),0.85,0),0,0.0,-0.175));    // nuca más oscura
+      [-1,1].forEach(sd=>hg.add(BX(0.03,0.12,0.12,mkStd(shade(hair,0.8),0.85,0),sd*0.2,0.03,0.07)));  // patillas cortas
+      const sh=BX(0.18,0.02,0.2,hShineM,-0.04,0.245,0.0); sh.rotation.z=-0.1; hg.add(sh);         // brillo plateado
+    } else if(hairStyle==='bald'){
+      // Corona despejada: solo una franja de pelo corto atrás y a los costados
+      hg.add(back(0.2,0.198,0.12,0.07,Math.PI*0.62,Math.PI*0.76));
+    } else if(hairStyle==='cap'){
+      const capCol=[0x2f4f6b,0xb9463c,0x3f6b4a,0xe8e2d4,0x1d1d22][Math.floor(rnd(7)*5)];
+      const cM=mkStd(capCol,0.75,0);
+      hg.add(back(0.2,0.198,0.1,0.04,Math.PI*0.62,Math.PI*0.76));     // pelo que asoma
+      hg.add(cap(cM,0.214,-0.12,0.06));
+      const vis=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.16,0.018,14,1,false,-Math.PI*0.42,Math.PI*0.84),cM);
+      vis.position.set(0,0.075,0.12); vis.rotation.x=0.12; vis.castShadow=true; hg.add(vis);   // visera
+      hg.add(SP(0.018,5,cM,0,0.272,0.0));                                                   // botón
+    } else {
+      hg.add(cap(hrM,0.216,-0.32,0.05));                                   // casquete
+      if(hairStyle==='short'||hairStyle==='side') hg.add(BX(0.3,0.14,0.06,hrM,0,0.0,-0.175)); // nuca
+      if(hairStyle==='side'){ const p=BX(0.2,0.05,0.09,hShineM,0.06,0.17,0.15); p.rotation.z=-0.25; hg.add(p); } // raya al costado
+      if(hairStyle==='long') hg.add(back(0.215,0.235,0.5,-0.12,Math.PI*0.4,Math.PI*1.2));   // pelo largo atrás
+      if(hairStyle==='bob')  hg.add(back(0.218,0.232,0.3,-0.02,Math.PI*0.32,Math.PI*1.36)); // carré a la mandíbula
+      if(hairStyle==='bun'){ hg.add(SP(0.095,8,hrM,0,0.16,-0.2)); }
+      if(hairStyle==='ponytail'){ hg.add(SP(0.06,6,hrM,0,0.1,-0.215));
+        const tail=SP(0.07,7,hrM,0,-0.06,-0.25); tail.scale.set(0.7,1.9,0.7); tail.rotation.x=0.35; hg.add(tail); }
+      // Brillo de pelo
+      const shineStrip=BX(0.2,0.02,0.16,hShineM,0.05,0.255,0.02); shineStrip.rotation.z=0.12; hg.add(shineStrip);
+    }
+  }
+  // Barba corta (opcional): casquete inferior apenas más grande que la mandíbula
+  if(opts.stubble!=null){
+    const bM=mkStd(opts.stubble,0.95,0);
+    const bd=new THREE.Mesh(new THREE.SphereGeometry(0.18,14,8,0,Math.PI*2,Math.PI*0.56,Math.PI*0.44),bM);
+    bd.position.set(0,-0.1,0.015); bd.scale.set(0.93,0.8,0.92); hg.add(bd);
+    const ch=SP(0.062,8,bM,0,-0.19,0.103); ch.scale.set(1.12,0.7,0.8); hg.add(ch);
+    const mu=BX(0.075,0.014,0.014,bM,0,-0.075,0.19); hg.add(mu);                       // bigote corto
+  }
+  // Anteojos rectangulares de marco fino (opción glassesStyle:'rect')
+  if(glasses&&opts.glassesStyle==='rect'){
+    const fM=mkStd(opts.glassesColor||0x1c1f26,0.35,0.3);
+    const lensM=mkStd(0xbfd8e6,0.1,0.1,{transparent:true,opacity:0.18});
+    [-0.075,0.075].forEach(ex=>{
+      hg.add(BX(0.088,0.009,0.01,fM,ex,0.05,0.214)); hg.add(BX(0.088,0.007,0.01,fM,ex,-0.008,0.214));
+      hg.add(BX(0.008,0.058,0.01,fM,ex-0.044,0.021,0.214)); hg.add(BX(0.008,0.058,0.01,fM,ex+0.044,0.021,0.214));
+      const ln=new THREE.Mesh(new THREE.PlaneGeometry(0.084,0.054),lensM); ln.position.set(ex,0.021,0.212); hg.add(ln);
+      hg.add(BX(0.008,0.01,0.2,fM,ex>0?0.192:-0.192,0.045,0.11));
+    });
+    hg.add(BX(0.035,0.008,0.01,fM,0,0.035,0.216));
+  }
+  // Anteojos sutiles: dos aros finos, puente y patillas
+  else if(glasses){
+    const fM=mkStd([0x1c1c20,0x5a3a22,0x8a8f96][Math.floor(rnd(8)*3)],0.4,0.2);
+    [-0.075,0.075].forEach(ex=>{ const rim=new THREE.Mesh(new THREE.TorusGeometry(0.044,0.007,5,16),fM); rim.position.set(ex,0.02,0.214); rim.scale.set(1.1,0.85,1); hg.add(rim);
+      const tp=BX(0.008,0.012,0.2,fM,ex>0?0.192:-0.192,0.03,0.11); hg.add(tp); });
+    hg.add(BX(0.045,0.01,0.01,fM,0,0.028,0.218));
   }
   hg.userData={isHead:true}; g.add(hg);
+
+  if(opts.doctorOutfit){
+    const shirtM=mkStd(0xf6f6f2,0.8,0);
+    const v=BX(0.15,0.36,0.02,shirtM,0,1.3,0.138); g.add(v);                      // camisa en V
+    [-1,1].forEach(sd=>{ const c=BX(0.07,0.13,0.02,shirtM,sd*0.07,1.46,0.13); c.rotation.z=sd*0.5; c.rotation.x=-0.25; g.add(c); }); // cuello abierto
+    [-1,1].forEach(sd=>{ const l=BX(0.06,0.4,0.02,mkStd(shade(top,0.75),0.8,0),sd*0.1,1.27,0.142); l.rotation.z=sd*-0.22; g.add(l); }); // solapas
+    const stM=mkStd(0x2b3440,0.5,0.1), metM=mkStd(0xc8ccd2,0.25,0.8);
+    const neck=new THREE.Mesh(new THREE.TorusGeometry(0.13,0.012,6,20,Math.PI),stM); neck.position.set(0,1.5,0.0); neck.rotation.x=-Math.PI/2+0.35; neck.rotation.z=Math.PI; g.add(neck); // por detrás del cuello
+    [[-1,0.32],[1,0.2]].forEach(([sd,len])=>{ const t=CY(0.012,0.012,len,6,stM,sd*0.14,1.5-len/2,0.1); t.rotation.z=sd*0.15; g.add(t); });
+    const bell=CY(0.035,0.035,0.018,12,metM,0.15,1.29,0.15); bell.rotation.x=Math.PI/2; g.add(bell); // campana
+    [-0.025,0.025].forEach(dx=>g.add(SP(0.014,6,metM,-0.17+dx,1.17,0.15)));        // olivas
+  }
 
   // ── ACCESORIOS POR ROL
   if(role==='police'){
@@ -4795,7 +4888,7 @@ function spawnNPCs(lite){ // lite: celular -- menos personas, mismas rutas princ
     const skin=SKINS[Math.floor(Math.random()*SKINS.length)];
     const hair=HAIRS[Math.floor(Math.random()*HAIRS.length)];
     const top=TOPS[Math.floor(Math.random()*TOPS.length)];
-    const pantsC=[0x223344,0x444422,0x333322,0x442233,0x334433][Math.floor(Math.random()*5)];
+    const pantsC=PANTS[Math.floor(Math.random()*PANTS.length)];
     const npc=buildCharacter({skin,hair,top,pants:pantsC,shoes:0x111111,role:'civilian'});
     npc.position.set(d.x,0,d.z);
     npc.userData.isNPC=true; npc.userData.isWalking=true;
@@ -5087,6 +5180,35 @@ function spawnCabinCrewFallback(){
 // Fase 8: LOD frame counter para throttling de NPCs lejanos
 let _npcFrame=0;
 function _lerpAngle(a,b,t){ let d=((b-a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI; return a+d*t; }
+// ── FASE 55: pose de caminata articulada ──
+// Pierna: muslo oscila desde la cadera; la rodilla se flexiona sobre todo en
+// el "vuelo" (cuando la pierna pasa hacia adelante). Brazo: opuesto a la
+// pierna del mismo lado, con un pequeño retraso y el codo apenas doblado.
+function _joint(c){ if(c._jt===undefined) c._jt=c.children.find(o=>o.userData&&o.userData.isJoint)||null; return c._jt; }
+function _walkPose(npc,ph,k){
+  const ud=npc.userData;
+  if(ud.armLag==null){ ud.armLag=0.18+Math.random()*0.25; ud.armAmp=0.24+Math.random()*0.12; ud.strideAmp=0.36+Math.random()*0.08; }
+  npc.children.forEach(c=>{
+    const u=c.userData;
+    if(u.isLeg){
+      const lp=ph+(u.side>0?0:Math.PI);
+      c.rotation.x=ud.strideAmp*k*Math.sin(lp);
+      const j=_joint(c);
+      if(j){ const sw=Math.max(0,-Math.cos(lp-0.35)); j.rotation.x=k*(0.05+0.7*sw*Math.sqrt(sw)+0.08*Math.max(0,Math.cos(lp))); }
+    } else if(u.isArm){
+      const ap=ph+(u.side<0?Math.PI:0)-ud.armLag;
+      const a=Math.sin(ap);
+      c.rotation.x=ud.armAmp*k*a;
+      const j=_joint(c); if(j) j.rotation.x=-k*(0.16+0.24*Math.max(0,-a));
+    }
+  });
+}
+function _relaxPose(npc,f){
+  npc.children.forEach(c=>{
+    if(c.userData.isLeg||c.userData.isArm){ c.rotation.x*=f; const j=_joint(c); if(j) j.rotation.x*=f; }
+  });
+}
+
 function updateNPCs(delta, speedFactor){
   const playerPos=camera.position;
   const t=clock.getElapsedTime();
@@ -5143,30 +5265,25 @@ function updateNPCs(delta, speedFactor){
           // Media vuelta: se detiene, apoya los pies y gira despacio (sin "saltos")
           ud.turnT-=delta;
           npc.position.y=0; npc.rotation.z*=0.9;
-          npc.children.forEach(c=>{ if(c.userData.isLeg||c.userData.isArm) c.rotation.x*=(1-Math.min(1,delta*5)); });
+          _relaxPose(npc,1-Math.min(1,delta*5));
         } else {
           ud.progress+=delta*ud.spd*0.055*walkMult*(speedFactor||1.0);
           if(ud.progress>=1){ ud.progress=0; const tmp=ud.start.clone(); ud.start.copy(ud.dest); ud.dest.copy(tmp); ud.turnT=1.3; }
           const pos=ud.start.clone().lerp(ud.dest,ud.progress);
-          // Ciclo de paso: piernas y brazos alternados + leve rebote y balanceo
-          ud.wt+=delta*ud.spd*4.5;
-          const sw=Math.sin(ud.wt)*0.45;
-          npc.children.forEach(c=>{
-            if(c.userData.isLeg) c.rotation.x=sw*c.userData.side;
-            if(c.userData.isArm) c.rotation.x=-sw*c.userData.side*0.55;
-          });
-          const bob=calmMode?0.018:0.035;
-          npc.position.set(pos.x+avoidX,Math.abs(Math.sin(ud.wt))*bob*npc.scale.y,pos.z+avoidZ);
-          npc.rotation.z=Math.sin(ud.wt)*0.022;
+          // Ciclo de paso (FASE 55): cadencia propia de cada persona, rodillas que
+          // se flexionan al adelantar la pierna, brazos opuestos y algo desfasados
+          if(!ud.cadence) ud.cadence=4.0+Math.random()*0.9;
+          ud.wt+=delta*ud.spd*ud.cadence*(calmMode?0.85:1);
+          _walkPose(npc,ud.wt,calmMode?0.8:1);
+          const bob=calmMode?0.016:0.028;
+          npc.position.set(pos.x+avoidX,Math.abs(Math.cos(ud.wt))*bob*npc.scale.y,pos.z+avoidZ);
+          npc.rotation.z=Math.sin(ud.wt)*0.018;
         }
         // Orientación suave hacia la dirección de marcha (gira en ~1 s al dar la vuelta)
         if(dir.lengthSq()>0.0001) npc.rotation.y=_lerpAngle(npc.rotation.y,Math.atan2(dir.x,dir.z),Math.min(1,delta*(ud.turnT>0?3:8)));
       } else {
         // En pausa: de pie, quieto -- piernas/brazos vuelven a reposo suavemente
-        npc.children.forEach(c=>{
-          if(c.userData.isLeg) c.rotation.x*=(1-Math.min(1,delta*3));
-          if(c.userData.isArm) c.rotation.x*=(1-Math.min(1,delta*3));
-        });
+        _relaxPose(npc,1-Math.min(1,delta*3));
         npc.position.y=0;
         // Balanceo de peso muy sutil (persona quieta, no estatua)
         ud.idlePhase=(ud.idlePhase||0)+delta*0.6;
@@ -5192,8 +5309,8 @@ function updateNPCs(delta, speedFactor){
       if(ud.role==='agent'){
         // Typing arm motion
         npc.children.forEach(c=>{
-          if(c.userData.isArm&&c.userData.side===1) c.rotation.x=-0.3-Math.abs(Math.sin(ud.idlePhase*2.5))*0.25;
-          if(c.userData.isArm&&c.userData.side===-1) c.rotation.x=-0.1-Math.abs(Math.sin(ud.idlePhase*2.5+1))*0.18;
+          if(c.userData.isArm&&c.userData.side===1){ c.rotation.x=-0.3-Math.abs(Math.sin(ud.idlePhase*2.5))*0.25; const j=_joint(c); if(j) j.rotation.x=-0.75; }
+          if(c.userData.isArm&&c.userData.side===-1){ c.rotation.x=-0.1-Math.abs(Math.sin(ud.idlePhase*2.5+1))*0.18; const j=_joint(c); if(j) j.rotation.x=-0.85; }
         });
       }
 
@@ -7186,9 +7303,19 @@ function buildBaggageHall(){
   });
   [0,Math.PI].forEach(ry=>_arrPanel(8.5,3.5,-165.5+(ry?-0.01:0),4.2,2.1,fids,ry));
   _arrBox(8.5-1.8,8.5-1.76,4.55,Hh.H,-165.52,-165.48,trimM); _arrBox(8.5+1.76,8.5+1.8,4.55,Hh.H,-165.52,-165.48,trimM);
-  // Mostrador de equipaje perdido (pared este): tranquiliza saber que existe
-  _arrBox(27.4,29.6,0,1.05,-187.5,-184.5,B(0x3d6b8c)); _arrBox(27.3,29.7,1.05,1.12,-187.6,-184.4,B(0xd9dde1));
-  _arrPanel(Hh.x1-0.03,2.6,-186,3.6,1.2,_arrSignTex([['Equipaje perdido · Lost & found',64,'#ffffff'],['Si tu valija no aparece, acá te ayudamos.',44,'#cfe9f5']],{bg:'#24506b',bar:'#7cc4e8',h:300}),-Math.PI/2);
+  // Mostrador de asistencia / equipaje perdido (pared este): tranquiliza saber que existe.
+  // FASE 55: atendido por Lucía; detrás queda espacio para ella.
+  _arrBox(26.9,27.9,0,1.05,-187.5,-184.5,B(0x3d6b8c)); _arrBox(26.8,28.0,1.05,1.12,-187.6,-184.4,B(0xd9dde1));
+  _arrBox(26.86,26.9,0.2,0.95,-187.4,-184.6,B(0x7cc4e8));                                  // filete claro del frente
+  _arrBox(27.35,27.4,1.12,1.5,-186.6,-186.0,darkM); _arrBox(27.3,27.6,1.12,1.14,-186.45,-186.15,darkM); // monitor
+  _arrBox(27.4,27.42,1.16,1.46,-186.57,-186.03,B(0x9fd0f0));
+  _arrPanel(Hh.x1-0.03,2.75,-186,3.6,1.2,_arrSignTex([['🛄 Asistencia de equipaje',66,'#ffffff'],['Baggage service · Lost & found',44,'#cfe9f5']],{bg:'#24506b',bar:'#7cc4e8',h:300}),-Math.PI/2);
+  const deskAgent=buildCharacter({skin:SKINS[3],hair:HAIRS[1],top:0x3d6b8c,pants:0x2a3442,shoes:0x111111,role:'agent',hatCol:0x24506b,tieCol:0xf08a24,female:true});
+  deskAgent.position.set(28.85,0.07,-186); deskAgent.rotation.y=-Math.PI/2;
+  deskAgent.userData.isNPC=true; deskAgent.userData.isStaff=true; deskAgent.userData.idlePhase=0.7;
+  deskAgent.userData.role='agent'; deskAgent.userData.baseRotY=-Math.PI/2;
+  npcs.push(deskAgent); scene.add(deskAgent);
+  addInteractable({id:'bag-desk',x:25.9,z:-186,radius:2.2,icon:'🛄',label:'Hablar con Asistencia de equipaje',root:deskAgent,onTrigger:openBagDesk});
   // Carritos portaequipajes (pared oeste) y bancos (pared este)
   for(let i=0;i<5;i++){ const z=-168-i*0.55;
     _arrBox(0.5,1.5,0.15,0.2,z-0.22,z+0.22,trimM); _arrBox(0.5,0.56,0.2,1.0,z-0.22,z+0.22,trimM); _arrBox(1.44,1.5,0.2,0.7,z-0.2,z+0.2,darkM); }
@@ -7201,7 +7328,7 @@ function buildBaggageHall(){
   // Personas esperando en la cinta 2 (de pie, mirando la cinta)
   const people=[];
   [[18.2,-173.9,0.2],[22.6,-173.8,-0.3],[25.6,-176.4,-1.3],[17.6,-180.3,2.9]].forEach(([x,z,ry],i)=>{
-    const p=buildCharacter({skin:SKINS[(i*2)%SKINS.length],hair:HAIRS[(i+2)%HAIRS.length],top:[0x445566,0x8a3b3b,0x2f6b4f,0x6b5a8a][i],pants:[0x2a2a35,0x3a3226,0x1f2a3a,0x333333][i],role:'civilian'});
+    const p=buildCharacter({skin:SKINS[(i*2)%SKINS.length],hair:HAIRS[(i+2)%HAIRS.length],top:TOPS[(i*5+2)%TOPS.length],pants:PANTS[(i*2)%PANTS.length],role:'civilian'});
     p.position.set(x,0.07,z); p.rotation.y=ry; scene.add(p); people.push(p);
   });
   const it=addInteractable({id:'my-bag',x:9999,z:9999,radius:1.9,icon:'🧳',label:'Retirar tu valija',root:null,onTrigger:pickMyBag});
@@ -7304,16 +7431,82 @@ function updateBaggageHall(delta,t){
 }
 function pickMyBag(){
   const s=_bh; if(!s||!s.mine||s.state!=='mine') return;
-  scene.remove(s.mine.g); s.bags.splice(s.bags.indexOf(s.mine),1); s.mine=null;
+  _collectBag(false);
+}
+// Retirada de la valija: desde la cinta (viaDesk=false) o entregada en Asistencia
+function _collectBag(viaDesk){
+  const s=_bh; if(!s||s.state==='done') return;
+  if(s.mine){ scene.remove(s.mine.g); s.bags.splice(s.bags.indexOf(s.mine),1); s.mine=null; }
   s.state='done'; s.it.x=s.it.z=9999;
-  playUiTone('success'); logInteraction('equipaje','retirada');
-  playVoice('bag-retirada');
+  playUiTone('success'); logInteraction('equipaje',viaDesk?'entregada en asistencia':'retirada');
+  if(!viaDesk) playVoice('bag-retirada');
   _drawBeltScreen(s.belt,'done');
-  _bagHud('✅','¡Valija retirada!','Lo lograste: esperaste con calma y la reconociste. Ahora, la salida.',false);
+  if(viaDesk) _bagHud('✅','¡Valija entregada!','Lucía verificó tu etiqueta y te la entregó. Ahora, la salida.',false);
+  else _bagHud('✅','¡Valija retirada!','Lo lograste: esperaste con calma y la reconociste. Ahora, la salida.',false);
   setTimeout(()=>{ const h=document.getElementById('bag-hud'); if(h&&_bh.state==='done') h.classList.add('hidden'); },6000);
   document.body.classList.add('has-bag');
   setTimeout(()=>{ if(_bh&&_bh.state==='done'&&isGameActive) showToast('🚪 Seguí hacia la Salida: con tu valija, la puerta se abre.'); },6500);
 }
+// ── FASE 55: Asistencia de equipaje (modal guiado) ──
+// Verifica la etiqueta contra el ticket. Si la valija todavía no salió,
+// tranquiliza y propone esperarla en la cinta (la práctica de la espera),
+// pero deja elegir que te la entreguen en el mostrador.
+let _bdTimer=null;
+function _bdEl(id){ return document.getElementById(id); }
+function _bdShow(ids){ ['btn-bagdesk-verify','btn-bagdesk-give','btn-bagdesk-done'].forEach(id=>_bdEl(id).classList.toggle('hidden',!ids.includes(id))); }
+function openBagDesk(){
+  clearInterval(_bdTimer); clearTimeout(_bdTimer);
+  const box=_bdEl('bagdesk-modal').querySelector('.interact-box');
+  box.classList.remove('bagdesk-checking','bagdesk-ok');
+  _bdEl('bd-fill').style.width='0%';
+  _bdEl('bagdesk-title').textContent='Hola, soy Lucía';
+  _bdEl('bagdesk-note').classList.add('hidden');
+  _bdEl('bagdesk-step').textContent=_hasBag()
+    ?'¿Querés que confirmemos que esa valija es la tuya? Comparo la etiqueta con tu ticket de vuelo.'
+    :'Te ayudo con tu equipaje. Primero comparo la etiqueta de tu valija con tu ticket de vuelo.';
+  _bdShow(['btn-bagdesk-verify']);
+  openUiModal('bagdesk-modal');
+}
+function verifyBagDesk(){
+  const box=_bdEl('bagdesk-modal').querySelector('.interact-box');
+  _bdShow([]); box.classList.add('bagdesk-checking');
+  _bdEl('bagdesk-step').textContent='Verificando etiqueta de equipaje con el ticket de vuelo…';
+  const dur=calmMode?3200:2600, t0=performance.now();
+  clearInterval(_bdTimer);
+  _bdTimer=setInterval(()=>{
+    const pct=Math.min(100,(performance.now()-t0)/dur*100); _bdEl('bd-fill').style.width=pct+'%';
+    if(pct<100) return;
+    clearInterval(_bdTimer);
+    box.classList.remove('bagdesk-checking'); box.classList.add('bagdesk-ok'); playUiTone('success');
+    _bdEl('bagdesk-step').textContent='✓ La etiqueta 3421-14C coincide con tu ticket: vuelo 3421, asiento 14C.';
+    _bdTimer=setTimeout(_bagDeskResult,1300);
+  },100);
+}
+function _bagDeskResult(){
+  if(_hasBag()){ _bagDeskSuccess(); return; }
+  const onBelt=_bh&&_bh.state==='mine';
+  _bdEl('bagdesk-title').textContent=onBelt?'Tu valija ya está en la cinta':'Tu valija está en camino';
+  _bdEl('bagdesk-step').textContent=onBelt
+    ?'Está dando vueltas en la cinta 2: azul, con la cinta naranja. Podés retirarla ahí o, si preferís, te la acerco yo.'
+    :'Está registrada y sale por la cinta 2. Todo está en orden: solo hay que esperar un poco. Si preferís no esperar, te la acerco yo.';
+  _bdEl('bagdesk-note').textContent='Esperar sin saber exactamente cuándo es incómodo, y está bien sentirlo. Respirá lento mientras mirás la cinta.';
+  _bdEl('bagdesk-note').classList.remove('hidden');
+  _bdEl('btn-bagdesk-done').textContent=onBelt?'Voy a la cinta':'Espero en la cinta';
+  _bdShow(['btn-bagdesk-done','btn-bagdesk-give']);
+}
+function _bagDeskSuccess(){
+  const had=_hasBag();
+  if(!had) _collectBag(true);
+  _bdEl('bagdesk-title').textContent=had?'Equipaje verificado':'¡Equipaje entregado!';
+  _bdEl('bagdesk-step').textContent=(had?'Equipaje verificado con éxito: es tuyo. ':'Equipaje entregado con éxito. ')+'Completaste todo el recorrido del viaje de forma segura. ¡Felicitaciones!';
+  _bdEl('bagdesk-note').textContent='Solo queda cruzar la salida «Nada que declarar»: del otro lado te esperan.';
+  _bdEl('bagdesk-note').classList.remove('hidden');
+  _bdEl('btn-bagdesk-done').textContent='Ir a la salida';
+  _bdShow(['btn-bagdesk-done']);
+  logInteraction('asistencia equipaje',had?'verificado':'entregado');
+}
+function closeBagDesk(){ clearInterval(_bdTimer); clearTimeout(_bdTimer); closeUiModal('bagdesk-modal'); }
+
 function _resetBaggageHall(){
   const s=_bh; if(!s) return;
   s.bags.forEach(b=>scene.remove(b.g)); s.bags=[]; s.mine=null; s.spawned=0; s.state='idle'; s.t=0;
@@ -7412,7 +7605,7 @@ function buildExitHall(){
   // Personas esperando, algunas con carteles; una espera a quien recorrió AeroCalma
   const people=[];
   const add=(x,z,ry,i,sign)=>{
-    const p=buildCharacter({skin:SKINS[i%SKINS.length],hair:HAIRS[(i*3)%HAIRS.length],top:[0x8a3b3b,0x2f6b4f,0x445566,0xc9a227,0x6b5a8a,0x2f4f6b,0xb05a2a][i%7],pants:[0x2a2a35,0x3a3226,0x1f2a3a,0x333333][i%4],role:'civilian'});
+    const p=buildCharacter({skin:SKINS[i%SKINS.length],hair:HAIRS[(i*3)%HAIRS.length],top:TOPS[(i*7+3)%TOPS.length],pants:PANTS[(i*3+1)%PANTS.length],role:'civilian'});
     p.position.set(x,0.07,z); p.rotation.y=ry; scene.add(p); people.push(p);
     if(sign){ const t=_greeterSign(sign[0],sign[1],sign[2]||0.7,sign[3]||0.4); const m=new THREE.Mesh(new THREE.PlaneGeometry(sign[2]||0.7,sign[3]||0.4),new THREE.MeshBasicMaterial({map:t,toneMapped:false,side:THREE.DoubleSide}));
       m.position.set(x+Math.sin(ry)*0.42,1.3,z+Math.cos(ry)*0.42); m.rotation.y=ry; scene.add(m); }
