@@ -218,6 +218,7 @@ function init(){
   buildWorld();
   _arrHideIntruders(); // FASE 48: la sala de llegadas queda limpia
   buildInteractiveSpots(); // FASE 37: mostrador B2 y kiosko de bienestar
+  buildGuideArrows();      // FASE 58: flechas guía en el piso
   captureFloorReflections(); // después del mundo y antes de las personas
   spawnNPCs(isMobile); // en celular, versión liviana (5 caminantes + tripulación)
   spawnStaffNPCs();
@@ -5517,7 +5518,7 @@ function toggleGuidedMode(){
     btn.firstChild.textContent=guidedMode?' 📍 Modo Guiado':' 🗺 Modo Libre';
   }
   const hint=btn?btn.parentElement.querySelector('.calm-hint'):null;
-  if(hint) hint.textContent=guidedMode?'Los paneles se abren automáticamente':'Explorás libremente sin interrupciones';
+  if(hint) hint.textContent=guidedMode?'Flechas en el piso y paneles automáticos te guían':'Explorás libremente sin interrupciones';
 }
 
 // ── IR DIRECTO A UNA ZONA ─────────────────────────
@@ -7187,6 +7188,102 @@ function deplaneToArrivals(){
     setTimeout(()=>ov.classList.add('hidden'),900);
   },3400);
 }
+
+// ─── FASE 58: FLECHAS GUÍA ──────────────────────────────────
+// Cuatro chevrones luminosos en el piso, delante de la persona, que siguen la
+// ruta del recorrido (terminal → puerta A7 → manga → asiento 14C · Madrid →
+// cinta 2 → tu valija → salida → encuentro). Destellan en ola hacia adelante.
+// Solo en Modo Guiado; se ocultan con paneles abiertos, en vuelo y en pausa.
+// En Modo Calma destellan más lento y suave.
+const GUIDE_STEPS=[1.5,2.5,3.5,4.5];
+let _guide=null;
+function buildGuideArrows(){
+  const sh=new THREE.Shape();
+  sh.moveTo(0,0.24); sh.lineTo(0.38,-0.13); sh.lineTo(0.24,-0.25); sh.lineTo(0,-0.02); sh.lineTo(-0.24,-0.25); sh.lineTo(-0.38,-0.13); sh.closePath();
+  const geo=new THREE.ExtrudeGeometry(sh,{depth:0.05,bevelEnabled:true,bevelThickness:0.012,bevelSize:0.012,bevelSegments:1});
+  geo.rotateX(-Math.PI/2);                       // acostada; la punta mira a -Z
+  const arrows=GUIDE_STEPS.map(()=>{
+    const m=new THREE.MeshBasicMaterial({color:0x5ef2ff,transparent:true,opacity:0.8,depthWrite:false,toneMapped:false});
+    m.userData.guide=true;                       // material propio: no se comparte al optimizar
+    const a=new THREE.Mesh(geo,m); a.visible=false; a.renderOrder=5; a.frustumCulled=false;
+    // Borde oscuro debajo: contraste sobre el piso claro de la terminal
+    const om=new THREE.MeshBasicMaterial({color:0x0b2e4a,transparent:true,opacity:0.55,depthWrite:false,toneMapped:false}); om.userData.guide=true;
+    const ol=new THREE.Mesh(geo,om); ol.scale.set(1.28,0.5,1.28); ol.position.set(0,-0.02,0.03); ol.renderOrder=4; a.add(ol);
+    a.userData.arr=true; scene.add(a); return a;
+  });
+  _guide={arrows,t:0};
+}
+// Altura del piso según la región (terminal, cabina, Madrid)
+function _guideFloor(z){ return z<ARR.regionZ?0.07:(z<CABIN.zFront+0.5&&z>CABIN.zRear-1)?CABIN.floorY:0.09; }
+// Ruta completa de la etapa actual (lista de puntos {x,z})
+function _guideNodes(){
+  const p=camera.position, P=(x,z)=>({x,z});
+  if(p.z<ARR.regionZ){                                   // Madrid
+    const r=[P(ARR.jetX0+1.2,ARR.jetZ),P(ARR.jetX1-0.4,ARR.jetZ),P(16.2,ARR.walkZ0),P(16.2,ARR.walkZ1),P(HALL.doorX,HALL.z0+1.2),P(HALL.doorX,HALL.z0-2)];
+    if(!_hasBag()){
+      const mine=_bh&&_bh.state==='mine'&&_bh.mine;
+      r.push(mine?P(mine.g.position.x,mine.g.position.z):P(BELTS[1].cx,BELTS[1].cz+BELTS[1].r+2.0));
+      return r;
+    }
+    r.push(P(HALL.doorX,HALL.z1+2),P(HALL.doorX,EXITH.cz1-1),P(EXITH.meet.x,EXITH.meet.z+0.9));
+    return r;
+  }
+  const seat=_seat14C?[P(0,CABIN.firstRowZ),P(0,_seat14C.z+0.6),P(_seat14C.x+0.4,_seat14C.z)]:[];
+  const cabin=[P(0,GATE.z+1.1),...JETWAY.map(([x,z])=>P(x,z)),P(0,-35.0),...seat];
+  if(p.z<GATE.z) return cabin;                           // manga y avión
+  // Por el pasillo central; en la sala de embarque se esquiva el kiosco de información (0,-10)
+  const hall=['entrance','checkin','security','lounge'].map(id=>{ const z=ZONE_DATA.find(d=>d.id===id); return P(id==='lounge'?1.8:0,z.position.z); });
+  hall.push(P(0.4,GATE.z+2.1));                           // tótem de escaneo
+  return gateFlapTarget?hall.concat(cabin):hall;
+}
+// Recorta la ruta desde el tramo más cercano a la persona
+function _guideRoute(){
+  const n=_guideNodes(), p=camera.position;
+  if(n.length<2) return n;
+  let best=0, bd=Infinity;
+  for(let i=0;i<n.length-1;i++){
+    const a=n[i], b=n[i+1], vx=b.x-a.x, vz=b.z-a.z, L2=vx*vx+vz*vz||1e-6;
+    const t=Math.max(0,Math.min(1,((p.x-a.x)*vx+(p.z-a.z)*vz)/L2));
+    const d=Math.hypot(p.x-(a.x+vx*t),p.z-(a.z+vz*t));
+    if(d<=bd+0.25){ bd=Math.min(bd,d); best=i; }
+  }
+  return n.slice(best+1);
+}
+function updateGuideArrows(delta){
+  if(!_guide) return;
+  const show=isGameActive&&guidedMode&&!isPaused&&!uiModalOpen&&!_flight&&!_autoWalk&&!_deplaning&&!_endPending;
+  const A=_guide.arrows;
+  if(!show){ A.forEach(a=>a.visible=false); return; }
+  _guide.t+=delta;
+  const p=camera.position, route=_guideRoute();
+  // Recorrido como polilínea desde la persona
+  const pts=[{x:p.x,z:p.z},...route];
+  const last=route[route.length-1];
+  const nearEnd=!last||Math.hypot(last.x-p.x,last.z-p.z)<1.3;
+  const t=_guide.t, sp=calmMode?2.2:4.0, amp=calmMode?0.45:0.7;
+  GUIDE_STEPS.forEach((d,i)=>{
+    const a=A[i];
+    if(nearEnd){ a.visible=false; return; }
+    let rem=d, k=0, pos=null, dir=null;
+    while(k<pts.length-1){
+      const s0=pts[k], s1=pts[k+1], L=Math.hypot(s1.x-s0.x,s1.z-s0.z);
+      if(L>1e-4&&rem<=L){ const f=rem/L; pos={x:s0.x+(s1.x-s0.x)*f,z:s0.z+(s1.z-s0.z)*f}; dir={x:(s1.x-s0.x)/L,z:(s1.z-s0.z)/L}; break; }
+      rem-=L; k++;
+    }
+    if(!pos){ a.visible=false; return; }               // la ruta termina antes
+    a.visible=true;
+    const y=_guideFloor(pos.z)+0.05+Math.sin(t*2.4+i*0.7)*0.025;
+    a.position.set(pos.x,y,pos.z);
+    a.rotation.y=Math.atan2(-dir.x,-dir.z);
+    // Destello en ola hacia adelante (de la flecha cercana a la lejana)
+    const w=Math.max(0,Math.sin(t*sp-i*0.9));
+    const glow=0.35+amp*w*w;
+    a.material.opacity=0.45+0.5*w;
+    a.material.color.setRGB(0.02,0.5*glow+0.1,0.92*glow+0.15);   // azul saturado; en el pico apenas pasa 1 → destello suave (bloom)
+    const sc=1+0.12*w; a.scale.set(sc,1,sc);
+  });
+}
+
 // El final del recorrido espera a que termine la voz (no la corta)
 let _endPending=false;
 function _endWhenQuiet(){
@@ -8067,6 +8164,7 @@ function animate(){
   updateJetSounds(delta);       // FASE 44: aviones a lo lejos en Embarque
   if(chargeLeds.length){ const k=0.6+Math.abs(Math.sin(t*1.6))*0.9; chargeLeds.forEach(l=>l.material.emissiveIntensity=k); }
   updateAutoWalk(delta);        // FASE 43: caminata guiada por la manga
+  updateGuideArrows(delta);     // FASE 58: flechas guía en el piso
   updateCabinSeq(delta);        // FASE 46: anuncios de a bordo
   if(_arrWalkTex) _arrWalkTex.offset.y-=delta*(calmMode?0.22:0.33); // FASE 48: cinta caminadora
   updateBaggageHall(delta,t);   // FASE 49: sala de equipajes
