@@ -8072,14 +8072,8 @@ function buildHallQuality(){
     var sign=new THREE.Mesh(mkBox(4,1.2,0.1),sm);
     sign.position.set(s.x,8,s.z); scene.add(sign);
   });
-  var tapeMat=new THREE.MeshStandardMaterial({color:0xffcc00,roughness:0.5,metalness:0.1,emissive:0xffcc00,emissiveIntensity:0.15});
-  var postMat=mkStd(0xdddddd,0.5,0.05);
-  for(var ti=0;ti<=20;ti+=5){
-    var post=new THREE.Mesh(mkBox(0.08,2.2,0.08),postMat);
-    post.position.set(-8+ti,1.1,28); scene.add(post);
-    var tape=new THREE.Mesh(mkBox(0.08,0.04,6),tapeMat);
-    tape.position.set(-8+ti,1.8,28); scene.add(tape);
-  }
+  // FASE 59: se quitaron las cintas amarillas a 1,8 m frente a los mostradores:
+  // parecían cerrar el paso al check-in.
   // (-16,38) y (-16,30) quedaban dentro del consultorio y de los baños
   [[16,38],[16,30],[-16,22],[16,22]].forEach(function(pp){ addPlant(pp[0],pp[1],1.0+Math.random()*0.5); });
   var binColors=[0x44aa44,0x4488cc,0xcccc44];
