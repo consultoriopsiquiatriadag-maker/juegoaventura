@@ -878,7 +878,7 @@ function _magCoverTex(title,c1,c2){
   return tex(256,340,(ctx)=>{ const g=ctx.createLinearGradient(0,0,0,340); g.addColorStop(0,c1); g.addColorStop(1,c2); ctx.fillStyle=g; ctx.fillRect(0,0,256,340);
     ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.font='bold 20px Georgia'; ctx.fillText('AeroCalma',16,34); ctx.fillRect(16,44,224,3);
     ctx.fillStyle='#fff'; ctx.font='bold 26px Georgia'; _wrapLines(ctx,title,224,6).forEach((l,i)=>ctx.fillText(l,16,110+i*32));
-    ctx.font='16px Arial'; ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.fillText('Dr. Pedro Dagnino',16,322); });
+    ctx.font='16px Arial'; ctx.fillStyle='rgba(255,255,255,0.8)'; ctx.fillText('Dr. Pedro Nicolas Dagnino',16,322); });
 }
 function buildMagazineStand(){
   const spot=_freeSpot([{x:-6.5,z:-13.5},{x:6,z:-4.5},{x:-6,z:-4.5},{x:5.5,z:-17.5}],1.3)||{x:-6.5,z:-13.5};
@@ -1529,7 +1529,7 @@ function setupInteractionUI(){
 // (gira la cabeza hacia el visitante) y se ofrece escribir por WhatsApp a la
 // Central de turnos. El enlace se abre solo si el usuario lo toca.
 const CONSULTORIO_WHATSAPP='5491124769361'; // Central de turnos (formato internacional, sin +)
-const CONSULTORIO_MSG='Hola, me comunico desde AeroCalma. Quisiera solicitar un turno con el Dr. Pedro Dagnino.';
+const CONSULTORIO_MSG='Hola, me comunico desde AeroCalma. Quisiera solicitar un turno con el Dr. Pedro Nicolas Dagnino.';
 let officeDoor=null, officeDoorTarget=0, officeDoctor=null, _officeCloseT=0;
 
 function buildConsultorio(){
@@ -1579,12 +1579,23 @@ function buildConsultorio(){
   [-0.55,0.55].forEach(z=>{ const m=new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.46),new THREE.MeshStandardMaterial({map:dip,roughness:0.6})); m.position.set(0.21,1.85,z); m.rotation.y=Math.PI/2; g.add(m); });
   // Cartel del local (sobre el frente)
   const st=tex(1024,160,(ctx)=>{ ctx.fillStyle='#16324a'; ctx.fillRect(0,0,1024,160); ctx.fillStyle='#ffffff'; ctx.textAlign='center';
-    ctx.font='bold 54px Georgia'; ctx.fillText('Consultorio Dr. Pedro Dagnino',512,76); ctx.fillStyle='#8fd3f0'; ctx.font='34px Arial'; ctx.fillText('PSIQUIATRÍA',512,128); });
+    ctx.font='bold 52px Georgia'; ctx.fillText('Consultorio Dr. Pedro Nicolas Dagnino',512,74,980); ctx.fillStyle='#8fd3f0'; ctx.font='32px Arial'; ctx.fillText('Médico especialista en Psiquiatría y Medicina Aeronáutica',512,128,980); });
   st.encoding=THREE.sRGBEncoding;
   const sign=new THREE.Mesh(new THREE.PlaneGeometry(5.4,0.84),new THREE.MeshStandardMaterial({map:st,emissive:0xffffff,emissiveMap:st,emissiveIntensity:0.45,roughness:0.6}));
-  sign.position.set(D+0.1,H-0.55,0); sign.rotation.y=Math.PI/2; g.add(sign);
+  sign.position.set(D+0.165,H-0.55,0); sign.rotation.y=Math.PI/2; g.add(sign);
+  // FASE 61: retroiluminación LED -- el cartel se separa de la pared y un halo
+  // celeste-blanco se escapa por los bordes, como un letrero con LED detrás.
+  const panel=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.84,5.4),new THREE.MeshStandardMaterial({color:0x0f2436,roughness:0.5,metalness:0.3}));
+  panel.position.set(D+0.13,H-0.55,0); g.add(panel);
+  const halo=tex(640,170,(ctx)=>{ ctx.clearRect(0,0,640,170);
+    ctx.shadowColor='rgba(255,255,255,1)'; ctx.fillStyle='rgba(255,255,255,1)';
+    for(const b of [46,28,14]){ ctx.shadowBlur=b; ctx.fillRect(50,43,540,84); } });
+  const haloM=new THREE.MeshBasicMaterial({map:halo,transparent:true,depthWrite:false,toneMapped:false});
+  haloM.color.setRGB(0.4,1.5,2.4);           // >1: el bloom lo hace "brillar" como LED
+  const hp=new THREE.Mesh(new THREE.PlaneGeometry(6.4,1.7),haloM);
+  hp.position.set(D+0.09,H-0.55,0); hp.rotation.y=Math.PI/2; hp.renderOrder=2; g.add(hp);
   // Placa junto a la puerta
-  const pl=tex(256,128,(ctx)=>{ ctx.fillStyle='#d9c48a'; ctx.fillRect(0,0,256,128); ctx.fillStyle='#3a2e14'; ctx.textAlign='center'; ctx.font='bold 24px Georgia'; ctx.fillText('Dr. Pedro Dagnino',128,56); ctx.font='18px Georgia'; ctx.fillText('Psiquiatría',128,90); });
+  const pl=tex(256,128,(ctx)=>{ ctx.fillStyle='#d9c48a'; ctx.fillRect(0,0,256,128); ctx.fillStyle='#3a2e14'; ctx.textAlign='center'; ctx.font='bold 24px Georgia'; ctx.fillText('Dr. Pedro Nicolas Dagnino',128,50,236); ctx.font='17px Georgia'; ctx.fillText('Psiquiatría y',128,82,236); ctx.fillText('Medicina Aeronáutica',128,104,236); });
   pl.encoding=THREE.sRGBEncoding;
   const plate=new THREE.Mesh(new THREE.PlaneGeometry(0.42,0.21),new THREE.MeshStandardMaterial({map:pl,roughness:0.35,metalness:0.4}));
   plate.position.set(D+0.09,1.5,1.0); plate.rotation.y=Math.PI/2; g.add(plate);
@@ -1596,7 +1607,7 @@ function buildConsultorio(){
   const knob=new THREE.Mesh(new THREE.SphereGeometry(0.04,10,8),mkStd(0xd4b25a,0.25,0.8)); knob.position.set(0.06,1.05,DW-0.16); officeDoor.add(knob);
 
   // El doctor, sentado y de frente a la puerta
-  // El doctor es Pedro Dagnino: pelo corto canoso peinado hacia atrás, anteojos
+  // El doctor es Pedro Nicolas Dagnino: pelo corto canoso peinado hacia atrás, anteojos
   // rectangulares oscuros, barba corta canosa, saco azul marino, camisa blanca y estetoscopio.
   officeDoctor=buildCharacter({skin:0xedc4a4,hair:0x8f8b86,top:0x1f2a44,pants:0x232b3a,shoes:0x1a1a1a,role:'civilian',
     female:false,hairStyle:'swept',glasses:true,glassesStyle:'rect',stubble:0x6f6a66,doctorOutfit:true,seed:7});
@@ -1792,6 +1803,7 @@ function buildMateDispensers(){
       for(const sd of sides){
         for(const ax of [11.5,10.5,12.5]){
           const x=sd*ax;
+          if(sd<0&&z>-11&&z<-3) continue;            // FASE 61: frente del consultorio, despejado
           if(_floorIsFree(x,z,0.7)&&_floorIsFree(x-sd*1.0,z,0.4)){
             _buildMateDispenser(x,z,-sd); placed=true; n++; break;
           }
@@ -1880,7 +1892,7 @@ function _consultorioIdentity(g,D){
   new THREE.TextureLoader().load(DOCTOR_PHOTO,t=>{ t.encoding=THREE.sRGBEncoding; t.anisotropy=renderer.capabilities.getMaxAnisotropy(); photoMat.map=t; photoMat.needsUpdate=true; });
   const ph=new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.93),photoMat); ph.position.set(D+0.15,1.78,-1.85); ph.rotation.y=Math.PI/2; g.add(ph);
   // Rótulo bajo la foto
-  const lt=tex(512,96,(ctx)=>{ ctx.fillStyle='#1d2633'; ctx.fillRect(0,0,512,96); ctx.fillStyle='#e9d9a6'; ctx.textAlign='center'; ctx.font='bold 34px Georgia'; ctx.fillText('Dr. Pedro Dagnino',256,44); ctx.fillStyle='#c9d6e6'; ctx.font='24px Georgia'; ctx.fillText('Médico Psiquiatra',256,80); });
+  const lt=tex(512,96,(ctx)=>{ ctx.fillStyle='#1d2633'; ctx.fillRect(0,0,512,96); ctx.fillStyle='#e9d9a6'; ctx.textAlign='center'; ctx.font='bold 34px Georgia'; ctx.fillText('Dr. Pedro Nicolas Dagnino',256,44,490); ctx.fillStyle='#c9d6e6'; ctx.font='20px Georgia'; ctx.fillText('Médico especialista en Psiquiatría y Medicina Aeronáutica',256,80,496); });
   lt.encoding=THREE.sRGBEncoding;
   const lb=new THREE.Mesh(new THREE.PlaneGeometry(0.8,0.15),new THREE.MeshStandardMaterial({map:lt,roughness:0.5}));
   lb.position.set(D+0.15,1.1,-1.85); lb.rotation.y=Math.PI/2; g.add(lb);
@@ -2560,7 +2572,8 @@ function buildZoneRings(){
 // Hall Ambience - ambient detail objects in the hall
 function buildHallAmbience(){
   // Plants in waiting areas
-  const plantPositions=[[-12,24],[-12,-5],[12,24],[12,-5],[-12,-20],[12,-20]];
+  // FASE 61: sin la planta de (-12,-5): tapaba la puerta del consultorio
+  const plantPositions=[[-12,24],[12,24],[12,-5],[-12,-20],[12,-20]];
   plantPositions.forEach(([px,pz])=>{ addPlant(px,pz,0.8+Math.random()*0.4); });
 
   // Extra benches in lounge area
@@ -2571,7 +2584,7 @@ function buildHallAmbience(){
   [[-5,38],[5,38],[-3,36],[3,36],[-4,40],[4,40]].forEach(([px,pz])=>{ addSuitcase(px,pz); });
 
   // Vending machines near lounge
-  [[13,-6],[-13,-6]].forEach(([px,pz])=>{ addVending(px,pz); });
+  addVending(13,-6);   // FASE 61: la de (-13,-6) tapaba el consultorio
 
   // Information monitors on side walls near check-in
   [[-17,20],[17,20],[-17,10],[17,10]].forEach(([wx,wz])=>{ addMonitor(wx,wz); });
@@ -6248,7 +6261,7 @@ function generateShareText(){
   if(anxietyPre>=0)  txt+=`Ansiedad inicial: ${anxietyPre}/10\n`;
   if(anxietyPost>=0) txt+=`Ansiedad final:   ${anxietyPost}/10\n`;
   txt+=`\nZonas visitadas:\n${zonas}\n\n` +
-    `Consultorio Dr. Pedro Dagnino – Psiquiatría\nhttps://aerocalma.netlify.app/`;
+    `Consultorio Dr. Pedro Nicolas Dagnino – Psiquiatría y Medicina Aeronáutica\nhttps://aerocalma.netlify.app/`;
   return txt;
 }
 function shareWithTherapist(){
