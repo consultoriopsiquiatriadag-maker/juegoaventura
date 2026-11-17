@@ -376,6 +376,28 @@
         </div>
     </div>
 
+    <!-- FASE 60: Preguntarle a una persona -->
+    <div id="talk-modal" class="overlay-dark overlay-soft hidden" role="dialog" aria-modal="true" aria-labelledby="talk-title">
+        <div class="interact-box talk-box">
+            <button id="btn-close-talk" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p id="talk-who" class="ib-eyebrow">💬 Pasajero</p>
+            <h2 id="talk-title">¿Qué le querés preguntar?</h2>
+            <p class="ib-sub">Pedir indicaciones es parte del viaje: en el aeropuerto la gente suele ayudar con gusto.</p>
+            <div class="talk-qs">
+                <button class="talk-q" type="button" data-q="banos"><span class="tq-ico">🚻</span>Disculpá, ¿dónde quedan los baños?</button>
+                <button class="talk-q" type="button" data-q="embarque"><span class="tq-ico">🛫</span>¿Por dónde se va al embarque, a la puerta A7?</button>
+                <button class="talk-q" type="button" data-q="cafe"><span class="tq-ico">☕</span>¿Dónde puedo tomar algo?</button>
+            </div>
+            <div id="talk-answer" class="talk-answer hidden" aria-live="polite">
+                <span id="talk-ava" class="talk-ava" aria-hidden="true">🙂</span>
+                <p id="talk-text"></p>
+            </div>
+            <div class="ib-actions">
+                <button id="btn-talk-done" class="btn-primary hidden" type="button">Gracias 🙌</button>
+            </div>
+        </div>
+    </div>
+
     <!-- FASE 38: Consultorio Dr. Pedro Dagnino -->
     <div id="office-modal" class="overlay-dark overlay-soft hidden" role="dialog" aria-modal="true" aria-labelledby="office-title">
         <div class="interact-box office-box">

@@ -1909,3 +1909,25 @@ body.has-bag #bag-chip { display: block; }
 #bd-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .2s linear; }
 .bd-actions { flex-wrap: wrap; justify-content: center; }
 @media (prefers-reduced-motion: reduce) { .bagdesk-checking .bd-dot { animation: none; opacity: .8; } }
+
+/* ── FASE 60: preguntarle a una persona ── */
+.talk-qs { display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.talk-q {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 13px 16px; border-radius: 14px; cursor: pointer;
+  border: 1.5px solid #dbe7f0; background: #f7fafc;
+  font-family: var(--ff-body); font-size: 0.97rem; color: var(--deep); text-align: left;
+  transition: border-color .2s, background .2s, transform .2s;
+}
+.talk-q:hover { border-color: var(--accent2); background: #effaf8; transform: translateX(3px); }
+.talk-q.chosen { border-color: var(--green); background: #e8f7ef; }
+.tq-ico { font-size: 1.4rem; flex: none; }
+.talk-answer {
+  display: flex; gap: 12px; align-items: flex-start; margin-top: 16px; text-align: left;
+  background: #fff8e8; border: 1px solid #f1dfb0; border-radius: 16px 16px 16px 4px; padding: 12px 14px;
+  animation: talkIn .35s ease-out;
+}
+.talk-ava { font-size: 1.8rem; line-height: 1; flex: none; }
+.talk-answer p { margin: 0; line-height: 1.5; color: var(--deep); font-size: 0.95rem; }
+@keyframes talkIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .talk-answer, .talk-q { animation: none; transition: none; } }

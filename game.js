@@ -1202,6 +1202,7 @@ function updateInteractables(delta,t){
   if(isGameActive&&!isPaused&&!uiModalOpen&&!_flight){
     const p=camera.position;
     for(const it of interactables){ const d=Math.hypot(p.x-it.x,p.z-it.z); if(d<it.radius&&d<bd){bd=d;best=it;} }
+    if(!best&&p.z>GATE.z){ const n=_nearestTalker(); if(n) best=_talkTrigger(n); }   // FASE 60
   }
   if(best!==activeInteractable){
     activeInteractable=best;
@@ -1246,6 +1247,117 @@ function closeUiModal(id){
   document.getElementById(id).classList.add('hidden');
   uiModalOpen=false;
   if(!isMobile&&isGameActive&&!isPaused) controls.lock();
+}
+
+
+// ─── FASE 60: PREGUNTARLE A LA GENTE ────────────────────────
+// Al acercarse a una persona de la terminal aparece "💬 Preguntar algo". Se
+// elige una de tres preguntas y la persona responde con indicaciones reales
+// según dónde estás parado y hacia dónde mirás. La persona se detiene y te
+// mira mientras conversan; al responder, las flechas del piso marcan el camino.
+let _talkNpc=null, _talkGuide=null;
+const TALK_R=2.4;
+function _talkable(n){
+  const r=n.userData.role;
+  if(!n.visible||n.userData.isPilotDetailed||n.userData.isAttendantDetailed) return false;
+  if(r!=='civilian'&&r!=='agent'&&r!=='police') return false;
+  return n.position.z>GATE.z+0.5&&n.position.z<56;     // solo en la terminal
+}
+function _talkWho(n){
+  const r=n.userData.role, f=n.userData.female;
+  if(r==='police') return {ico:'👮',name:f?'Oficial de seguridad':'Oficial de seguridad'};
+  if(r==='agent') return {ico:'🧑‍💼',name:f?'Agente del aeropuerto':'Agente del aeropuerto'};
+  return {ico:f?'👩':'👨',name:f?'Pasajera':'Pasajero'};
+}
+function _talkTrigger(n){
+  if(!n._talkIt) n._talkIt={id:'talk',icon:'💬',label:'Preguntar algo',radius:TALK_R,root:n,onTrigger:()=>openTalk(n)};
+  n._talkIt.x=n.position.x; n._talkIt.z=n.position.z;
+  return n._talkIt;
+}
+// Persona más cercana, delante de la cámara
+function _nearestTalker(){
+  const p=camera.position, f=new THREE.Vector3(); camera.getWorldDirection(f);
+  const fl=Math.hypot(f.x,f.z)||1; let best=null, bd=TALK_R;
+  for(const n of npcs){
+    if(!_talkable(n)) continue;
+    const dx=n.position.x-p.x, dz=n.position.z-p.z, d=Math.hypot(dx,dz);
+    if(d>=bd||d<0.2) continue;
+    if((dx*f.x+dz*f.z)/(d*fl)<0.35) continue;         // tiene que estar más o menos enfrente
+    bd=d; best=n;
+  }
+  return best;
+}
+// "adelante", "a tu izquierda"... según hacia dónde mirás
+function _talkDir(x,z){
+  const p=camera.position, f=new THREE.Vector3(); camera.getWorldDirection(f);
+  const fl=Math.hypot(f.x,f.z)||1, fx=f.x/fl, fz=f.z/fl;
+  const vx=x-p.x, vz=z-p.z, d=Math.hypot(vx,vz);
+  const a=Math.atan2(vx*(-fz)+vz*fx, vx*fx+vz*fz)*180/Math.PI;
+  let dir;
+  if(Math.abs(a)<35) dir='derecho hacia adelante';
+  else if(Math.abs(a)<135) dir=a>0?'a tu derecha':'a tu izquierda';
+  else dir='detrás tuyo (date vuelta)';
+  const m=Math.max(5,Math.round(d/5)*5);
+  return {dir,dist:d<4?'acá nomás':'a unos '+m+' metros',d};
+}
+const TALK_OPEN=['¡Claro!','Sí, por supuesto.','Mirá, te explico.','¡Cómo no!','Dale, es fácil.'];
+const TALK_CLOSE=['¡Buen viaje!','Tranqui, hay tiempo.','Cualquier cosa, preguntá de nuevo.','Que tengas un lindo vuelo.'];
+function _talkAnswer(q,n){
+  const p=camera.position, sd=(n.id||0);
+  const op=TALK_OPEN[sd%TALK_OPEN.length], cl=TALK_CLOSE[(sd>>1)%TALK_CLOSE.length];
+  const pastSec=p.z<4;                                  // ya pasó el control de seguridad
+  let tx,tz,txt,nodes;
+  if(q==='banos'){
+    tx=RESTROOM.x1+1.2; tz=(RESTROOM.door0+RESTROOM.door1)/2;
+    const D=_talkDir(tx,tz);
+    txt=pastSec
+      ?`Los baños están en el hall de entrada, antes del control de seguridad: volvé por el pasillo central; quedan junto a la pared del hall, al lado de AeroCafé, ${D.dist} de acá. Buscá el cartel 🚻.`
+      :`Los baños están ${D.dir}, ${D.dist}, junto a la pared del hall, al lado de AeroCafé. Buscá el cartel 🚻 en la puerta.`;
+    nodes=[{x:0,z:-4},{x:0,z:16},{x:-6,z:26},{x:-6,z:tz},{x:tx,z:tz}];
+  } else if(q==='cafe'){
+    tx=-10.2; tz=20;
+    const D=_talkDir(tx,tz);
+    txt=pastSec
+      ?`AeroCafé queda en el hall, antes de seguridad, junto a la pared y al lado de los baños (${D.dist}). Si preferís no volver, acá en la sala de embarque hay máquinas de bebidas.`
+      :`AeroCafé está ${D.dir}, ${D.dist}, junto a la pared del hall, al lado de los baños. Hay café, té y agua; tomar algo tibio ayuda a bajar un cambio.`;
+    nodes=[{x:0,z:-4},{x:0,z:16},{x:tx,z:tz}];
+  } else {
+    tx=0.4; tz=GATE.z+2.1;
+    const D=_talkDir(tx,tz);
+    txt=pastSec
+      ?`La puerta de embarque A7 está ${D.dir}, ${D.dist}, al fondo de la sala de embarque. Ahí escaneás tu tarjeta en el tótem y seguís por la manga hasta el avión.`
+      :`Para embarcar: primero hacé el check-in en los mostradores, después pasá el control de seguridad por el pasillo central, y la puerta A7 queda al fondo de la sala de embarque, ${D.dist} de acá.`;
+    nodes=['entrance','checkin','security','lounge'].map(id=>{ const z=ZONE_DATA.find(d=>d.id===id); return {x:0,z:z.position.z}; });
+    nodes[3]={x:1.8,z:nodes[3].z}; nodes.push({x:tx,z:tz});
+  }
+  return {text:op+' '+txt+' '+cl, nodes};
+}
+function openTalk(n){
+  _talkNpc=n; n._talk=true;
+  const w=_talkWho(n);
+  document.getElementById('talk-who').textContent=w.ico+' '+w.name;
+  document.getElementById('talk-ava').textContent=w.ico;
+  document.getElementById('talk-answer').classList.add('hidden');
+  document.getElementById('btn-talk-done').classList.add('hidden');
+  document.querySelectorAll('#talk-modal .talk-q').forEach(b=>b.classList.remove('chosen'));
+  openUiModal('talk-modal');
+}
+function askTalk(q){
+  if(!_talkNpc) return;
+  const a=_talkAnswer(q,_talkNpc);
+  document.querySelectorAll('#talk-modal .talk-q').forEach(b=>b.classList.toggle('chosen',b.dataset.q===q));
+  const box=document.getElementById('talk-answer');
+  box.classList.add('hidden'); void box.offsetWidth;
+  document.getElementById('talk-text').textContent=a.text;
+  box.classList.remove('hidden');
+  document.getElementById('btn-talk-done').classList.remove('hidden');
+  _talkGuide={nodes:a.nodes,until:clock.getElapsedTime()+40};
+}
+function closeTalk(){
+  if(_talkNpc) _talkNpc._talk=false;
+  _talkNpc=null;
+  closeUiModal('talk-modal');
+  if(_talkGuide) showToast('➡️ Seguí las flechas del piso: te marcan el camino.');
 }
 
 // ── Check-in: panel guiado ──────────────────────────────────
@@ -1339,6 +1451,8 @@ function setupInteractionUI(){
   on('btn-checkin-continue',continueFromCheckin);
   on('btn-close-checkin',()=>{ clearTimeout(_checkinTimer); if(checkinState==='verifying') _setCheckinLamp('idle'); closeUiModal('checkin-modal'); });
   on('btn-close-kiosk',()=>closeUiModal('kiosk-modal'));
+  on('btn-close-talk',closeTalk); on('btn-talk-done',closeTalk);
+  document.querySelectorAll('#talk-modal .talk-q').forEach(b=>b.addEventListener('click',()=>askTalk(b.dataset.q)));
   on('btn-close-office',()=>closeUiModal('office-modal'));
   on('btn-gate-scan',scanBoardingPass);
   on('btn-close-mag',closeMagModal);
@@ -1387,6 +1501,7 @@ function setupInteractionUI(){
     if(e.code!=='Escape'||!uiModalOpen) return;
     if(!document.getElementById('checkin-modal').classList.contains('hidden')) document.getElementById('btn-close-checkin').click();
     else if(!document.getElementById('kiosk-modal').classList.contains('hidden')) closeUiModal('kiosk-modal');
+    else if(!document.getElementById('talk-modal').classList.contains('hidden')) closeTalk();
     else if(!document.getElementById('office-modal').classList.contains('hidden')) closeUiModal('office-modal');
     else if(!document.getElementById('mag-modal').classList.contains('hidden')){ if(_reelOpen) closeReel(); else closeMagModal(); }
     else if(!document.getElementById('charge-modal').classList.contains('hidden')){ clearInterval(_chargeTimer); closeUiModal('charge-modal'); }
@@ -4400,6 +4515,7 @@ function buildCharacter(opts){
 
   g.userData.headGroup=hg;
   g.userData.role=role;
+  g.userData.female=!!female;
   _optimizeCharacter(g); // ~75 piezas -> pocas mallas (piernas/brazos/cabeza siguen animándose)
   return g;
 }
@@ -5225,6 +5341,13 @@ function updateNPCs(delta, speedFactor){
     const ud=npc.userData;
     // ── Fase 8 LOD: NPCs no visibles o muy lejanos actualizan a menor cadencia
     if(!npc.visible) return;
+    if(npc._talk){                                   // FASE 60: conversando
+      if(ud.isWalking){
+        _relaxPose(npc,1-Math.min(1,delta*4)); npc.position.y=0; npc.rotation.z*=0.9;
+        npc.rotation.y=_lerpAngle(npc.rotation.y,Math.atan2(playerPos.x-npc.position.x,playerPos.z-npc.position.z),Math.min(1,delta*4));
+      }
+      return;
+    }
     const _dx=playerPos.x-npc.position.x, _dz=playerPos.z-npc.position.z;
     const _dist2=_dx*_dx+_dz*_dz;
     // >22u → skip animación cada 2 frames; >35u → skip animación 3 de cada 4
@@ -7218,6 +7341,7 @@ function _guideFloor(z){ return z<ARR.regionZ?0.07:(z<CABIN.zFront+0.5&&z>CABIN.
 // Ruta completa de la etapa actual (lista de puntos {x,z})
 function _guideNodes(){
   const p=camera.position, P=(x,z)=>({x,z});
+  if(_talkGuideOn()) return _talkGuide.nodes;            // FASE 60: indicación pedida
   if(p.z<ARR.regionZ){                                   // Madrid
     const r=[P(ARR.jetX0+1.2,ARR.jetZ),P(ARR.jetX1-0.4,ARR.jetZ),P(16.2,ARR.walkZ0),P(16.2,ARR.walkZ1),P(HALL.doorX,HALL.z0+1.2),P(HALL.doorX,HALL.z0-2)];
     if(!_hasBag()){
@@ -7249,9 +7373,15 @@ function _guideRoute(){
   }
   return n.slice(best+1);
 }
+function _talkGuideOn(){
+  if(!_talkGuide) return false;
+  const p=camera.position, L=_talkGuide.nodes[_talkGuide.nodes.length-1];
+  if(clock.getElapsedTime()>_talkGuide.until||p.z<GATE.z||Math.hypot(L.x-p.x,L.z-p.z)<1.5){ _talkGuide=null; return false; }
+  return true;
+}
 function updateGuideArrows(delta){
   if(!_guide) return;
-  const show=isGameActive&&guidedMode&&!isPaused&&!uiModalOpen&&!_flight&&!_autoWalk&&!_deplaning&&!_endPending;
+  const show=isGameActive&&(guidedMode||_talkGuideOn())&&!isPaused&&!uiModalOpen&&!_flight&&!_autoWalk&&!_deplaning&&!_endPending;
   const A=_guide.arrows;
   if(!show){ A.forEach(a=>a.visible=false); return; }
   _guide.t+=delta;
