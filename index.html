@@ -376,6 +376,25 @@
         </div>
     </div>
 
+    <!-- FASE 62: Control de la Policía de Seguridad Aeroportuaria -->
+    <div id="psa-modal" class="overlay-dark overlay-soft hidden" role="dialog" aria-modal="true" aria-labelledby="psa-title">
+        <div class="interact-box psa-box">
+            <button id="btn-close-psa" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p id="psa-who" class="ib-eyebrow">👮 Policía de Seguridad Aeroportuaria</p>
+            <h2 id="psa-title">Control de seguridad</h2>
+            <div id="psa-bubble" class="talk-answer psa-bubble" aria-live="polite">
+                <span id="psa-ava" class="talk-ava" aria-hidden="true">👮</span>
+                <p id="psa-text"></p>
+            </div>
+            <div id="psa-wait" class="psa-wait hidden">
+                <p><span class="ib-spinner"></span><span id="psa-wait-txt">Un momento…</span></p>
+                <div class="bd-bar"><div id="psa-fill" class="psa-fill"></div></div>
+            </div>
+            <p id="psa-tip" class="kr-tip psa-tip hidden"></p>
+            <div id="psa-actions" class="ib-actions"></div>
+        </div>
+    </div>
+
     <!-- FASE 60: Preguntarle a una persona -->
     <div id="talk-modal" class="overlay-dark overlay-soft hidden" role="dialog" aria-modal="true" aria-labelledby="talk-title">
         <div class="interact-box talk-box">

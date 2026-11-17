@@ -1250,6 +1250,122 @@ function closeUiModal(id){
 }
 
 
+
+// ─── FASE 62: POLICÍA DE SEGURIDAD AEROPORTUARIA (PSA) ──────
+// Dos versiones del uniforme formal (saco gris oscuro, camisa blanca, corbata):
+// ella, con pelo oscuro tirante y rodete bajo, aros de perla y sonrisa amplia;
+// él, con pelo corto oscuro y sienes canosas, barba completa canosa y ojos marrones.
+const PSA_F={skin:0xdcab88,hair:0x100b08,top:0x1d1f25,pants:0x1a1b20,shoes:0x111111,role:'police',
+  female:true,hairStyle:'slick',noHat:true,psaUniform:true,earrings:true,lashes:true,lipColor:0xb0525a,iris:0x4a2e1c,glasses:false,seed:21};
+const PSA_M={skin:0xc28d66,hair:0x2a2826,top:0x1d1f25,pants:0x1a1b20,shoes:0x111111,role:'police',
+  female:false,hairStyle:'short',temples:0x8e8a84,stubble:0x8b8680,noHat:true,psaUniform:true,iris:0x3b2416,glasses:false,seed:33};
+let psaArchOfficer=null;
+// Al llegar al arco central, el oficial se te pone enfrente y te avisa que hay
+// que hacer un control. Pasos guiados: bandeja → arco → (a veces) detector
+// manual → "todo en orden". Una vez por recorrido.
+const _psa={state:'idle',home:null,t:0,ph:0,timer:null};
+function updateSecurityCheck(delta){
+  const o=psaArchOfficer; if(!o) return;
+  const p=camera.position, S=_psa;
+  if(S.state==='idle'){
+    if(!isGameActive||isPaused||uiModalOpen||_flight||_autoWalk) return;
+    if(p.z<14.4&&p.z>9.4&&Math.abs(p.x)<3.6){
+      S.state='approach'; S.t=0; S.home={x:o.position.x,z:o.position.z,ry:o.rotation.y}; o._psa=true;
+      showToast('👮 Un momento, por favor…');
+    }
+    return;
+  }
+  if(S.state==='approach'){
+    releaseMovementKeys(); joystick.nx=joystick.ny=0;   // la persona se detiene
+    S.t+=delta;
+    const tx=Math.max(-1.4,Math.min(1.4,p.x)), tz=p.z-1.35;
+    if(_psaStep(o,tx,tz,delta,1.9)||S.t>4){
+      o.rotation.y=Math.atan2(p.x-o.position.x,p.z-o.position.z);
+      _relaxPose(o,0); S.state='talk'; openPsa();
+    }
+    return;
+  }
+  if(S.state==='talk'){
+    o.rotation.y=_lerpAngle(o.rotation.y,Math.atan2(p.x-o.position.x,p.z-o.position.z),Math.min(1,delta*4));
+    return;
+  }
+  if(S.state==='return'){
+    if(_psaStep(o,S.home.x,S.home.z,delta,1.4)){
+      o.rotation.y=S.home.ry; _relaxPose(o,0); o._psa=false; S.state='done';
+    }
+  }
+}
+// Un paso de caminata hacia (tx,tz); devuelve true al llegar
+function _psaStep(o,tx,tz,delta,speed){
+  const dx=tx-o.position.x, dz=tz-o.position.z, d=Math.hypot(dx,dz);
+  if(d<0.08){ o.position.y=0; return true; }
+  const st=Math.min(d,speed*delta*(calmMode?0.75:1));
+  o.position.x+=dx/d*st; o.position.z+=dz/d*st;
+  o.rotation.y=_lerpAngle(o.rotation.y,Math.atan2(dx,dz),Math.min(1,delta*8));
+  _psa.ph+=delta*speed*4.2; _walkPose(o,_psa.ph,1);
+  o.position.y=Math.abs(Math.cos(_psa.ph))*0.025;
+  return false;
+}
+const PSA_STEPS={
+  intro:{say:'Buen día. Soy oficial de la Policía de Seguridad Aeroportuaria. Antes de pasar tenemos que hacerte un control de rutina. Es breve y lo hacemos con todos los pasajeros.',
+    btns:[['ok','De acuerdo','btn-primary'],['why','¿Hice algo mal?','btn-ghost']]},
+  why:{say:'Para nada. Es un control de rutina, igual para todas las personas. No significa que hayas hecho algo malo. ¿Arrancamos?',
+    btns:[['ok','Sí, arranquemos','btn-primary']]},
+  tray:{say:'Por favor, dejá la mochila, la campera y el celular en la bandeja. La notebook y los líquidos van aparte, en otra bandeja.',
+    btns:[['arch','Listo, ya lo dejé ✓','btn-primary']]},
+  arch:{say:'Perfecto. Ahora pasá despacio por el arco, sin apuro.',wait:'Pasando por el arco…'},
+  beep:{say:'El arco sonó: suele ser un cinturón, unas monedas o un botón de metal. No es nada grave. Abrí los brazos un momento, por favor.',wait:'Revisión con el detector manual…'},
+  done:{say:'Todo en orden. Gracias por tu paciencia. Podés retirar tus cosas de la bandeja. ¡Buen viaje!',
+    tip:'💙 ¿Notaste cómo la tensión subió al principio y después bajó? Eso es exactamente lo que estamos practicando.',
+    btns:[['finish','Retirar mis cosas y seguir','btn-primary']]}
+};
+function _psaShow(id){
+  const st=PSA_STEPS[id];
+  document.getElementById('psa-text').textContent=st.say;
+  const bubble=document.getElementById('psa-bubble'); bubble.classList.remove('psa-in'); void bubble.offsetWidth; bubble.classList.add('psa-in');
+  const tip=document.getElementById('psa-tip'); tip.textContent=st.tip||''; tip.classList.toggle('hidden',!st.tip);
+  const acts=document.getElementById('psa-actions'); acts.innerHTML='';
+  (st.btns||[]).forEach(([act,label,cls])=>{ const b=document.createElement('button'); b.type='button'; b.className=cls; b.textContent=label; b.addEventListener('click',()=>_psaAct(act)); acts.appendChild(b); });
+  const wait=document.getElementById('psa-wait'), fill=document.getElementById('psa-fill');
+  clearTimeout(_psa.timer);
+  if(st.wait){
+    wait.classList.remove('hidden'); document.getElementById('psa-wait-txt').textContent=st.wait;
+    fill.style.transition='none'; fill.style.width='0%'; void fill.offsetWidth;
+    const ms=calmMode?3000:2300;
+    fill.style.transition=`width ${ms}ms linear`; fill.style.width='100%';
+    _psa.timer=setTimeout(()=>{
+      if(id==='arch'){ if(Math.random()<0.35){ playUiTone&&playUiTone('alert'); _psaShow('beep'); } else _psaShow('done'); }
+      else _psaShow('done');
+    },ms);
+  } else wait.classList.add('hidden');
+  if(id==='done'&&typeof playUiTone==='function') playUiTone('success');
+}
+function _psaAct(a){
+  if(a==='ok') _psaShow('tray');
+  else if(a==='why') _psaShow('why');
+  else if(a==='arch') _psaShow('arch');
+  else if(a==='finish') closePsa(true);
+}
+function openPsa(){
+  const o=psaArchOfficer, f=o&&o.userData.female;
+  document.getElementById('psa-ava').textContent=f?'👮‍♀️':'👮‍♂️';
+  document.getElementById('psa-who').textContent=(f?'👮‍♀️':'👮‍♂️')+' Policía de Seguridad Aeroportuaria';
+  _psaShow('intro');
+  openUiModal('psa-modal');
+}
+function closePsa(passed){
+  clearTimeout(_psa.timer);
+  closeUiModal('psa-modal');
+  _psa.state='return';
+  if(passed){
+    // Del otro lado del arco, mirando hacia la sala de embarque
+    camera.position.set(0,camera.position.y,5.4);
+    if(isMobile){ mobileYaw=0; } else camera.rotation.set(0,0,0,'YXZ');
+    showToast('✅ Control de seguridad superado. Seguí hacia la Sala de Embarque.');
+    if(typeof logInteraction==='function') logInteraction('security','control');
+  }
+}
+
 // ─── FASE 60: PREGUNTARLE A LA GENTE ────────────────────────
 // Al acercarse a una persona de la terminal aparece "💬 Preguntar algo". Se
 // elige una de tres preguntas y la persona responde con indicaciones reales
@@ -1259,7 +1375,7 @@ let _talkNpc=null, _talkGuide=null;
 const TALK_R=2.4;
 function _talkable(n){
   const r=n.userData.role;
-  if(!n.visible||n.userData.isPilotDetailed||n.userData.isAttendantDetailed) return false;
+  if(!n.visible||n._psa||n.userData.isPilotDetailed||n.userData.isAttendantDetailed) return false;
   if(r!=='civilian'&&r!=='agent'&&r!=='police') return false;
   return n.position.z>GATE.z+0.5&&n.position.z<56;     // solo en la terminal
 }
@@ -1452,6 +1568,7 @@ function setupInteractionUI(){
   on('btn-close-checkin',()=>{ clearTimeout(_checkinTimer); if(checkinState==='verifying') _setCheckinLamp('idle'); closeUiModal('checkin-modal'); });
   on('btn-close-kiosk',()=>closeUiModal('kiosk-modal'));
   on('btn-close-talk',closeTalk); on('btn-talk-done',closeTalk);
+  on('btn-close-psa',()=>closePsa(false));
   document.querySelectorAll('#talk-modal .talk-q').forEach(b=>b.addEventListener('click',()=>askTalk(b.dataset.q)));
   on('btn-close-office',()=>closeUiModal('office-modal'));
   on('btn-gate-scan',scanBoardingPass);
@@ -1502,6 +1619,7 @@ function setupInteractionUI(){
     if(!document.getElementById('checkin-modal').classList.contains('hidden')) document.getElementById('btn-close-checkin').click();
     else if(!document.getElementById('kiosk-modal').classList.contains('hidden')) closeUiModal('kiosk-modal');
     else if(!document.getElementById('talk-modal').classList.contains('hidden')) closeTalk();
+    else if(!document.getElementById('psa-modal').classList.contains('hidden')) closePsa(false);
     else if(!document.getElementById('office-modal').classList.contains('hidden')) closeUiModal('office-modal');
     else if(!document.getElementById('mag-modal').classList.contains('hidden')){ if(_reelOpen) closeReel(); else closeMagModal(); }
     else if(!document.getElementById('charge-modal').classList.contains('hidden')){ clearInterval(_chargeTimer); closeUiModal('charge-modal'); }
@@ -4357,7 +4475,7 @@ function buildCharacter(opts){
   // Ojos -- pequeños, con iris, pupila y brillo
   const eyeWhiteM=mkStd(0xf6f4f0,0.2,0.0);
   const irisColors=[0x3a5a8a,0x3f6a45,0x5a3a20,0x4a4a55,0x2e3f66];
-  const irisMat=mkStd(irisColors[Math.floor(rnd(9)*irisColors.length)],0.3,0.05);
+  const irisMat=mkStd(opts.iris!=null?opts.iris:irisColors[Math.floor(rnd(9)*irisColors.length)],0.3,0.05);
   const lidM=mkStd(shade(skin,0.9),0.8,0);
   [-0.075,0.075].forEach(ex=>{
     const ew=SP(0.036,8,eyeWhiteM,ex,0.02,0.168); ew.scale.set(1.15,0.85,0.7); hg.add(ew);  // blanco
@@ -4370,7 +4488,7 @@ function buildCharacter(opts){
   // Cejas finas con leve ángulo
   const browM=mkStd(shade(hair,0.85),0.9,0);
   [[-0.075,0.084,0.19,0.07],[0.075,0.084,0.19,-0.07]].forEach(([ex,ey,ez,rz])=>{
-    const br=BX(0.08,0.016,0.016,browM,ex,ey,ez); br.rotation.z=rz; hg.add(br);
+    const br=BX(0.08,opts.lashes?0.01:0.016,0.016,browM,ex,ey+(opts.lashes?0.006:0),ez); br.rotation.z=rz; hg.add(br);
   });
 
   // Nariz -- tabique y punta
@@ -4393,7 +4511,7 @@ function buildCharacter(opts){
   const hrM=mkStd(hair,0.85,0.02);
   const hShineM=mkStd(Math.min(hair+0x181008,0xffffff),0.4,0.05); // brillo de pelo
 
-  if(role==='police'||role==='agent'||role==='pilot'||role==='attendant'){
+  if((role==='police'&&!opts.noHat)||role==='agent'||role==='pilot'||role==='attendant'){
     // Sombrero de uniforme
     const htM=mkStd(hatCol,0.6,0.05);
     hg.add(BX(0.50,0.05,0.48,htM,0,0.235,-0.025)); // ala/brim
@@ -4421,7 +4539,13 @@ function buildCharacter(opts){
       o.position.set(0,y,0); o.rotation.x=tilt; o.castShadow=true; return o; };
     const back=(r0,r1,h,y,th0,thL)=>{ const o=new THREE.Mesh(new THREE.CylinderGeometry(r0,r1,h,14,1,true,th0,thL),hairDS);
       o.position.set(0,y,-0.005); o.castShadow=true; return o; };
-    if(hairStyle==='swept'){
+    if(hairStyle==='slick'){
+      // FASE 62: pelo tirante hacia atrás, raya al medio y rodete bajo (uniforme)
+      hg.add(cap(hrM,0.214,-0.3,0.045));
+      hg.add(back(0.212,0.214,0.15,0.03,Math.PI*0.6,Math.PI*0.8));                         // costados y nuca, tirantes
+      const bun=SP(0.085,10,hrM,0,-0.02,-0.215); bun.scale.set(1.05,0.9,0.85); hg.add(bun); // rodete bajo
+      hg.add(BX(0.3,0.1,0.05,hrM,0,0.04,-0.18));                                       // nuca recogida
+    } else if(hairStyle==='swept'){
       hg.add(cap(hrM,0.218,-0.36,0.055));                                        // casquete
       const top=SP(0.17,10,hrM,0,0.17,0.02); top.scale.set(1.12,0.42,1.12); top.rotation.x=-0.2; hg.add(top); // volumen peinado hacia atrás
       hg.add(BX(0.3,0.14,0.06,mkStd(shade(hair,0.75),0.85,0),0,0.0,-0.175));    // nuca más oscura
@@ -4448,9 +4572,19 @@ function buildCharacter(opts){
       if(hairStyle==='ponytail'){ hg.add(SP(0.06,6,hrM,0,0.1,-0.215));
         const tail=SP(0.07,7,hrM,0,-0.06,-0.25); tail.scale.set(0.7,1.9,0.7); tail.rotation.x=0.35; hg.add(tail); }
       // Brillo de pelo
-      const shineStrip=BX(0.2,0.02,0.16,hShineM,0.05,0.255,0.02); shineStrip.rotation.z=0.12; hg.add(shineStrip);
+      const shineStrip=BX(0.2,0.02,0.16,hShineM,0.05,0.255,0.02); shineStrip.rotation.z=0.12; if(!opts.psaUniform) hg.add(shineStrip);
     }
   }
+  // Sienes canosas (opcional)
+  if(opts.temples!=null){
+    const tM=mkStd(opts.temples,0.9,0);
+    [-1,1].forEach(sd=>{ const t=SP(0.07,8,tM,sd*0.196,0.06,0.03); t.scale.set(0.4,0.9,1.0); hg.add(t); });
+  }
+  // Pestañas y labios con color (opcional)
+  if(opts.lashes){ const lM=mkStd(0x15100c,0.9,0); [-0.075,0.075].forEach(ex=>{ const l=BX(0.07,0.006,0.008,lM,ex,0.044,0.2); l.rotation.x=-0.3; hg.add(l); const w=BX(0.014,0.006,0.008,lM,ex+(ex>0?0.039:-0.039),0.05,0.194); w.rotation.z=ex>0?0.5:-0.5; hg.add(w); }); }
+  if(opts.lipColor!=null){ const lp=new THREE.Mesh(new THREE.TorusGeometry(0.036,0.011,5,12,Math.PI),mkStd(opts.lipColor,0.5,0.05)); lp.rotation.z=Math.PI; lp.position.set(0,-0.092,0.178); lp.scale.set(1.05,0.6,1); hg.add(lp); }
+  // Aros de perla (opcional)
+  if(opts.earrings){ const pM=mkStd(0xf3eee4,0.25,0.15); [-0.215,0.215].forEach(ex=>hg.add(SP(0.016,6,pM,ex,-0.075,0.03))); }
   // Barba corta (opcional): casquete inferior apenas más grande que la mandíbula
   if(opts.stubble!=null){
     const bM=mkStd(opts.stubble,0.95,0);
@@ -4480,6 +4614,21 @@ function buildCharacter(opts){
   }
   hg.userData={isHead:true}; g.add(hg);
 
+  if(opts.psaUniform){
+    const shirtM=mkStd(0xf7f7f4,0.8,0), tieM=mkStd(0x1b1e25,0.6,0.05);
+    const goldM=mkStd(0xcfa94a,0.25,0.75), silverM=mkStd(0xd5d8dc,0.25,0.8), dk=mkStd(shade(top,0.72),0.8,0);
+    g.add(BX(0.13,0.3,0.02,shirtM,0,1.33,0.138));                                    // camisa
+    [-1,1].forEach(sd=>{ const cl=BX(0.06,0.1,0.02,shirtM,sd*0.05,1.47,0.13); cl.rotation.z=sd*0.45; g.add(cl); }); // cuello
+    g.add(BX(0.045,0.26,0.02,tieM,0,1.3,0.15));                                      // corbata
+    [-1,1].forEach(sd=>{ const l=BX(0.055,0.34,0.02,dk,sd*0.085,1.3,0.145); l.rotation.z=sd*-0.2; g.add(l); }); // solapas
+    [1.13,1.0].forEach(y=>g.add(SP(0.014,6,goldM,0.05,y,0.152)));                    // botones dorados
+    [-1,1].forEach(sd=>{
+      g.add(BX(0.12,0.022,0.16,dk,sd*0.22,1.465,0));                                 // hombrera
+      [-0.03,0.03].forEach(dz=>g.add(SP(0.011,5,silverM,sd*0.22,1.478,dz+0.02)));    // insignias
+    });
+    g.add(BX(0.075,0.022,0.008,silverM,-0.115,1.27,0.152));                          // placa de nombre
+    g.add(SP(0.016,6,goldM,-0.1,1.37,0.15));                                         // escudo en la solapa
+  }
   if(opts.doctorOutfit){
     const shirtM=mkStd(0xf6f6f2,0.8,0);
     const v=BX(0.15,0.36,0.02,shirtM,0,1.3,0.138); g.add(v);                      // camisa en V
@@ -4500,8 +4649,8 @@ function buildCharacter(opts){
     g.add(BX(0.065,0.235,0.245,mkStd(0x0a1020,0.6,0.1),0,0.825,-0.02));       // placa cinturón
     g.add(BX(0.075,0.13,0.038,mkStd(0x111111,0.5,0.1),-0.255,1.35,-0.01));    // radio
     g.add(BX(0.013,0.095,0.013,mkStd(0x222222,0.8,0),-0.255,1.465,-0.01));    // antena
-    // Reflectivos en hombros
-    [-0.27,0.27].forEach(sx=>g.add(BX(0.06,0.02,0.14,mkStd(0xdd9900,0.1,0.3),sx,1.46,0)));
+    // Reflectivos en hombros (no en el uniforme formal de la PSA)
+    if(!opts.psaUniform) [-0.27,0.27].forEach(sx=>g.add(BX(0.06,0.02,0.14,mkStd(0xdd9900,0.1,0.3),sx,1.46,0)));
   }
   if(role==='agent'||role==='attendant'){
     const tieMatR=mkStd(tieCol,0.6,0.05);
@@ -5175,13 +5324,17 @@ function spawnStaffNPCs(){
   });
 
   // ── POLICE at security (flanking the security zone, z=8)
-  const policeSlots=isMobile?[{x:-12,z:10,ry:Math.PI*0.15},{x:12,z:10,ry:-Math.PI*0.15}]:[
+  // FASE 62: el oficial junto al arco central es quien te para para el control
+  const policeSlots=isMobile?[{x:-12,z:10,ry:Math.PI*0.15},{x: 3.0, z:12.6, ry:-Math.PI*0.35,arch:true}]:[
     {x:-12,z:10,ry: Math.PI*0.15},
     {x: 12,z:10,ry:-Math.PI*0.15},
-    {x: 3.0, z:12.6, ry:-Math.PI*0.35}   // al costado del arco central (no en el paso)
+    {x: 3.0, z:12.6, ry:-Math.PI*0.35,arch:true}   // al costado del arco central (no en el paso)
   ];
+  const archFemale=Math.random()<0.5;                // a veces te para ella, a veces él
   policeSlots.forEach((d,i)=>{
-    const npc=buildCharacter({skin:SKINS[i%3],hair:HAIRS[0],top:0x0d1f3c,pants:0x0d1f3c,shoes:0x0a0a0a,role:'police',hatCol:0x0d1f3c});
+    const fem=d.arch?archFemale:((i%2===0)!==archFemale);
+    const npc=buildCharacter(fem?PSA_F:PSA_M);
+    if(d.arch) psaArchOfficer=npc;
     npc.position.set(d.x,0,d.z); npc.rotation.y=d.ry;
     npc.userData.isNPC=true; npc.userData.isStaff=true;
     npc.userData.idlePhase=Math.random()*Math.PI*2;
@@ -5354,6 +5507,7 @@ function updateNPCs(delta, speedFactor){
     const ud=npc.userData;
     // ── Fase 8 LOD: NPCs no visibles o muy lejanos actualizan a menor cadencia
     if(!npc.visible) return;
+    if(npc._psa) return;                             // FASE 62: lo maneja updateSecurityCheck
     if(npc._talk){                                   // FASE 60: conversando
       if(ud.isWalking){
         _relaxPose(npc,1-Math.min(1,delta*4)); npc.position.y=0; npc.rotation.z*=0.9;
@@ -8302,6 +8456,7 @@ function animate(){
   if(chargeLeds.length){ const k=0.6+Math.abs(Math.sin(t*1.6))*0.9; chargeLeds.forEach(l=>l.material.emissiveIntensity=k); }
   updateAutoWalk(delta);        // FASE 43: caminata guiada por la manga
   updateGuideArrows(delta);     // FASE 58: flechas guía en el piso
+  updateSecurityCheck(delta);   // FASE 62: control de la PSA en el arco
   updateCabinSeq(delta);        // FASE 46: anuncios de a bordo
   if(_arrWalkTex) _arrWalkTex.offset.y-=delta*(calmMode?0.22:0.33); // FASE 48: cinta caminadora
   updateBaggageHall(delta,t);   // FASE 49: sala de equipajes

@@ -1931,3 +1931,13 @@ body.has-bag #bag-chip { display: block; }
 .talk-answer p { margin: 0; line-height: 1.5; color: var(--deep); font-size: 0.95rem; }
 @keyframes talkIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .talk-answer, .talk-q { animation: none; transition: none; } }
+
+/* ── FASE 62: control de la PSA ── */
+.psa-bubble { margin-top: 6px; }
+.psa-bubble.psa-in { animation: talkIn .35s ease-out; }
+.psa-wait { margin-top: 16px; text-align: left; color: #8a6d1d; font-size: 0.93rem; }
+.psa-wait p { margin: 0 0 8px; }
+.psa-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+.psa-tip { margin-top: 14px; text-align: left; }
+#psa-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+@media (prefers-reduced-motion: reduce) { .psa-bubble.psa-in { animation: none; } }
