@@ -750,26 +750,7 @@ function buildAircraftNose(){
   const flLen=(zN+0.8)-zFront;
   const fl=new THREE.Mesh(new THREE.BoxGeometry(_cabinHalf(floorY)*2-0.1,0.06,flLen),mkStd(0x2a2d35,0.8,0));
   fl.position.set(x,floorY-0.02,zFront+flLen/2); scene.add(fl);
-  // Panel de instrumentos con pantallas
-  const pm=mkStd(0x15191f,0.5,0.1);
-  const panel=new THREE.Mesh(new THREE.BoxGeometry(3.0,0.85,0.5),pm); panel.position.set(x,floorY+1.05,zN+0.95); scene.add(panel);
-  const glare=new THREE.Mesh(new THREE.BoxGeometry(3.0,0.08,0.7),pm); glare.position.set(x,floorY+1.5,zN+1.0); scene.add(glare);
-  const sc=tex(512,128,(ctx)=>{ ctx.fillStyle='#05080c'; ctx.fillRect(0,0,512,128);
-    [[10,'#0f3d6e'],[130,'#103a1f'],[260,'#0f3d6e'],[380,'#103a1f']].forEach(([px,c])=>{ ctx.fillStyle=c; ctx.fillRect(px,10,118,108); ctx.strokeStyle='#4ecdc4'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(px+10,64); ctx.lineTo(px+108,60); ctx.stroke(); }); });
-  sc.encoding=THREE.sRGBEncoding;
-  const scr=new THREE.Mesh(new THREE.PlaneGeometry(2.6,0.62),new THREE.MeshStandardMaterial({map:sc,emissive:0xffffff,emissiveMap:sc,emissiveIntensity:0.8}));
-  scr.position.set(x,floorY+1.07,zN+0.69); scr.rotation.y=Math.PI; scene.add(scr);
-  // Vista del cielo por el parabrisas (solo visible desde adentro)
-  const sk=tex(512,160,(ctx)=>{ const gr=ctx.createLinearGradient(0,0,0,160); gr.addColorStop(0,'#3d7cc0'); gr.addColorStop(1,'#cfe6f6'); ctx.fillStyle=gr; ctx.fillRect(0,0,512,160);
-    ctx.fillStyle='rgba(255,255,255,0.85)'; [[90,120,70,14],[260,130,90,12],[420,118,60,12]].forEach(([a,b,c,d])=>{ ctx.beginPath(); ctx.ellipse(a,b,c,d,0,0,Math.PI*2); ctx.fill(); }); });
-  sk.encoding=THREE.sRGBEncoding;
-  const sky=new THREE.Mesh(new THREE.PlaneGeometry(2.4,0.6),new THREE.MeshBasicMaterial({map:sk}));
-  sky.position.set(x,floorY+1.95,zN+1.35); sky.rotation.y=Math.PI; scene.add(sky);
-  // Asientos de los pilotos
-  [-0.62,0.62].forEach(px=>{
-    const b=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.1,0.55),mkStd(0x1a1a22,0.6,0.05)); b.position.set(x+px,floorY+0.45,zN-0.6); scene.add(b);
-    const bk=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.95,0.1),mkStd(0x1a1a22,0.6,0.05)); bk.position.set(x+px,floorY+0.95,zN-0.92); scene.add(bk);
-  });
+  buildCockpit737(zN);   // FASE 63: cabina de mando estilo Boeing 737 (procedural)
 }
 
 // Puerta delantera izquierda: marco interior en la cabina
@@ -1251,6 +1232,215 @@ function closeUiModal(id){
 
 
 
+
+// ─── FASE 63: CABINA DE MANDO ESTILO 737 ────────────────────
+// Modelada a mano con la distribución típica de un 737 NG (no usa archivos
+// externos): seis pantallas (PFD/ND de cada piloto, motores y sistemas al
+// centro), glareshield con el panel de piloto automático (MCP), panel de techo
+// lleno de interruptores, pedestal con aceleradores, flaps y dos FMC, columnas
+// con yoke y parabrisas de seis paños.
+function _ckTex(w,h,draw){ const t=tex(w,h,draw); t.encoding=THREE.sRGBEncoding; t.anisotropy=4; return t; }
+function _duPFD(){ return _ckTex(256,256,(c)=>{
+  c.fillStyle='#000'; c.fillRect(0,0,256,256);
+  c.save(); c.beginPath(); c.rect(62,34,132,150); c.clip();
+  c.fillStyle='#2f78d8'; c.fillRect(62,34,132,78); c.fillStyle='#8b5a2b'; c.fillRect(62,112,132,72);
+  c.strokeStyle='#fff'; c.lineWidth=2; c.beginPath(); c.moveTo(62,112); c.lineTo(194,112); c.stroke();
+  c.lineWidth=1.5; [[-30,30],[-15,18],[15,18],[30,30]].forEach(([dy,w])=>{ c.beginPath(); c.moveTo(128-w,112+dy); c.lineTo(128+w,112+dy); c.stroke(); });
+  c.restore();
+  c.fillStyle='#ffd400'; c.fillRect(88,110,26,5); c.fillRect(142,110,26,5); c.fillRect(125,109,6,7);
+  c.fillStyle='#3a3f48'; c.fillRect(8,34,46,150); c.fillRect(202,34,46,150);
+  c.fillStyle='#fff'; c.font='bold 13px Arial'; c.textAlign='center';
+  [160,150,140,130].forEach((v,i)=>c.fillText(v,31,58+i*36)); [3400,3300,3200,3100].forEach((v,i)=>c.fillText(v,225,58+i*36));
+  c.fillStyle='#000'; c.strokeStyle='#fff'; c.lineWidth=1.5; c.fillRect(10,102,44,20); c.strokeRect(10,102,44,20); c.fillRect(200,102,48,20); c.strokeRect(200,102,48,20);
+  c.fillStyle='#fff'; c.font='bold 15px Arial'; c.fillText('145',32,118); c.fillText('3250',224,118);
+  c.fillStyle='#38e04a'; c.font='bold 12px Arial'; c.fillText('MCP SPD   LNAV   VNAV PTH',128,22);
+  c.strokeStyle='#fff'; c.lineWidth=1.5; c.beginPath(); c.arc(128,300,96,Math.PI*1.22,Math.PI*1.78); c.stroke();
+  c.fillStyle='#fff'; c.font='bold 12px Arial'; c.fillText('27',128,224); c.fillText('24',80,232); c.fillText('30',176,232);
+  c.fillStyle='#ff4fd8'; c.fillRect(126,206,4,10); }); }
+function _duND(){ return _ckTex(256,256,(c)=>{
+  c.fillStyle='#000'; c.fillRect(0,0,256,256);
+  c.strokeStyle='#fff'; c.lineWidth=2; c.beginPath(); c.arc(128,236,170,Math.PI*1.2,Math.PI*1.8); c.stroke();
+  for(let a=-50;a<=50;a+=10){ const r=a*Math.PI/180-Math.PI/2; c.beginPath(); c.moveTo(128+Math.cos(r)*170,236+Math.sin(r)*170); c.lineTo(128+Math.cos(r)*160,236+Math.sin(r)*160); c.stroke(); }
+  c.fillStyle='#fff'; c.font='bold 13px Arial'; c.textAlign='center'; c.fillText('27',128,82);
+  c.strokeStyle='#ff4fd8'; c.lineWidth=3; c.beginPath(); c.moveTo(128,232); c.lineTo(150,140); c.lineTo(196,72); c.stroke();
+  c.strokeStyle='#5ee0ff'; c.lineWidth=2; [[150,140],[196,72]].forEach(([x,y])=>{ c.beginPath(); c.moveTo(x,y-7); c.lineTo(x+7,y); c.lineTo(x,y+7); c.lineTo(x-7,y); c.closePath(); c.stroke(); });
+  c.fillStyle='#5ee0ff'; c.font='12px Arial'; c.textAlign='left'; c.fillText('SADL',160,144); c.fillText('MAD',206,76);
+  c.fillStyle='#fff'; c.font='12px Arial'; c.fillText('GS 280  TAS 302',8,18); c.textAlign='right'; c.fillStyle='#ff4fd8'; c.fillText('MAD  42 NM',248,18);
+  c.fillStyle='#fff'; c.beginPath(); c.moveTo(128,222); c.lineTo(120,246); c.lineTo(136,246); c.closePath(); c.fill(); }); }
+function _duENG(){ return _ckTex(256,256,(c)=>{
+  c.fillStyle='#000'; c.fillRect(0,0,256,256);
+  const dial=(x,y,r,v,txt)=>{ c.strokeStyle='#fff'; c.lineWidth=2; c.beginPath(); c.arc(x,y,r,Math.PI*0.75,Math.PI*2.25); c.stroke();
+    c.fillStyle='rgba(120,130,140,0.55)'; c.beginPath(); c.moveTo(x,y); c.arc(x,y,r-3,Math.PI*0.75,Math.PI*(0.75+1.5*v)); c.closePath(); c.fill();
+    const a=Math.PI*(0.75+1.5*v); c.strokeStyle='#fff'; c.lineWidth=2.5; c.beginPath(); c.moveTo(x,y); c.lineTo(x+Math.cos(a)*(r-4),y+Math.sin(a)*(r-4)); c.stroke();
+    c.fillStyle='#000'; c.fillRect(x-4,y-r-20,46,17); c.strokeStyle='#fff'; c.lineWidth=1; c.strokeRect(x-4,y-r-20,46,17);
+    c.fillStyle='#fff'; c.font='bold 13px Arial'; c.textAlign='center'; c.fillText(txt,x+19,y-r-7); };
+  dial(68,78,40,0.82,'92.5'); dial(188,78,40,0.82,'92.4'); dial(68,180,30,0.62,'795'); dial(188,180,30,0.62,'790');
+  c.fillStyle='#38e04a'; c.font='bold 12px Arial'; c.textAlign='center'; c.fillText('N1',128,82); c.fillText('EGT',128,184);
+  c.fillStyle='#fff'; c.font='11px Arial'; c.fillText('FUEL  5.4  8.1  5.4',128,246); }); }
+function _duSYS(){ return _ckTex(256,256,(c)=>{
+  c.fillStyle='#000'; c.fillRect(0,0,256,256);
+  c.strokeStyle='#fff'; c.lineWidth=2; c.fillStyle='#5ee0ff'; c.font='bold 14px Arial'; c.textAlign='center';
+  [[20,90,'5420'],[98,90,'8130'],[176,90,'5410']].forEach(([x,y,v])=>{ c.strokeRect(x,y,60,46); c.fillText(v,x+30,y+29); });
+  c.fillStyle='#fff'; c.font='12px Arial'; c.fillText('FUEL  KG',128,60); c.fillText('TOTAL  18960',128,180);
+  c.fillStyle='#38e04a'; c.fillText('GEAR DOWN',128,226); }); }
+function _cduTex(){ return _ckTex(128,140,(c)=>{
+  c.fillStyle='#1d2126'; c.fillRect(0,0,128,140); c.fillStyle='#000'; c.fillRect(10,8,108,62);
+  c.fillStyle='#4be06a'; c.font='9px monospace'; ['  ACT RTE 1','SADL    MAD','FL320  .78','DEP 0910Z','<INDEX  LEGS>'].forEach((l,i)=>c.fillText(l,13,20+i*11));
+  c.fillStyle='#cfd3d8'; for(let r=0;r<5;r++) for(let k=0;k<6;k++) c.fillRect(10+k*18,78+r*12,14,8); }); }
+function _mcpTex(){ return _ckTex(512,64,(c)=>{
+  c.fillStyle='#4a5058'; c.fillRect(0,0,512,64);
+  const win=(x,w,v)=>{ c.fillStyle='#0a0a0a'; c.fillRect(x,12,w,22); c.fillStyle='#ff9d2e'; c.font='bold 17px monospace'; c.textAlign='center'; c.fillText(v,x+w/2,29); };
+  win(30,52,'145'); win(150,44,'270'); win(250,72,'32000'); win(352,58,'-1200'); win(440,40,'2');
+  c.fillStyle='#e8e8e8'; for(let i=0;i<14;i++) c.fillRect(20+i*35,42,24,12);
+  c.fillStyle='#7cff8a'; [1,4,8].forEach(i=>c.fillRect(26+i*35,44,12,3)); }); }
+function _efisTex(){ return _ckTex(128,48,(c)=>{ c.fillStyle='#4a5058'; c.fillRect(0,0,128,48); c.fillStyle='#d7d9dc';
+  [[20,24],[64,24],[108,24]].forEach(([x,y])=>{ c.beginPath(); c.arc(x,y,11,0,Math.PI*2); c.fill(); }); c.fillStyle='#222'; [[20,24],[64,24],[108,24]].forEach(([x,y])=>c.fillRect(x-1,y-10,2,9)); }); }
+function _ovhTex(){ return _ckTex(512,512,(c)=>{
+  c.fillStyle='#4f555d'; c.fillRect(0,0,512,512);
+  c.strokeStyle='#363b41'; c.lineWidth=3;
+  for(let r=0;r<6;r++) for(let k=0;k<5;k++){ const x=8+k*101, y=8+r*84; c.strokeRect(x,y,95,78);
+    c.fillStyle='#e9e9e9'; c.font='8px Arial'; c.fillText(['FUEL','ELEC','HYD','APU','BLEED','PRESS','ANTI-ICE','LIGHTS'][(r*5+k)%8],x+6,y+12);
+    for(let i=0;i<4;i++){ const sx=x+12+i*21, sy=y+30;
+      if((r+k+i)%3===0){ c.fillStyle=((r*k+i)%4===0)?'#3fa8ff':'#24272b'; c.fillRect(sx-6,sy-6,16,12); }
+      else { c.fillStyle='#cfd2d6'; c.beginPath(); c.arc(sx+2,sy,4,0,Math.PI*2); c.fill(); c.fillRect(sx+1,sy-12,3,10); }
+      c.fillStyle='#c9ccd0'; c.fillRect(sx-4,sy+20,14,3); } } }); }
+function _pedTex(){ return _ckTex(256,384,(c)=>{
+  c.fillStyle='#4a5058'; c.fillRect(0,0,256,384); c.strokeStyle='#2f3338'; c.lineWidth=3;
+  for(let r=0;r<5;r++){ const y=150+r*46; c.strokeRect(10,y,236,40); c.fillStyle='#0a0a0a'; c.fillRect(30,y+10,60,18); c.fillRect(150,y+10,60,18);
+    c.fillStyle='#ff9d2e'; c.font='bold 12px monospace'; c.fillText(['118.30','121.90','123.45','109.50','7000'][r],34,y+24); c.fillText(['119.10','124.70','118.00','110.30','TA/RA'][r],154,y+24);
+    c.fillStyle='#d7d9dc'; c.beginPath(); c.arc(118,y+20,8,0,Math.PI*2); c.fill(); }
+  c.fillStyle='#2f3338'; c.fillRect(70,10,116,120); c.fillStyle='#1c1f23'; c.fillRect(96,18,10,104); c.fillRect(150,18,10,104); }); }
+
+function buildCockpit737(zN){
+  const {floorY:F,x}=CABIN;
+  const grey=mkStd(0x4c5259,0.7,0.15), dark=mkStd(0x1b1d21,0.6,0.1), black=mkStd(0x0e0f11,0.5,0.1);
+  const add=(geo,m,px,py,pz,rx=0,ry=0,rz=0)=>{ const o=new THREE.Mesh(geo,m); o.position.set(px,py,pz); o.rotation.set(rx,ry,rz); scene.add(o); return o; };
+  const scr=(t,w,h)=>new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({map:t,toneMapped:false}));
+  // Panel principal (levemente inclinado hacia la nariz) con 6 pantallas
+  const pg=new THREE.Group(); pg.position.set(x,F+0.88,zN+0.55); pg.rotation.x=0.15; scene.add(pg);
+  const body=new THREE.Mesh(new THREE.BoxGeometry(2.7,0.72,0.14),grey); pg.add(body);
+  const pfd=_duPFD(), nd=_duND();
+  [[-1.06,0,pfd],[-0.66,0,nd],[0.66,0,nd],[1.06,0,pfd],[0,0.16,_duENG()],[0,-0.19,_duSYS()]].forEach(([dx,dy,t])=>{
+    const bz=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.34,0.03),black); bz.position.set(dx,dy,-0.08); pg.add(bz);
+    const p=scr(t,0.3,0.3); p.position.set(dx,dy,-0.097); p.rotation.y=Math.PI; pg.add(p);
+  });
+  // Instrumentos de respaldo y palanca del tren de aterrizaje
+  [[-0.31,0.18],[0.31,0.18]].forEach(([dx,dy])=>{ const b=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.13,0.03),black); b.position.set(dx,dy,-0.08); pg.add(b);
+    const p=scr(_ckTex(64,64,(c)=>{ c.fillStyle='#2f78d8'; c.fillRect(0,0,64,32); c.fillStyle='#8b5a2b'; c.fillRect(0,32,64,32); c.fillStyle='#ffd400'; c.fillRect(18,30,28,4); }),0.1,0.1); p.position.set(dx,dy,-0.097); p.rotation.y=Math.PI; pg.add(p); });
+  { const gl=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.16,0.03),mkStd(0xbfc3c7,0.4,0.6)); gl.position.set(0.31,-0.14,-0.11); gl.rotation.x=-0.5; pg.add(gl);
+    const kb=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,0.04,12),mkStd(0xf2f2f2,0.4,0)); kb.position.set(0.31,-0.07,-0.15); kb.rotation.z=Math.PI/2; pg.add(kb); }
+  // Glareshield con el MCP (piloto automático) y los paneles EFIS
+  add(new THREE.BoxGeometry(2.8,0.08,0.62),dark,x,F+1.27,zN+0.62);
+  add(new THREE.BoxGeometry(2.8,0.14,0.08),dark,x,F+1.2,zN+0.3);
+  { const m=scr(_mcpTex(),1.24,0.13); m.position.set(x,F+1.2,zN+0.255); m.rotation.y=Math.PI; scene.add(m);
+    const ef=_efisTex(); [-0.95,0.95].forEach(dx=>{ const e=scr(ef,0.34,0.12); e.position.set(x+dx,F+1.2,zN+0.255); e.rotation.y=Math.PI; scene.add(e); }); }
+  // Parabrisas: seis paños con cielo y parantes oscuros
+  const sk=_ckTex(512,256,(c)=>{ const gr=c.createLinearGradient(0,0,0,256); gr.addColorStop(0,'#3a78c2'); gr.addColorStop(0.75,'#bfe0f6'); gr.addColorStop(1,'#e8f3fb'); c.fillStyle=gr; c.fillRect(0,0,512,256);
+    c.fillStyle='rgba(255,255,255,0.9)'; [[90,190,80,14],[280,205,110,13],[440,185,60,11]].forEach(([a,b,w,h])=>{ c.beginPath(); c.ellipse(a,b,w,h,0,0,Math.PI*2); c.fill(); }); });
+  const skyM=new THREE.MeshBasicMaterial({map:sk,toneMapped:false});
+  const frameM=mkStd(0x2a2d33,0.6,0.2);
+  [[-0.36,0,0.68],[0.36,0,0.68],[-1.02,-0.55,0.62],[1.02,0.55,0.62],[-1.5,-1.05,0.45],[1.5,1.05,0.45]].forEach(([dx,yaw,w],i)=>{
+    const zz=zN+0.95+(i<2?0:i<4?-0.18:-0.6);
+    const p=new THREE.Mesh(new THREE.PlaneGeometry(w,0.52),skyM); p.position.set(x+dx,F+1.58,zz); p.rotation.set(0,Math.PI+yaw,0); scene.add(p);
+    [-1,1].forEach(sd=>{ const post=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.6,0.05),frameM); post.position.set(x+dx+sd*Math.cos(yaw)*w/2,F+1.58,zz-sd*Math.sin(yaw)*w/2); post.rotation.y=yaw; scene.add(post); });
+    const top=new THREE.Mesh(new THREE.BoxGeometry(w+0.05,0.06,0.06),frameM); top.position.set(x+dx,F+1.87,zz); top.rotation.y=yaw; scene.add(top);
+  });
+  // Panel de techo (overhead) con interruptores, inclinado hacia adelante
+  { const ov=new THREE.Mesh(new THREE.PlaneGeometry(1.3,1.5),new THREE.MeshStandardMaterial({map:_ovhTex(),roughness:0.7,metalness:0.1}));
+    ov.position.set(x,F+2.12,zN-0.25); ov.rotation.x=Math.PI/2+0.32; scene.add(ov);
+    add(new THREE.BoxGeometry(1.36,0.08,1.56),dark,x,F+2.19,zN-0.24,0.32,0,0); }
+  // Pedestal central: radios, aceleradores, freno aerodinámico, flaps y dos FMC
+  const pz0=zN-1.15, pz1=zN+0.45;
+  add(new THREE.BoxGeometry(0.46,0.66,pz1-pz0),grey,x,F+0.33,(pz0+pz1)/2);
+  { const tp=new THREE.Mesh(new THREE.PlaneGeometry(0.44,pz1-pz0-0.02),new THREE.MeshStandardMaterial({map:_pedTex(),roughness:0.7}));
+    tp.position.set(x,F+0.665,(pz0+pz1)/2); tp.rotation.x=-Math.PI/2; tp.rotation.z=Math.PI; scene.add(tp); }
+  const cdu=_cduTex();
+  [-0.11,0.11].forEach(dx=>{ const p=new THREE.Mesh(new THREE.PlaneGeometry(0.19,0.21),new THREE.MeshBasicMaterial({map:cdu,toneMapped:false})); p.position.set(x+dx,F+0.69,zN+0.28); p.rotation.set(-Math.PI/2+0.55,Math.PI,0,'YXZ'); scene.add(p); });
+  const knobW=mkStd(0xeeeeee,0.5,0), knobB=mkStd(0x111111,0.4,0.1), steel=mkStd(0xb9bec4,0.3,0.7);
+  [-0.06,0.06].forEach(dx=>{ add(new THREE.BoxGeometry(0.025,0.2,0.04),steel,x+dx,F+0.76,zN-0.35,-0.35); const k=add(new THREE.CylinderGeometry(0.03,0.03,0.07,12),knobB,x+dx,F+0.86,zN-0.32,0,0,Math.PI/2); });
+  add(new THREE.BoxGeometry(0.02,0.16,0.03),steel,x-0.18,F+0.74,zN-0.45,-0.3); add(new THREE.BoxGeometry(0.08,0.03,0.04),knobW,x-0.18,F+0.82,zN-0.43);   // speedbrake
+  add(new THREE.BoxGeometry(0.02,0.16,0.03),steel,x+0.18,F+0.74,zN-0.6,-0.3); add(new THREE.BoxGeometry(0.06,0.04,0.06),knobW,x+0.18,F+0.82,zN-0.58);    // flaps
+  // Columnas de mando con yoke
+  [-0.62,0.62].forEach(px=>{
+    add(new THREE.CylinderGeometry(0.035,0.045,0.82,10),dark,x+px,F+0.41,zN+0.0,-0.12);
+    add(new THREE.BoxGeometry(0.3,0.045,0.045),dark,x+px,F+0.83,zN-0.05);
+    [-1,1].forEach(sd=>{ add(new THREE.BoxGeometry(0.045,0.15,0.05),black,x+px+sd*0.15,F+0.88,zN-0.05,0,0,sd*0.12); });
+    add(new THREE.CylinderGeometry(0.05,0.05,0.04,14),mkStd(0xcfd2d6,0.4,0.4),x+px,F+0.83,zN-0.08,Math.PI/2);
+    // consolas laterales
+    add(new THREE.BoxGeometry(0.32,0.62,1.3),grey,x+px*2.0,F+0.31,zN-0.55);
+  });
+  { const tl=add(new THREE.CylinderGeometry(0.05,0.05,0.03,14),knobB,x-1.18,F+0.66,zN-0.45); }   // tiller del comandante
+  // Mamparo de fondo con la puerta abierta, en tono cabina
+  add(new THREE.BoxGeometry(0.12,0.2,0.12),dark,x,F+0.05,zN-1.2);
+}
+
+// ── Pilotos en butacas giratorias: si los mirás al pasar, se dan vuelta y saludan
+const PILOT_CPT={skin:0xe8bfa0,hair:0x8e8b86,top:0xf4f5f7,pants:0x16213a,shoes:0x0a0a0a,role:'pilot',female:false,hairStyle:'side',noHat:true,iris:0x3c5a7a,glasses:false,seed:51};
+const PILOT_FO ={skin:0xc99a76,hair:0x24170f,top:0xf4f5f7,pants:0x16213a,shoes:0x0a0a0a,role:'pilot',female:true,hairStyle:'ponytail',noHat:true,lashes:true,iris:0x4a2e1c,glasses:false,seed:52};
+const _pilots=[];
+function spawnCockpitPilots(){
+  const {floorY:F,x}=CABIN, zN=-29.4;
+  const seatM=mkStd(0x0f1013,0.8,0.05), seatL=mkStd(0x1d1f24,0.8,0.05), metal=mkStd(0x8c9196,0.4,0.6);
+  [[-0.62,PILOT_CPT,'👨‍✈️ El comandante se da vuelta y te saluda: «¡Bienvenido a bordo! Hoy tenemos un vuelo tranquilo.»',1],
+   [ 0.62,PILOT_FO ,'👩‍✈️ La primera oficial te saluda: «¡Hola! Cualquier cosa que necesites, la tripulación está para ayudarte.»',-1]].forEach(([px,look,msg,ws])=>{
+    const pv=new THREE.Group(); pv.position.set(x+px,F,zN-0.6); scene.add(pv);
+    const B=(w,h,d,m,a,b,c2)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); o.position.set(a,b,c2); o.castShadow=true; pv.add(o); return o; };
+    const col=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.12,0.38,12),metal); col.position.y=0.19; pv.add(col);
+    B(0.56,0.12,0.56,seatM,0,0.44,0.02);                         // asiento
+    B(0.54,0.9,0.12,seatM,0,0.95,-0.3);                          // respaldo
+    B(0.3,0.2,0.1,seatL,0,1.5,-0.31);                            // apoyacabeza
+    [-1,1].forEach(sd=>B(0.07,0.06,0.42,seatL,sd*0.3,0.68,0.0)); // apoyabrazos
+    const n=buildCharacter(look);
+    n.position.set(0,-0.25,0.05); pv.add(n);
+    n.children.forEach(c=>{ if(c.userData.isLeg){ c.rotation.x=-Math.PI/2; const j=_joint(c); if(j) j.rotation.x=Math.PI/2; }
+      if(c.userData.isArm){ c.rotation.x=-0.9; const j=_joint(c); if(j) j.rotation.x=-0.5; } });
+    _pilots.push({pv,n,msg,ws,turn:0,state:'idle',t:0,cool:0,ph:Math.random()*6});
+  });
+}
+const _plF=new THREE.Vector3();
+function updateCockpitPilots(delta,t){
+  if(!_pilots.length) return;
+  const p=camera.position; camera.getWorldDirection(_plF);
+  const L=(a,b,k)=>a+(b-a)*Math.min(1,delta*k);
+  for(const P of _pilots){
+    const hx=P.pv.position.x, hy=P.pv.position.y+1.5, hz=P.pv.position.z;
+    const dx=hx-p.x, dy=hy-p.y, dz=hz-p.z, d=Math.hypot(dx,dy,dz)||1;
+    const look=(dx*_plF.x+dy*_plF.y+dz*_plF.z)/d;
+    const near=isGameActive&&!_flight&&!uiModalOpen&&d<3.8&&p.z>-33.6;
+    const want=Math.max(-2.45,Math.min(2.45,Math.atan2(p.x-hx,p.z-hz)));
+    P.cool-=delta; P.t+=delta; P.ph+=delta;
+    if(P.state==='idle'&&near&&look>0.93&&P.cool<=0){ P.state='turn'; P.t=0; }
+    if(P.state==='turn'||P.state==='wave'||P.state==='hold'){
+      P.turn=L(P.turn,want,2.2);
+      if(P.state==='turn'&&P.t>1.0){ P.state='wave'; P.t=0; showToast(P.msg); }
+      else if(P.state==='wave'&&P.t>2.8){ P.state='hold'; P.t=0; }
+      else if(P.state==='hold'&&(!near||P.t>4)){ P.state='back'; P.t=0; }
+    } else if(P.state==='back'){
+      P.turn=L(P.turn,0,1.8); if(Math.abs(P.turn)<0.02){ P.turn=0; P.state='idle'; P.cool=12; }
+    }
+    P.pv.rotation.y=P.turn;
+    const k=Math.min(1,Math.abs(P.turn)/1.3);          // 0: manos en el yoke · 1: de frente a vos
+    P.n.children.forEach(c=>{
+      if(!c.userData.isArm) return;
+      const s=c.userData.side, j=_joint(c);
+      if(P.state==='wave'&&s===P.ws){
+        const a=Math.min(1,P.t*3)*(P.t>2.3?Math.max(0,(2.8-P.t)/0.5):1);
+        c.rotation.x=L(c.rotation.x,-0.25*a-0.9*(1-a),10);
+        c.rotation.z=s*(0.06+a*(2.5+Math.sin(t*11)*0.3));
+        if(j) j.rotation.x=-0.5*(1-a)-0.3*a;
+      } else {
+        c.rotation.x=L(c.rotation.x,-0.9*(1-k)-0.12*k,4); c.rotation.z=L(c.rotation.z,s*0.06,5);
+        if(j) j.rotation.x=L(j.rotation.x,-0.5*(1-k)-0.75*k,4);
+      }
+    });
+    const hg=P.n.userData.headGroup;
+    if(hg){
+      if(P.state==='idle'){ hg.rotation.y=L(hg.rotation.y,Math.sin(P.ph*0.22)*0.15,1.5); hg.rotation.x=L(hg.rotation.x,-0.06+Math.sin(P.ph*0.3)*0.05,1.5); }
+      else { hg.rotation.y=L(hg.rotation.y,Math.max(-0.8,Math.min(0.8,want-P.turn)),4); hg.rotation.x=L(hg.rotation.x,0.05,4); }
+    }
+  }
+}
+
 // ─── FASE 62: POLICÍA DE SEGURIDAD AEROPORTUARIA (PSA) ──────
 // Dos versiones del uniforme formal (saco gris oscuro, camisa blanca, corbata):
 // ella, con pelo oscuro tirante y rodete bajo, aros de perla y sonrisa amplia;
@@ -1260,6 +1450,13 @@ const PSA_F={skin:0xdcab88,hair:0x100b08,top:0x1d1f25,pants:0x1a1b20,shoes:0x111
 const PSA_M={skin:0xc28d66,hair:0x2a2826,top:0x1d1f25,pants:0x1a1b20,shoes:0x111111,role:'police',
   female:false,hairStyle:'short',temples:0x8e8a84,stubble:0x8b8680,noHat:true,psaUniform:true,iris:0x3b2416,glasses:false,seed:33};
 let psaArchOfficer=null;
+// FASE 63: tripulantes de cabina (TCP). Ella: piel clara, pelo castaño cobrizo
+// tirante con rodete, ojos claros, labios rojos y pañuelo azul/marino/amarillo.
+// Él: piel clara, pelo castaño oscuro, barba completa oscura, corbata azul.
+const TCP_F={skin:0xf0cdb4,hair:0x6a3b22,top:0xfbfbf8,pants:0x1c2a5e,shoes:0x111111,role:'attendant',
+  female:true,hairStyle:'slick',noHat:true,tcp:true,scarf:true,lashes:true,lipColor:0xb23a3e,iris:0x5b7a8c,glasses:false,seed:31};
+const TCP_M={skin:0xeac3a8,hair:0x3b271a,top:0xfbfbf8,pants:0x1c2a5e,shoes:0x111111,role:'attendant',tieCol:0x2f6fc4,
+  female:false,hairStyle:'short',noHat:true,tcp:true,stubble:0x3b271a,iris:0x6b5a45,glasses:false,seed:32};
 // Al llegar al arco central, el oficial se te pone enfrente y te avisa que hay
 // que hacer un control. Pasos guiados: bandeja → arco → (a veces) detector
 // manual → "todo en orden". Una vez por recorrido.
@@ -4511,7 +4708,7 @@ function buildCharacter(opts){
   const hrM=mkStd(hair,0.85,0.02);
   const hShineM=mkStd(Math.min(hair+0x181008,0xffffff),0.4,0.05); // brillo de pelo
 
-  if((role==='police'&&!opts.noHat)||role==='agent'||role==='pilot'||role==='attendant'){
+  if(!opts.noHat&&(role==='police'||role==='agent'||role==='pilot'||role==='attendant')){
     // Sombrero de uniforme
     const htM=mkStd(hatCol,0.6,0.05);
     hg.add(BX(0.50,0.05,0.48,htM,0,0.235,-0.025)); // ala/brim
@@ -4544,7 +4741,6 @@ function buildCharacter(opts){
       hg.add(cap(hrM,0.214,-0.3,0.045));
       hg.add(back(0.212,0.214,0.15,0.03,Math.PI*0.6,Math.PI*0.8));                         // costados y nuca, tirantes
       const bun=SP(0.085,10,hrM,0,-0.02,-0.215); bun.scale.set(1.05,0.9,0.85); hg.add(bun); // rodete bajo
-      hg.add(BX(0.3,0.1,0.05,hrM,0,0.04,-0.18));                                       // nuca recogida
     } else if(hairStyle==='swept'){
       hg.add(cap(hrM,0.218,-0.36,0.055));                                        // casquete
       const top=SP(0.17,10,hrM,0,0.17,0.02); top.scale.set(1.12,0.42,1.12); top.rotation.x=-0.2; hg.add(top); // volumen peinado hacia atrás
@@ -4572,7 +4768,7 @@ function buildCharacter(opts){
       if(hairStyle==='ponytail'){ hg.add(SP(0.06,6,hrM,0,0.1,-0.215));
         const tail=SP(0.07,7,hrM,0,-0.06,-0.25); tail.scale.set(0.7,1.9,0.7); tail.rotation.x=0.35; hg.add(tail); }
       // Brillo de pelo
-      const shineStrip=BX(0.2,0.02,0.16,hShineM,0.05,0.255,0.02); shineStrip.rotation.z=0.12; if(!opts.psaUniform) hg.add(shineStrip);
+      const shineStrip=BX(0.2,0.02,0.16,hShineM,0.05,0.255,0.02); shineStrip.rotation.z=0.12; if(!opts.psaUniform&&!opts.tcp&&role!=='pilot') hg.add(shineStrip);
     }
   }
   // Sienes canosas (opcional)
@@ -4614,6 +4810,20 @@ function buildCharacter(opts){
   }
   hg.userData={isHead:true}; g.add(hg);
 
+  // FASE 63: TCP -- camisa blanca con cuello; ella con pañuelo azul, marino y amarillo
+  if(opts.tcp){
+    const wM=mkStd(0xfbfbf8,0.8,0);
+    [-1,1].forEach(sd=>{ const cl=BX(0.075,0.11,0.02,wM,sd*0.06,1.47,0.13); cl.rotation.z=sd*0.5; cl.rotation.x=-0.2; g.add(cl); });  // cuello
+    if(opts.scarf){
+      const lb=mkStd(0x3f86d8,0.7,0), nv=mkStd(0x1c2a5e,0.7,0), yl=mkStd(0xe2b33c,0.6,0);
+      const band=new THREE.Mesh(new THREE.TorusGeometry(0.098,0.022,6,16),lb); band.rotation.x=Math.PI/2; band.position.set(0,1.5,0.01); band.scale.set(1,0.85,1); g.add(band);
+      const kn=SP(0.04,8,lb,0.035,1.44,0.13); kn.scale.set(1.2,0.9,0.8); g.add(kn);        // nudo
+      const t1=BX(0.075,0.26,0.016,lb,0.0,1.31,0.15); t1.rotation.z=0.3; g.add(t1);         // punta celeste
+      const t2=BX(0.07,0.24,0.016,nv,0.07,1.31,0.153); t2.rotation.z=-0.12; g.add(t2);      // punta marino
+      const t3=BX(0.014,0.24,0.017,yl,0.105,1.31,0.154); t3.rotation.z=-0.12; g.add(t3);    // borde amarillo
+    }
+    g.add(BX(0.07,0.02,0.008,mkStd(0xcfa94a,0.25,0.75),-0.11,1.3,0.152));                 // alas doradas
+  }
   if(opts.psaUniform){
     const shirtM=mkStd(0xf7f7f4,0.8,0), tieM=mkStd(0x1b1e25,0.6,0.05);
     const goldM=mkStd(0xcfa94a,0.25,0.75), silverM=mkStd(0xd5d8dc,0.25,0.8), dk=mkStd(shade(top,0.72),0.8,0);
@@ -4654,13 +4864,13 @@ function buildCharacter(opts){
   }
   if(role==='agent'||role==='attendant'){
     const tieMatR=mkStd(tieCol,0.6,0.05);
-    g.add(BX(0.055,0.21,0.022,tieMatR,0,1.225,0.148));              // corbata
+    if(!opts.scarf) g.add(BX(0.055,0.21,0.022,tieMatR,0,1.225,0.148));              // corbata
     g.add(BX(0.022,0.135,0.022,mkStd(0xfafafa,0.5,0),-0.068,1.295,0.147)); // solapa L
     g.add(BX(0.022,0.135,0.022,mkStd(0xfafafa,0.5,0), 0.068,1.295,0.147)); // solapa R
     g.add(BX(0.135,0.038,0.018,mkStd(0xfafafa,0.3,0),0,1.062,0.148)); // gafete nombre
     // Detalle gafete -- letras insinuadas
     g.add(BX(0.12,0.012,0.002,mkStd(0x3355aa,0.6,0),0,1.065,0.152));
-    if(role==='attendant'){
+    if(role==='attendant'&&!opts.tcp){
       g.add(BX(0.075,0.075,0.055,mkStd(0xcc1111,0.5,0.05),0.162,1.345,0.10)); // pañuelo nudo
     }
   }
@@ -5250,7 +5460,7 @@ function spawnNPCs(lite){ // lite: celular -- menos personas, mismas rutas princ
     {x:0,z:-38,dx:0,dz:-56,spd:0.7},
     {x:0,z:-54,dx:0,dz:-36,spd:0.65}
   ].forEach((d,i)=>{
-    const npc=buildCharacter({skin:SKINS[i],hair:HAIRS[0],top:0x1a2e42,pants:0x1a2e42,shoes:0x111111,role:'attendant',hatCol:0x1a2e42,tieCol:0xcc2222});
+    const npc=buildCharacter(i===0?Object.assign({},TCP_F,{hair:0x3a2416,skin:0xe6bb9c,seed:41}):Object.assign({},TCP_M,{stubble:null,hair:0x241812,skin:0xd9a985,seed:42}));
     npc.position.set(d.x,0,d.z);
     npc.userData.isNPC=true; npc.userData.isWalking=true;
     npc.userData.spd=d.spd; npc.userData.wt=Math.random()*Math.PI*2;
@@ -5363,8 +5573,8 @@ function spawnStaffNPCs(){
 // usa buildCharacter() como fallback transparente
 // ══════════════════════════════════════════════════
 function loadCabinCrew(){
-  // Sin GLTFLoader o sin archivos GLB: usar siempre la tripulación procedural detallada
-  if(!gltfLoader){
+  // FASE 63: no hay archivos GLB en assets/ -- tripulación procedural directa (sin 404)
+  if(true){
     spawnCabinCrewFallback(); return;
   }
   // Intentar cargar GLBs externos -- si fallan, spawnCabinCrewFallback ya creó la tripulación
@@ -5408,34 +5618,15 @@ function loadCabinCrew(){
 }
 
 function spawnCabinCrewFallback(){
-  // ── COMANDANTE -- sentado en asiento izquierdo del cockpit
-  // El cockpit está en z ≈ -46 + 17.5 = -28.5; piloto en asiento izquierdo
-  const pilot1=buildPilotDetailed(SKINS[0], HAIRS[6]);
-  pilot1.position.set(-0.62, 0.05, -29.95);
-  pilot1.rotation.y=0;         // mirando a los instrumentos (hacia la nariz, +z)
-  pilot1.userData.isNPC=true; pilot1.userData.isStaff=true;
-  pilot1.userData.role='pilot'; pilot1.userData.baseRotY=0;
-  pilot1.userData.idlePhase=0; pilot1.userData.headGroup=pilot1.userData.headGroup;
-  // Recuperar headGroup si existe
-  pilot1.traverse(c=>{ if(c.userData&&c.userData.isHead) pilot1.userData.headGroup=c; });
-  npcs.push(pilot1); scene.add(pilot1);
+  // ── FASE 63: comandante y primera oficial, sentados en butacas giratorias
+  spawnCockpitPilots();
 
-  // ── COPILOTO -- asiento derecho del cockpit
-  const pilot2=buildPilotDetailed(SKINS[2], HAIRS[3]);
-  pilot2.position.set(0.62, 0.05, -29.95);
-  pilot2.rotation.y=0;
-  pilot2.userData.isNPC=true; pilot2.userData.isStaff=true;
-  pilot2.userData.role='pilot'; pilot2.userData.baseRotY=0;
-  pilot2.userData.idlePhase=1.1;
-  pilot2.traverse(c=>{ if(c.userData&&c.userData.isHead) pilot2.userData.headGroup=c; });
-  npcs.push(pilot2); scene.add(pilot2);
-
-  // ── AUXILIAR 1 (femenina) -- al inicio del pasillo con carrito
-  const att1=buildAttendantDetailed(SKINS[3], HAIRS[1], 'female');
+  // ── TCP 1 (mujer) -- recibe en la puerta L1
+  const att1=buildCharacter(TCP_F);
   att1.position.set(-0.55, 0, -32.85); // recibe a los pasajeros en la puerta L1
   att1.rotation.y=-Math.PI*0.42;      // mirando hacia la puerta (lado izquierdo)
   att1.userData.isNPC=true; att1.userData.isStaff=true;
-  att1.userData.role='attendant'; att1.userData.baseRotY=att1.rotation.y;
+  att1.userData.role='attendant'; att1.userData.baseRotY=att1.rotation.y; att1.userData.tcp=true;
   att1.userData.idlePhase=0.5;
   att1.traverse(c=>{ if(c.userData&&c.userData.isHead) att1.userData.headGroup=c; });
   npcs.push(att1); scene.add(att1);
@@ -5447,11 +5638,11 @@ function spawnCabinCrewFallback(){
   scene.add(cart1);
 
   // ── AUXILIAR 2 (masculino) -- al fondo del pasillo
-  const att2=buildAttendantDetailed(SKINS[4], HAIRS[0], 'male');
+  const att2=buildCharacter(TCP_M);
   att2.position.set(-1.2, 0, -53);
   att2.rotation.y=Math.PI*0.05;
   att2.userData.isNPC=true; att2.userData.isStaff=true;
-  att2.userData.role='attendant'; att2.userData.baseRotY=att2.rotation.y;
+  att2.userData.role='attendant'; att2.userData.baseRotY=att2.rotation.y; att2.userData.tcp=true;
   att2.userData.idlePhase=2.1;
   att2.traverse(c=>{ if(c.userData&&c.userData.isHead) att2.userData.headGroup=c; });
   npcs.push(att2); scene.add(att2);
@@ -5655,7 +5846,7 @@ function updateNPCs(delta, speedFactor){
           }
         }
         // Brazo derecho hacia carrito: pequeño movimiento
-        npc.children.forEach(c=>{
+        if(!ud.tcp) npc.children.forEach(c=>{
           if(c.isGroup && c.position.x < -0.2 && c.position.y > 0.9){
             c.rotation.x = 0.4 + Math.sin(ud.idlePhase*0.7)*0.04;
           }
@@ -8457,6 +8648,7 @@ function animate(){
   updateAutoWalk(delta);        // FASE 43: caminata guiada por la manga
   updateGuideArrows(delta);     // FASE 58: flechas guía en el piso
   updateSecurityCheck(delta);   // FASE 62: control de la PSA en el arco
+  updateCockpitPilots(delta,t);   // FASE 63: los pilotos saludan
   updateCabinSeq(delta);        // FASE 46: anuncios de a bordo
   if(_arrWalkTex) _arrWalkTex.offset.y-=delta*(calmMode?0.22:0.33); // FASE 48: cinta caminadora
   updateBaggageHall(delta,t);   // FASE 49: sala de equipajes
