@@ -393,11 +393,10 @@ function buildWorld(){
   buildServicePosts();
   buildHallAmbience();
   // ───────────────────────────────────────────────
-  buildEntranceTarmacView(); // Fase 7: vista de plataforma desde la entrada
+  // (FASE 66: la vista de "pista" pintada frente a la entrada se reemplazó por la calle real)
   buildExterior(); buildZoneRings();
   // ── FASE 25: Calidad máxima del hall ───────────
-  buildStreetScene();
-  buildEntranceFacadeWindows();
+  buildEntranceFacade();   // FASE 66: frente vidriado con puertas y calle con autos
   buildEntranceSideWindows();
   buildHallQuality();
   // ── FASE 29: Señalética suspendida (puertas, baños, FIDS) ──
@@ -1107,6 +1106,7 @@ function buildInteractiveSpots(){
   buildDonationTotem(); // FASE 42: aporte voluntario
   buildFlightSimTotem();// FASE 64: simulador de vuelo (Cessna 172 en Buenos Aires)
   buildPackingSign();   // FASE 65: cómo armar una maleta de forma inteligente
+  buildInfoSigns();     // FASE 66: RENAPER, mapa, farmacia y medicina aeronáutica
   buildMagazineStand(); // FASE 44: revistas digitales
   buildChargeStations();// FASE 44: estaciones de carga
   buildSeatSpot();      // FASE 46: asiento 14C (vuelo simulado)
@@ -1796,6 +1796,9 @@ function setupInteractionUI(){
   on('btn-close-donation',()=>closeUiModal('donation-modal'));
   on('btn-close-flightsim',()=>closeUiModal('flightsim-modal'));
   on('btn-close-packing',()=>closeUiModal('packing-modal'));
+  on('btn-close-link',()=>closeUiModal('link-modal')); on('btn-link-back',()=>closeUiModal('link-modal'));
+  on('btn-link-go',()=>{ if(_linkCur) logInteraction(_linkCur,'abrir'); setTimeout(()=>closeUiModal('link-modal'),150); });
+  on('btn-close-map',()=>closeUiModal('map-modal')); on('btn-map-back',()=>closeUiModal('map-modal'));
   on('btn-packing-back',()=>closeUiModal('packing-modal'));
   on('btn-packing-go',()=>{ logInteraction('maleta','abrir'); setTimeout(()=>closeUiModal('packing-modal'),150); });
   on('btn-flightsim-back',()=>closeUiModal('flightsim-modal'));
@@ -1835,6 +1838,8 @@ function setupInteractionUI(){
     else if(!document.getElementById('donation-modal').classList.contains('hidden')) closeUiModal('donation-modal');
     else if(!document.getElementById('flightsim-modal').classList.contains('hidden')) closeUiModal('flightsim-modal');
     else if(!document.getElementById('packing-modal').classList.contains('hidden')) closeUiModal('packing-modal');
+    else if(!document.getElementById('link-modal').classList.contains('hidden')) closeUiModal('link-modal');
+    else if(!document.getElementById('map-modal').classList.contains('hidden')) closeUiModal('map-modal');
     else if(!document.getElementById('cafe-modal').classList.contains('hidden')){ clearTimeout(_cafeTimer); closeUiModal('cafe-modal'); }
     else if(!document.getElementById('mate-modal').classList.contains('hidden')){ clearTimeout(_mateTimer); closeUiModal('mate-modal'); }
     else if(!document.getElementById('zone-panel').classList.contains('hidden')) closeZonePanel();
@@ -2394,6 +2399,265 @@ function buildFlightSimTotem(){
     root:g,marker:mk,markerBaseY:2.65,onTrigger:openFlightSimModal});
 }
 
+
+// ─── FASE 66: FRENTE VIDRIADO, VEREDA Y CALLE CON TRÁNSITO ──
+// Una gran pared de vidrio de piso a techo con tres puertas automáticas que se
+// abren al acercarte. Afuera: vereda con toldos de lona tensada, cordón
+// amarillo, barandas, calle de tres carriles con autos, taxis porteños (negro
+// y amarillo) y combis que llegan, dejan pasajeros y se van; arboleda al fondo.
+const FACADE_Z=55.6;
+let _doors=[], _traffic=null;
+function buildEntranceFacade(){
+  const FZ=FACADE_Z, H=13;
+  const glassM=new THREE.MeshStandardMaterial({color:0xcfe6f5,transparent:true,opacity:0.16,roughness:0.05,metalness:0.1,depthWrite:false,side:THREE.DoubleSide});
+  const frameM=mkStd(0x3a3f47,0.4,0.5);
+  const box3=(w,hh,d,m,x,y,z)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,hh,d),m); o.position.set(x,y,z); scene.add(o); return o; };
+  const DOORS=[-6,0,6], DH=2.8, DW=2.6;
+  // Vidrio: arriba de las puertas, de punta a punta; abajo, entre puertas
+  { const up=new THREE.Mesh(new THREE.PlaneGeometry(34,H-DH),glassM); up.position.set(0,DH+(H-DH)/2,FZ); up.renderOrder=2; scene.add(up); }
+  [[-17,-7.4],[-4.6,-1.4],[1.4,4.6],[7.4,17]].forEach(([a,b])=>{ const p=new THREE.Mesh(new THREE.PlaneGeometry(b-a,DH),glassM); p.position.set((a+b)/2,DH/2,FZ); p.renderOrder=2; scene.add(p); });
+  // Parantes y travesaños
+  [-17,-14,-11,-7.4,-4.6,-1.4,1.4,4.6,7.4,11,14,17].forEach(x=>box3(0.14,H,0.22,frameM,x,H/2,FZ));
+  [DH,6.6,10,H-0.1].forEach(y=>box3(34,0.14,0.22,frameM,0,y,FZ));
+  box3(34,0.18,0.3,frameM,0,0.1,FZ);
+  // Puertas automáticas (dos hojas por puerta)
+  const leafGlass=new THREE.MeshStandardMaterial({color:0xd9eef9,transparent:true,opacity:0.22,roughness:0.05,metalness:0.1,depthWrite:false,side:THREE.DoubleSide});
+  const signT=_ckTex(512,96,(c)=>{ c.fillStyle='#16324a'; c.fillRect(0,0,512,96); c.fillStyle='#ffffff'; c.font='bold 40px Arial'; c.textAlign='center'; c.fillText('Salidas · Departures',256,62); });
+  DOORS.forEach(dx=>{
+    const leaves=[-1,1].map(sd=>{
+      const g=new THREE.Group(); g.position.set(dx+sd*DW/4,0,FZ); scene.add(g);
+      const gl=new THREE.Mesh(new THREE.PlaneGeometry(DW/2-0.06,DH-0.1),leafGlass); gl.position.y=DH/2; gl.renderOrder=3; g.add(gl);
+      [[DW/2,0.06,0,0.05],[DW/2,0.06,0,DH-0.05],[0.06,DH,-DW/4+0.03,DH/2],[0.06,DH,DW/4-0.03,DH/2]].forEach(([w,hh,ox,oy])=>{ const f=new THREE.Mesh(new THREE.BoxGeometry(w,hh,0.07),frameM); f.position.set(ox,oy,0); g.add(f); });
+      const hd=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.5,0.06),mkStd(0xc9ced4,0.3,0.7)); hd.position.set(-sd*(DW/4-0.12),1.1,0.06); g.add(hd);
+      return {g,sd,base:dx+sd*DW/4};
+    });
+    box3(DW+0.4,0.3,0.4,frameM,dx,DH+0.15,FZ);                 // cajón del motor
+    [-1,1].forEach(face=>{ const sp=new THREE.Mesh(new THREE.PlaneGeometry(2.2,0.42),new THREE.MeshBasicMaterial({map:signT,toneMapped:false}));
+      sp.position.set(dx,DH+0.62,FZ+face*0.13); if(face<0) sp.rotation.y=Math.PI; scene.add(sp); });
+    _doors.push({x:dx,leaves,open:0});
+  });
+  // Vereda, cordón amarillo y barandas
+  const pave=_ckTex(256,256,(c)=>{ c.fillStyle='#c9c4ba'; c.fillRect(0,0,256,256); c.strokeStyle='rgba(0,0,0,0.13)'; c.lineWidth=2; for(let i=0;i<=256;i+=32){ c.beginPath(); c.moveTo(i,0); c.lineTo(i,256); c.stroke(); c.beginPath(); c.moveTo(0,i); c.lineTo(256,i); c.stroke(); } });
+  pave.wrapS=pave.wrapT=THREE.RepeatWrapping; pave.repeat.set(30,2.5);
+  const side=new THREE.Mesh(new THREE.PlaneGeometry(120,5.6),new THREE.MeshStandardMaterial({map:pave,roughness:0.9}));
+  side.rotation.x=-Math.PI/2; side.position.set(0,0.14,FZ+2.8); side.receiveShadow=true; scene.add(side);
+  box3(120,0.16,0.3,mkStd(0xe7b928,0.6,0),0,0.08,FZ+5.6);
+  const railM=mkStd(0xb7bcc2,0.35,0.7);
+  [[-44,-9],[9,44]].forEach(([a,b])=>{ box3(b-a,0.05,0.05,railM,(a+b)/2,1.0,FZ+5.3); box3(b-a,0.04,0.04,railM,(a+b)/2,0.55,FZ+5.3);
+    for(let x=a;x<=b;x+=2.5) box3(0.05,1.0,0.05,railM,x,0.5,FZ+5.3); });
+  // Toldos de lona tensada sobre la vereda
+  const sailM=new THREE.MeshStandardMaterial({color:0xf4f4f0,roughness:0.6,side:THREE.DoubleSide});
+  [-14,-7,0,7,14].forEach(x=>{
+    box3(0.18,5.2,0.18,mkStd(0x9aa1a8,0.35,0.6),x,2.6,FZ+3.2);
+    const s=new THREE.Mesh(new THREE.ConeGeometry(3.7,1.2,4,1,true),sailM); s.position.set(x,5.4,FZ+3.2); s.rotation.y=Math.PI/4; s.scale.set(1,1,0.75); s.castShadow=true; scene.add(s);
+  });
+  // Calle: tres carriles, líneas, cantero con árboles
+  const asp=_ckTex(512,128,(c)=>{ c.fillStyle='#3c3f44'; c.fillRect(0,0,512,128); c.fillStyle='rgba(255,255,255,0.05)'; for(let i=0;i<500;i++) c.fillRect(Math.random()*512,Math.random()*128,2,2); });
+  asp.wrapS=asp.wrapT=THREE.RepeatWrapping; asp.repeat.set(24,2);
+  const road=new THREE.Mesh(new THREE.PlaneGeometry(160,10),new THREE.MeshStandardMaterial({map:asp,roughness:0.95}));
+  road.rotation.x=-Math.PI/2; road.position.set(0,0.12,FZ+10.8); scene.add(road);
+  const lineM=new THREE.MeshBasicMaterial({color:0xe9e9e9});
+  [FZ+9.1,FZ+12.4].forEach(z=>{ for(let x=-78;x<78;x+=6){ const l=new THREE.Mesh(new THREE.PlaneGeometry(3,0.14),lineM); l.rotation.x=-Math.PI/2; l.position.set(x,0.13,z); scene.add(l); } });
+  { const med=new THREE.Mesh(new THREE.BoxGeometry(160,0.22,2.2),mkStd(0x6f9a52,0.9,0)); med.position.set(0,0.11,FZ+16.9); scene.add(med); }
+  const trunkM=mkStd(0x5a4632,0.9,0), leafM=[mkStd(0x4f7d3e,0.85,0),mkStd(0x5f8f45,0.85,0),mkStd(0x456f37,0.85,0)];
+  for(let x=-70;x<=70;x+=7.5){ const t=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.22,3.2,7),trunkM); t.position.set(x,1.6,FZ+16.9); scene.add(t);
+    const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(2.1+((x*7)%3+3)%3*0.25,0),leafM[Math.round(Math.abs(x)/7.5)%3]); crown.position.set(x,4.3,FZ+16.9); crown.scale.set(1.2,0.9,1.1); crown.castShadow=true; scene.add(crown); }
+  // Fondo: arboleda del parque y la ciudad
+  const bg=_ckTex(2048,512,(c)=>{
+    const gr=c.createLinearGradient(0,0,0,512); gr.addColorStop(0,'#4f8fcf'); gr.addColorStop(0.7,'#b9dcf2'); gr.addColorStop(1,'#dcebf5'); c.fillStyle=gr; c.fillRect(0,0,2048,512);
+    c.fillStyle='rgba(255,255,255,0.8)'; [[260,110,140,22],[900,80,200,26],[1600,130,160,20]].forEach(([a,b,w,hh])=>{ c.beginPath(); c.ellipse(a,b,w,hh,0,0,Math.PI*2); c.fill(); });
+    c.fillStyle='#9fb0c0'; for(let i=0;i<40;i++){ const x=i*52+((i*37)%23), hh=60+((i*53)%110); c.fillRect(x,380-hh,40,hh); }
+    for(let i=0;i<70;i++){ const x=i*30, r=36+((i*17)%22); c.fillStyle=['#3f6e3a','#4c7d43','#36602f'][i%3]; c.beginPath(); c.arc(x,400-((i*29)%26),r,0,Math.PI*2); c.fill(); }
+    c.fillStyle='#3d5f35'; c.fillRect(0,400,2048,112); });
+  const back=new THREE.Mesh(new THREE.PlaneGeometry(200,40),new THREE.MeshBasicMaterial({map:bg,toneMapped:false,color:0xdddddd}));
+  back.position.set(0,17,FZ+46); back.rotation.y=Math.PI; scene.add(back);
+  // Vehículos
+  _traffic={cars:[],t:0};
+  const kinds=['taxi','car','van','taxi','car','van','taxi','car'];
+  kinds.forEach((k,i)=>{ const v=_makeVehicle(k,i); v.visible=false; scene.add(v); _traffic.cars.push({g:v,kind:k,on:false,wait:i*0.9,lane:0,x:0,v:0,dir:1,stopX:null,stopT:0,wheels:v.userData.wheels}); });
+}
+function _makeVehicle(kind,i){
+  const g=new THREE.Group(); const wheels=[];
+  const paint=kind==='taxi'?0x15171a:kind==='van'?0xf2f3f4:[0xb9bec5,0x8d1f24,0x2f4f7a,0x5b5f66][i%4];
+  const bM=mkStd(paint,0.35,0.45), gM=mkStd(0x1d2a35,0.15,0.6), tM=mkStd(0x111111,0.8,0), rimM=mkStd(0xb0b5ba,0.3,0.7);
+  const B=(w,hh,d,m,x,y,z)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,hh,d),m); o.position.set(x,y,z); o.castShadow=true; g.add(o); return o; };
+  if(kind==='van'){
+    B(5.4,1.75,2.0,bM,0,1.25,0); B(1.2,0.9,1.96,bM,2.55,0.82,0);
+    B(4.2,0.55,2.02,gM,-0.4,1.6,0); B(0.06,0.7,1.7,gM,2.72,1.5,0);
+    B(5.42,0.12,2.02,mkStd(0x2f6fc4,0.5,0.1),0,0.95,0);
+  } else {
+    B(4.3,0.62,1.8,bM,0,0.62,0);
+    const cab=B(2.3,0.58,1.62,kind==='taxi'?mkStd(0xf1c232,0.4,0.3):bM,-0.2,1.2,0);
+    B(2.0,0.46,1.66,gM,-0.2,1.18,0);                      // ventanillas
+    if(kind==='taxi'){ B(0.6,0.18,0.3,mkStd(0xf7f7f7,0.4,0),-0.2,1.58,0); }
+  }
+  const wx=kind==='van'?1.9:1.4;
+  [[wx,1],[wx,-1],[-wx,1],[-wx,-1]].forEach(([x,sd])=>{ const w=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.26,14),tM); w.rotation.x=Math.PI/2; w.position.set(x,0.34,sd*0.86); g.add(w);
+    const r=new THREE.Mesh(new THREE.CylinderGeometry(0.18,0.18,0.27,10),rimM); r.rotation.x=Math.PI/2; r.position.copy(w.position); g.add(r); wheels.push(w,r); });
+  [[1,0xfff6d8],[-1,0xd23a3a]].forEach(([sd,col])=>[-0.6,0.6].forEach(z=>B(0.05,0.14,0.32,new THREE.MeshBasicMaterial({color:col}),sd*(kind==='van'?3.16:2.16),kind==='van'?0.9:0.7,z)));
+  g.userData.wheels=wheels;
+  return g;
+}
+function updateStreetTraffic(delta){
+  const T=_traffic; if(!T) return;
+  const FZ=FACADE_Z, LANES=[FZ+7.4,FZ+10.8,FZ+14.1], DIRS=[1,1,-1];
+  const cm=calmMode?0.6:1;
+  T.t+=delta;
+  for(const c of T.cars){
+    if(!c.on){
+      c.wait-=delta; if(c.wait>0) continue;
+      c.lane=Math.random()<0.5?0:Math.random()<0.5?1:2; c.dir=DIRS[c.lane];
+      c.x=-c.dir*(T.t<1?(10-Math.random()*45):52); c.v=(c.lane===0?6:9+Math.random()*3);
+      // Evitar aparecer encima de otro
+      if(T.cars.some(o=>o!==c&&o.on&&o.lane===c.lane&&Math.abs(o.x-c.x)<14)){ c.wait=1; continue; }
+      c.stopX=(c.lane===0&&Math.random()<0.75)?(-11+Math.random()*22):null; c.stopT=0;
+      c.on=true; c.g.visible=true; c.g.rotation.y=c.dir>0?0:Math.PI;
+    }
+    // Distancia al de adelante en el mismo carril
+    let gap=Infinity; for(const o of T.cars){ if(o===c||!o.on||o.lane!==c.lane) continue; const d=(o.x-c.x)*c.dir; if(d>0&&d<gap) gap=d; }
+    let target=(c.lane===0?7:11)*cm;
+    if(c.stopX!=null){ const d=(c.stopX-c.x)*c.dir;
+      if(d<=0.2&&c.stopT<(4+Math.random()*0.02)*1){ target=0; c.stopT+=delta; if(c.stopT>4.5) c.stopX=null; }
+      else if(d>0&&d<14) target=Math.min(target,Math.max(0.6,d*0.55)); }
+    if(gap<9) target=Math.min(target,Math.max(0,(gap-6)*1.2));
+    c.v+=(target-c.v)*Math.min(1,delta*(target<c.v?2.2:0.9));
+    c.x+=c.dir*c.v*delta;
+    c.g.position.set(c.x,0.12,LANES[c.lane]);
+    for(const w of c.wheels) w.rotation.y-=c.dir*c.v*delta/0.34;
+    if(Math.abs(c.x)>56){ c.on=false; c.g.visible=false; c.wait=2+Math.random()*5; }
+  }
+}
+function updateEntranceDoors(delta){
+  if(!_doors.length) return;
+  const p=camera.position;
+  for(const d of _doors){
+    const near=Math.abs(p.x-d.x)<3.2&&p.z>FACADE_Z-6;
+    d.open+=((near?1:0)-d.open)*Math.min(1,delta*(near?3.5:2));
+    for(const L of d.leaves) L.g.position.x=L.base+L.sd*d.open*1.2;
+  }
+}
+
+// ─── FASE 66: CARTELES CON ENLACE (RENAPER, farmacia, medicina aeronáutica) ──
+const LINK_INFO={
+  renaper:{eyebrow:'🛂 Trámites',title:'Renovación de DNI y Pasaporte argentino',
+    sub:'Antes de viajar, revisá que tus documentos estén vigentes. Los turnos y los requisitos se gestionan en el sitio oficial del RENAPER.',
+    tips:['Si viajás al exterior, fijate con tiempo la vigencia del pasaporte: algunos destinos piden meses de validez extra.','Se abre el sitio oficial en otra pestaña; AeroCalma queda abierto acá.'],
+    url:'https://www.argentina.gob.ar/interior/renaper',btn:'🛂 Ir al sitio del RENAPER'},
+  farmacia:{eyebrow:'💊 Farmacia',title:'Información sobre psicofármacos',
+    sub:'Material educativo del consultorio para entender mejor tu medicación.',
+    tips:['No reemplaza la indicación de tu médico: no cambies ni suspendas la medicación por tu cuenta.','Si viajás, llevá la medicación en el equipaje de mano, junto con la receta.','Se abre en otra pestaña; AeroCalma queda abierto acá.'],
+    url:'https://juegosconsultoriodagnino.netlify.app/psicofarmacos',btn:'💊 Leer sobre medicamentos'},
+  medaero:{eyebrow:'🩺 Antes de volar',title:'Medicina Aeronáutica para pasajeros',
+    sub:'Cómo cuidar tu salud antes y durante el vuelo: medicación, oídos, circulación, hidratación y más.',
+    tips:['Material del Consultorio Dr. Pedro Nicolas Dagnino.','Se abre en otra pestaña; AeroCalma queda abierto acá.'],
+    url:'https://juegosconsultoriodagnino.netlify.app/medicina-aeronautica',btn:'🩺 Leer más'}
+};
+let _linkCur=null;
+function openLinkModal(id){
+  const L=LINK_INFO[id]; if(!L) return; _linkCur=id;
+  document.getElementById('link-eyebrow').textContent=L.eyebrow;
+  document.getElementById('link-title').textContent=L.title;
+  document.getElementById('link-sub').textContent=L.sub;
+  const ul=document.getElementById('link-tips'); ul.innerHTML=''; L.tips.forEach(t=>{ const li=document.createElement('li'); li.textContent=t; ul.appendChild(li); });
+  const a=document.getElementById('btn-link-go'); a.href=L.url; a.textContent=L.btn;
+  openUiModal('link-modal');
+  logInteraction(id,'ver');
+}
+// Cartel de pie genérico (marco, parantes, lámina dibujada, aviso flotante)
+function _standSign(o){
+  const g=new THREE.Group(); g.name=o.id+'Sign';
+  g.position.set(o.x,0.09,o.z); g.rotation.y=o.ry||0;
+  const W=o.w||1.44, Hh=o.h||1.66, top=0.6+Hh;
+  const parts=new THREE.Group(); g.add(parts);
+  const B=(w,hh,d,col,px,py,pz,r,m)=>{ const q=new THREE.Mesh(new THREE.BoxGeometry(w,hh,d),mkStd(col,r==null?0.4:r,m||0)); q.position.set(px,py+hh/2,pz); q.castShadow=true; q.receiveShadow=true; parts.add(q); return q; };
+  B(W+0.06,0.05,0.5,0x4a5058,0,0,0,0.5,0.3);
+  [-(W/2-0.04),W/2-0.04].forEach(dx=>B(0.06,top+0.04,0.06,0x9aa3ab,dx,0.05,0,0.3,0.6));
+  B(W,Hh,0.06,o.frame||0x1f3a56,0,0.6,-0.02,0.5,0.1);
+  _optimizeCharacter(parts);
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(W-0.12,Hh-0.15),new THREE.MeshBasicMaterial({map:o.tex,color:0xd2d2d2}));
+  scr.position.set(0,0.6+Hh/2,0.015); g.add(scr);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(W,top,0.5),new THREE.MeshBasicMaterial({visible:false})); hit.position.set(0,top/2,0); g.add(hit);
+  const my=top+0.55;
+  const mk=_markerSprite(o.icon,o.text,o.color); mk.position.set(0,my,0.1); mk.scale.multiplyScalar(0.85); g.add(mk);
+  scene.add(g);
+  const ry=o.ry||0, ix=o.x+Math.sin(ry)*1.4, iz=o.z+Math.cos(ry)*1.4;
+  addInteractable({id:o.id,x:ix,z:iz,radius:o.radius||2.5,icon:o.icon,label:o.label,root:g,marker:mk,markerBaseY:my,onTrigger:o.onTrigger});
+  return g;
+}
+function _signHeader(c,W,col,l1,l2){ c.fillStyle=col; c.fillRect(0,0,W,116); c.fillStyle='#fff'; c.textAlign='center'; c.font='bold 40px Arial'; c.fillText(l1,W/2,l2?52:72,W-30); if(l2) c.fillText(l2,W/2,98,W-30); }
+function buildInfoSigns(){
+  // RENAPER: DNI y pasaporte
+  _standSign({id:'renaper',x:13.6,z:51,ry:-Math.PI/2,icon:'🛂',text:'DNI y Pasaporte',color:'#2f8fd8',label:'Trámites de DNI y Pasaporte',onTrigger:()=>openLinkModal('renaper'),
+    tex:_ckTex(560,640,(c)=>{ c.fillStyle='#f4f8fc'; c.fillRect(0,0,560,640); _signHeader(c,560,'#2f8fd8','Trámites de','DNI y Pasaporte');
+      c.save(); c.translate(150,300); c.rotate(-0.08); c.fillStyle='#ffffff'; c.strokeStyle='#9fb6cc'; c.lineWidth=4; c.fillRect(-120,-75,240,150); c.strokeRect(-120,-75,240,150);
+      c.fillStyle='#cfe0f0'; c.fillRect(-105,-55,70,90); c.fillStyle='#8aa6c0'; c.beginPath(); c.arc(-70,-22,17,0,Math.PI*2); c.fill(); c.fillRect(-92,2,44,26);
+      c.fillStyle='#9fb6cc'; [-45,-20,5,30].forEach(y=>c.fillRect(-20,y,120,9)); c.restore();
+      c.save(); c.translate(395,310); c.rotate(0.1); c.fillStyle='#1f3a6b'; c.fillRect(-80,-110,160,220); c.strokeStyle='#d6b24a'; c.lineWidth=4; c.beginPath(); c.arc(0,-10,38,0,Math.PI*2); c.stroke();
+      c.fillStyle='#d6b24a'; c.font='bold 20px Arial'; c.textAlign='center'; c.fillText('PASAPORTE',0,72); c.restore();
+      c.fillStyle='#1a2e42'; c.textAlign='center'; c.font='bold 30px Arial'; c.fillText('Renovación y turnos',280,500); c.font='24px Arial'; c.fillStyle='#4a6680'; c.fillText('en el sitio oficial',280,538);
+      c.fillStyle='#2f8fd8'; c.font='bold 26px Arial'; c.fillText('RENAPER  →',280,600); })});
+  // Mapa del aeropuerto (de pie, mirando a quien entra)
+  const mapT=_ckTex(1200,700,(c)=>drawTerminalMap(c,1200,700,{x:-7,z:50}));
+  _standSign({id:'map',x:-7,z:50,ry:0,w:2.5,h:1.5,icon:'🗺️',text:'Mapa del aeropuerto',color:'#3fc5e8',label:'Ver el mapa del aeropuerto',onTrigger:openMapModal,frame:0x0f2340,tex:mapT});
+  // Farmacia: psicofármacos
+  _standSign({id:'farmacia',x:12.4,z:19.8,ry:-Math.PI/2,w:1.0,h:1.4,icon:'💊',text:'Sobre medicamentos',color:'#1a9050',label:'Leer sobre medicamentos',onTrigger:()=>openLinkModal('farmacia'),frame:0x0e2018,
+    tex:_ckTex(400,560,(c)=>{ c.fillStyle='#f3faf5'; c.fillRect(0,0,400,560); _signHeader(c,400,'#1a9050','Psicofármacos');
+      c.fillStyle='#1a2e42'; c.textAlign='center'; c.font='bold 26px Arial'; c.fillText('Leé sobre',200,160); c.fillText('tu medicación',200,194);
+      [[110,290,'#5fb3e8'],[200,270,'#f2c230'],[290,300,'#e0857a']].forEach(([x,y,col])=>{ c.save(); c.translate(x,y); c.rotate(-0.5); c.fillStyle=col; c.beginPath(); c.ellipse(0,0,46,20,0,0,Math.PI*2); c.fill(); c.fillStyle='rgba(255,255,255,0.6)'; c.fillRect(-1,-20,3,40); c.restore(); });
+      c.fillStyle='#4a6680'; c.font='22px Arial'; c.fillText('Información educativa',200,400); c.fillText('del consultorio',200,430);
+      c.fillStyle='#1a9050'; c.font='bold 24px Arial'; c.fillText('Tocá para leer  →',200,510); })});
+  // Zona de embarque: Medicina Aeronáutica para pasajeros
+  _standSign({id:'medaero',x:6,z:-16,ry:0,icon:'🩺',text:'Medicina Aeronáutica',color:'#16324a',label:'Medicina Aeronáutica para pasajeros',onTrigger:()=>openLinkModal('medaero'),frame:0x16324a,
+    tex:_ckTex(560,640,(c)=>{ c.fillStyle='#f4f8fc'; c.fillRect(0,0,560,640); _signHeader(c,560,'#16324a','Medicina Aeronáutica','para pasajeros');
+      c.save(); c.translate(280,250); c.fillStyle='#d9e8f5'; c.beginPath(); c.arc(0,0,92,0,Math.PI*2); c.fill();
+      c.fillStyle='#16324a'; c.beginPath(); c.ellipse(0,0,74,12,-0.35,0,Math.PI*2); c.fill(); c.save(); c.rotate(-0.35); c.fillRect(-14,-50,22,100); c.fillRect(46,-26,12,52); c.restore();
+      c.fillStyle='#e05a5a'; c.beginPath(); c.moveTo(40,70); c.bezierCurveTo(10,48,22,26,40,40); c.bezierCurveTo(58,26,70,48,40,70); c.fill(); c.restore();
+      c.fillStyle='#1a2e42'; c.textAlign='left'; c.font='bold 26px Arial'; ['✓ Viajar con medicación','✓ Oídos y presión','✓ Circulación e hidratación'].forEach((t,i)=>c.fillText(t,70,420+i*42));
+      c.fillStyle='#2f78c8'; c.textAlign='center'; c.font='bold 26px Arial'; c.fillText('Leé más  →',280,600); })});
+}
+
+// ─── FASE 66: MAPA DE LA TERMINAL (estilo plano de aeropuerto, dibujo propio) ──
+function drawTerminalMap(c,W,Hh,here){
+  c.fillStyle='#0f2340'; c.fillRect(0,0,W,Hh);
+  c.fillStyle='#e9eef5'; c.fillRect(0,0,W,96);
+  c.fillStyle='#16324a'; c.textAlign='left'; c.font='bold 40px Arial'; c.fillText('Terminal AeroCalma',36,52); c.font='24px Arial'; c.fillStyle='#4a6680'; c.fillText('Mapa del aeropuerto · Airport map',36,84);
+  // Proyección: entrada a la izquierda, puerta A7 a la derecha; -x arriba
+  const X0=360, Y0=210, S=9.4, P=(x,z)=>[X0+(56-z)*S, Y0+(x+17)*S];
+  const R=(x0,x1,z0,z1,col)=>{ const [a,b]=P(x0,z0), [cc,d]=P(x1,z1); c.fillStyle=col; c.fillRect(Math.min(a,cc),Math.min(b,d),Math.abs(cc-a),Math.abs(d-b)); };
+  R(-17,17,56,14,'#8fb6de');        // área pública
+  R(-17,17,14,-21.6,'#6b7fb8');     // sólo pasajeros
+  R(-6,6,-15,-21.6,'#3fc5e8');      // pre embarque (puerta A7)
+  [-1,1].forEach(side=>[-2,-1,1,2].forEach(i=>R(i*5.5-2.3,i*5.5+2.3,28+side*2.8+0.8,28+side*2.8-0.8,'#f2c230')));   // mostradores
+  R(-5,5,9,7,'#f59e0b');            // control de seguridad
+  // Manga y avión
+  c.strokeStyle='#cfd8e3'; c.lineWidth=10; const [ja,jb]=P(0,-21.6), [jc,jd]=P(0,-27); c.beginPath(); c.moveTo(ja,jb); c.lineTo(jc,jd); c.stroke();
+  const [pa,pb]=P(0,-30); c.fillStyle='#e9eef5'; c.beginPath(); c.ellipse(pa+60,pb,80,22,0,0,Math.PI*2); c.fill(); c.fillRect(pa+40,pb-80,30,160); c.fillStyle='#0f2340'; c.font='bold 18px Arial'; c.textAlign='center'; c.fillText('✈',pa+60,pb+6);
+  // Contorno
+  const [o1,o2]=P(-17,56), [o3,o4]=P(17,-21.6); c.strokeStyle='#e9eef5'; c.lineWidth=3; c.strokeRect(o1,o2,o3-o1,o4-o2);
+  // Nombres de zonas
+  c.fillStyle='#0f2340'; c.font='bold 17px Arial'; c.textAlign='center';
+  [['ENTRADA',0,50],['CHECK-IN',0,33],['SEGURIDAD',0,12.5],['SALA DE|EMBARQUE',0,-6],['A7',0,-18.5]].forEach(([t,x,z])=>{ const [a,b]=P(x,z); t.split('|').forEach((ln,i,arr)=>c.fillText(ln,a,b+6+(i-(arr.length-1)/2)*20)); });
+  // Íconos
+  c.font='26px "Segoe UI Emoji",sans-serif';
+  [['🚻',-15,32],['☕',-12,20],['💊',14.5,15],['🩺',-14.5,-7],['ℹ️',0,45],['🛩️',13.6,40],['🧳',-13.6,46.5],['🛂',13.6,46.5],['🍽️',14.5,-5],['📰',-14.5,-21]].forEach(([ic,x,z])=>{ const [a,b]=P(x,z); c.fillStyle='rgba(255,255,255,0.92)'; c.beginPath(); c.arc(a,b,17,0,Math.PI*2); c.fill(); c.fillStyle='#000'; c.fillText(ic,a,b+9); });
+  // Leyenda
+  c.textAlign='left'; c.font='bold 20px Arial';
+  [['#8fb6de','Área pública','Public area'],['#6b7fb8','Sólo pasajeros','Passengers only'],['#f2c230','Check-in','Check-in counters'],['#f59e0b','Control de seguridad','Security'],['#3fc5e8','Pre embarque · A7','Boarding gate'],['#8bd35a','Llegadas (Madrid)','Arrivals']].forEach(([col,a,b],i)=>{
+    const y=150+i*64; c.fillStyle=col; c.fillRect(36,y,30,30); c.fillStyle='#ffffff'; c.font='bold 20px Arial'; c.fillText(a,80,y+16); c.fillStyle='#a9bdd3'; c.font='16px Arial'; c.fillText(b,80,y+36); });
+  c.fillStyle='#a9bdd3'; c.font='16px Arial'; c.fillText('🚻 Baños  ☕ Café  💊 Farmacia  🩺 Consultorio',36,560); c.fillText('🛩️ Simulador  🧳 Maleta  🛂 DNI/Pasaporte  ℹ️ Informes',36,588);
+  // Estás acá
+  if(here){ const [a,b]=P(here.x,here.z); c.fillStyle='#e53935'; c.beginPath(); c.arc(a,b,11,0,Math.PI*2); c.fill(); c.strokeStyle='#fff'; c.lineWidth=3; c.stroke();
+    c.fillStyle='#ffffff'; c.font='bold 18px Arial'; c.textAlign='left'; c.fillText('Estás acá',a+16,b-12); }
+  c.fillStyle='#6f87a3'; c.font='14px Arial'; c.textAlign='right'; c.fillText('Plano ilustrativo · AeroCalma',W-24,Hh-20);
+}
+function openMapModal(){
+  const cv=document.createElement('canvas'); cv.width=1200; cv.height=700;
+  const p=camera.position; drawTerminalMap(cv.getContext('2d'),1200,700,p.z>-22&&p.z<56?{x:p.x,z:p.z}:null);
+  document.getElementById('map-img').src=cv.toDataURL('image/png');
+  openUiModal('map-modal');
+  logInteraction('mapa','ver');
+}
+
 // ─── FASE 65: CARTEL "CÓMO ARMAR UNA MALETA DE FORMA INTELIGENTE" ──
 // Al inicio del hall: un cartel de pie con una valija abierta dibujada. Abre el
 // juego 26 de los juegos del consultorio en otra pestaña.
@@ -2891,14 +3155,14 @@ function buildWalls(){
   const wm=new THREE.MeshStandardMaterial({map:t, roughness:0.72, metalness:0.02});
 
   [-17,17].forEach(wx=>{
-    const wall=new THREE.Mesh(mkBox(0.3,13,142),wm);
-    wall.position.set(wx,6.5,-5); wall.receiveShadow=true; scene.add(wall);
+    const wall=new THREE.Mesh(mkBox(0.3,13,131.6),wm);
+    wall.position.set(wx,6.5,-10.2); wall.receiveShadow=true; scene.add(wall);
     // Zócalo de madera en cada pared
-    const baseboard=new THREE.Mesh(mkBox(0.35,0.45,140),mkStd(0x7a6a54,0.55,0.05));
-    baseboard.position.set(wx,0.23,-5); scene.add(baseboard);
+    const baseboard=new THREE.Mesh(mkBox(0.35,0.45,130.6),mkStd(0x7a6a54,0.55,0.05));
+    baseboard.position.set(wx,0.23,-9.7); scene.add(baseboard);
     // Moldura de techo
-    const crown=new THREE.Mesh(mkBox(0.35,0.3,140),mkStd(0xd8d0c0,0.6,0.02));
-    crown.position.set(wx,13.15,-5); scene.add(crown);
+    const crown=new THREE.Mesh(mkBox(0.35,0.3,130.6),mkStd(0xd8d0c0,0.6,0.02));
+    crown.position.set(wx,13.15,-9.7); scene.add(crown);
   });
   // F28: vidrio diferenciado interior/exterior, mullions, clearcoat, renderOrder
   var reflCvs=document.createElement("canvas");reflCvs.width=64;reflCvs.height=512;
@@ -3042,13 +3306,7 @@ function zoneHeader(x,z,txt,col){
 // ─── ENTRANCE ────────────────────────────────────
 function buildEntrance(){
   const x=0,z=48;
-  // Sliding door frames x3
-  [-6,0,6].forEach(dx=>{
-    box(x+dx,0,z+3,0.25,4.8,3.8,0x607d8b);
-    const dm=mkMat(0x88c8e8,{transparent:true,opacity:0.4});
-    [-0.95,0.95].forEach(ddx=>{ const d=new THREE.Mesh(mkBox(0.08,4.4,1.5),dm); d.position.set(x+dx+ddx,2.4,z+3); scene.add(d); });
-    box(x+dx,4.8,z+3,0.25,0.4,3.9,0x607d8b);
-  });
+  // (FASE 66: las puertas ahora son parte del frente vidriado, ver buildEntranceFacade)
   // Welcome sign
   const wt=tex(1024,256,(ctx)=>{
     ctx.fillStyle='#1a2e42'; ctx.fillRect(0,0,1024,256);
@@ -8633,7 +8891,7 @@ function buildEntranceSideWindows(){
     color:0xdde8f0,transparent:true,opacity:0.15,roughness:0.08,metalness:0.0,
     side:THREE.DoubleSide,depthWrite:false,envMap:reflTex3,envMapIntensity:0.2
   });
-  [{x:-17,z:38},{x:17,z:38},{x:-17,z:48},{x:17,z:48},{x:-17,z:58},{x:17,z:58}].forEach(function(pos){
+  [{x:-17,z:38},{x:17,z:38},{x:-17,z:48},{x:17,z:48}].forEach(function(pos){
     var W=5,H=4,yc=5;
     var f=new THREE.Mesh(mkBox(0.22,0.14,W+0.3),frameMat);
     f.position.set(pos.x,yc+H/2+0.08,pos.z);scene.add(f);
@@ -8763,6 +9021,8 @@ function animate(){
   updateGuideArrows(delta);     // FASE 58: flechas guía en el piso
   updateSecurityCheck(delta);   // FASE 62: control de la PSA en el arco
   updateCockpitPilots(delta,t);   // FASE 63: los pilotos saludan
+  updateEntranceDoors(delta);     // FASE 66: puertas automáticas
+  updateStreetTraffic(delta);     // FASE 66: autos, taxis y combis
   updateCabinSeq(delta);        // FASE 46: anuncios de a bordo
   if(_arrWalkTex) _arrWalkTex.offset.y-=delta*(calmMode?0.22:0.33); // FASE 48: cinta caminadora
   updateBaggageHall(delta,t);   // FASE 49: sala de equipajes

@@ -524,6 +524,33 @@
         </div>
     </div>
 
+    <!-- FASE 66: Carteles con enlace (RENAPER, farmacia, medicina aeronáutica) -->
+    <div id="link-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="link-title">
+        <div class="interact-box">
+            <button id="btn-close-link" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p id="link-eyebrow" class="ib-eyebrow"></p>
+            <h2 id="link-title"></h2>
+            <p id="link-sub" class="ib-sub"></p>
+            <ul id="link-tips" class="flightsim-tips"></ul>
+            <div class="ib-actions">
+                <a id="btn-link-go" class="btn-primary" href="#" target="_blank" rel="noopener">Abrir</a>
+                <button id="btn-link-back" class="btn-ghost" type="button">Volver al aeropuerto</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FASE 66: Mapa del aeropuerto -->
+    <div id="map-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="map-title">
+        <div class="interact-box map-box">
+            <button id="btn-close-map" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">🗺️ Terminal AeroCalma</p>
+            <h2 id="map-title">Mapa del aeropuerto</h2>
+            <img id="map-img" class="map-img" alt="Plano de la terminal: entrada, check-in, control de seguridad, sala de embarque y puerta A7, con baños, café, farmacia y consultorio" width="1200" height="700">
+            <p class="ib-sub map-note">El punto rojo marca dónde estás. Seguí el pasillo central: entrada → check-in → seguridad → sala de embarque → puerta A7.</p>
+            <div class="ib-actions"><button id="btn-map-back" class="btn-ghost" type="button">Volver al aeropuerto</button></div>
+        </div>
+    </div>
+
     <!-- FASE 65: Cartel "Cómo armar una maleta de forma inteligente" -->
     <div id="packing-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="packing-title">
         <div class="interact-box packing-box">

@@ -1948,3 +1948,9 @@ body.has-bag #bag-chip { display: block; }
 
 /* ── FASE 65: cartel de la maleta inteligente ── */
 #btn-packing-go { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
+/* ── FASE 66: carteles con enlace y mapa ── */
+#btn-link-go { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+.interact-box.map-box { max-width: min(96vw, 1040px); width: 100%; }
+.map-img { display: block; width: 100%; height: auto; border-radius: 12px; margin: 6px 0 4px; }
+.map-note { margin-top: 10px; }
