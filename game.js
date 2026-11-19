@@ -1106,6 +1106,7 @@ function buildInteractiveSpots(){
   buildReviewsMural();  // FASE 42: mural de reseñas
   buildDonationTotem(); // FASE 42: aporte voluntario
   buildFlightSimTotem();// FASE 64: simulador de vuelo (Cessna 172 en Buenos Aires)
+  buildPackingSign();   // FASE 65: cómo armar una maleta de forma inteligente
   buildMagazineStand(); // FASE 44: revistas digitales
   buildChargeStations();// FASE 44: estaciones de carga
   buildSeatSpot();      // FASE 46: asiento 14C (vuelo simulado)
@@ -1794,6 +1795,9 @@ function setupInteractionUI(){
   on('btn-close-reviews',()=>closeUiModal('reviews-modal'));
   on('btn-close-donation',()=>closeUiModal('donation-modal'));
   on('btn-close-flightsim',()=>closeUiModal('flightsim-modal'));
+  on('btn-close-packing',()=>closeUiModal('packing-modal'));
+  on('btn-packing-back',()=>closeUiModal('packing-modal'));
+  on('btn-packing-go',()=>{ logInteraction('maleta','abrir'); setTimeout(()=>closeUiModal('packing-modal'),150); });
   on('btn-flightsim-back',()=>closeUiModal('flightsim-modal'));
   on('btn-flightsim-go',()=>{ logInteraction('simulador','abrir'); setTimeout(()=>closeUiModal('flightsim-modal'),150); });
   on('btn-donation-copy',copyDonationAlias);
@@ -1830,6 +1834,7 @@ function setupInteractionUI(){
     else if(!document.getElementById('reviews-modal').classList.contains('hidden')) closeUiModal('reviews-modal');
     else if(!document.getElementById('donation-modal').classList.contains('hidden')) closeUiModal('donation-modal');
     else if(!document.getElementById('flightsim-modal').classList.contains('hidden')) closeUiModal('flightsim-modal');
+    else if(!document.getElementById('packing-modal').classList.contains('hidden')) closeUiModal('packing-modal');
     else if(!document.getElementById('cafe-modal').classList.contains('hidden')){ clearTimeout(_cafeTimer); closeUiModal('cafe-modal'); }
     else if(!document.getElementById('mate-modal').classList.contains('hidden')){ clearTimeout(_mateTimer); closeUiModal('mate-modal'); }
     else if(!document.getElementById('zone-panel').classList.contains('hidden')) closeZonePanel();
@@ -2387,6 +2392,57 @@ function buildFlightSimTotem(){
   scene.add(g);
   addInteractable({id:'flightsim',x:spot.x+face*1.3,z:spot.z,radius:2.4,icon:'🛩️',label:'Probar un simulador de vuelo',
     root:g,marker:mk,markerBaseY:2.65,onTrigger:openFlightSimModal});
+}
+
+// ─── FASE 65: CARTEL "CÓMO ARMAR UNA MALETA DE FORMA INTELIGENTE" ──
+// Al inicio del hall: un cartel de pie con una valija abierta dibujada. Abre el
+// juego 26 de los juegos del consultorio en otra pestaña.
+const PACKING_URL='https://juegosconsultoriodagnino.netlify.app/juego26';
+function buildPackingSign(){
+  scene.updateMatrixWorld(true);
+  const spots=[{x:-13.6,z:46.5},{x:13.6,z:46.5},{x:-6,z:46}];
+  const spot=spots.find(p=>_floorIsFree(p.x,p.z,0.7))||spots[0];
+  const face=spot.x<-8?1:spot.x>8?-1:0;
+  const g=new THREE.Group(); g.name='packingSign';
+  g.position.set(spot.x,0.09,spot.z); g.rotation.y=face*Math.PI/2;
+  const parts=new THREE.Group(); g.add(parts);
+  const B=(w,h,d,col,px,py,pz,r,m)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mkStd(col,r==null?0.4:r,m||0)); o.position.set(px,py+h/2,pz); o.castShadow=true; o.receiveShadow=true; parts.add(o); return o; };
+  B(1.5,0.05,0.5,0x4a5058,0,0,0,0.5,0.3);                     // base
+  [-0.68,0.68].forEach(dx=>B(0.06,2.3,0.06,0x9aa3ab,dx,0.05,0,0.3,0.6));   // parantes
+  B(1.44,1.66,0.06,0x1f3a56,0,0.6,-0.02,0.5,0.1);             // marco
+  _optimizeCharacter(parts);
+  const st=tex(560,640,(ctx)=>{
+    ctx.fillStyle='#fdf8ee'; ctx.fillRect(0,0,560,640);
+    ctx.fillStyle='#e07a3a'; ctx.fillRect(0,0,560,116);
+    ctx.fillStyle='#ffffff'; ctx.textAlign='center'; ctx.font='bold 40px Arial'; ctx.fillText('Cómo armar una maleta',280,52); ctx.fillText('de forma inteligente',280,98);
+    // Valija abierta (dibujo propio)
+    ctx.save(); ctx.translate(280,300);
+    ctx.fillStyle='#2f5f8a'; ctx.fillRect(-170,-110,340,40);                              // tapa abierta
+    ctx.fillStyle='#3f7cb3'; ctx.fillRect(-180,-70,360,190);                              // cuerpo
+    ctx.fillStyle='#e9eef3'; ctx.fillRect(-164,-56,328,162);                              // interior
+    [['#f2c230',-150,-44,90,40],['#7fb5b3',-52,-44,110,40],['#c98f8f',66,-44,84,40],      // ropa enrollada
+     ['#8fb59a',-150,4,130,46],['#b2a2c9',-12,4,72,46],['#d8b77c',68,4,82,46],
+     ['#9cc3e6',-150,58,300,36]].forEach(([col,x,y,w,hh])=>{ ctx.fillStyle=col; ctx.beginPath(); ctx.roundRect?ctx.roundRect(x,y,w,hh,14):ctx.rect(x,y,w,hh); ctx.fill(); });
+    ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=3; for(let i=0;i<5;i++){ ctx.beginPath(); ctx.moveTo(-140+i*20,-40); ctx.lineTo(-140+i*20,-8); ctx.stroke(); }
+    ctx.fillStyle='#24486b'; ctx.fillRect(-40,120,80,14); ctx.fillRect(-150,120,20,22); ctx.fillRect(130,120,20,22);
+    ctx.restore();
+    ctx.fillStyle='#1a2e42'; ctx.font='bold 28px Arial'; ctx.fillText('✓ Enrollá la ropa',280,488);
+    ctx.fillText('✓ Lo pesado, abajo',280,526); ctx.fillText('✓ Líquidos de 100 ml',280,564);
+    ctx.fillStyle='#e07a3a'; ctx.font='bold 26px Arial'; ctx.fillText('¡Jugá y aprendé!  →',280,614);
+  });
+  st.encoding=THREE.sRGBEncoding;
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(1.32,1.51),new THREE.MeshBasicMaterial({map:st,color:0xd2d2d2}));
+  scr.position.set(0,1.48,0.015); g.add(scr);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(1.5,2.3,0.5),new THREE.MeshBasicMaterial({visible:false})); hit.position.set(0,1.2,0); g.add(hit);
+  const mk=_markerSprite('🧳','Maleta inteligente','#e07a3a'); mk.position.set(0,2.85,0.1); mk.scale.multiplyScalar(0.85); g.add(mk);
+  scene.add(g);
+  const ix=face?spot.x+face*1.4:spot.x, iz=face?spot.z:spot.z+1.4;
+  addInteractable({id:'packing',x:ix,z:iz,radius:2.5,icon:'🧳',label:'Cómo armar una maleta inteligente',
+    root:g,marker:mk,markerBaseY:2.85,onTrigger:openPackingModal});
+}
+function openPackingModal(){
+  openUiModal('packing-modal');
+  logInteraction('maleta','ver');
 }
 function openFlightSimModal(){
   openUiModal('flightsim-modal');
