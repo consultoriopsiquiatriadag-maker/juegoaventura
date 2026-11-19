@@ -1105,6 +1105,7 @@ function buildInteractiveSpots(){
   buildMateDispensers();// FASE 40: agua caliente para el mate
   buildReviewsMural();  // FASE 42: mural de reseñas
   buildDonationTotem(); // FASE 42: aporte voluntario
+  buildFlightSimTotem();// FASE 64: simulador de vuelo (Cessna 172 en Buenos Aires)
   buildMagazineStand(); // FASE 44: revistas digitales
   buildChargeStations();// FASE 44: estaciones de carga
   buildSeatSpot();      // FASE 46: asiento 14C (vuelo simulado)
@@ -1792,6 +1793,9 @@ function setupInteractionUI(){
   on('btn-close-gate',()=>{ clearTimeout(_gateTimer); closeUiModal('gate-modal'); });
   on('btn-close-reviews',()=>closeUiModal('reviews-modal'));
   on('btn-close-donation',()=>closeUiModal('donation-modal'));
+  on('btn-close-flightsim',()=>closeUiModal('flightsim-modal'));
+  on('btn-flightsim-back',()=>closeUiModal('flightsim-modal'));
+  on('btn-flightsim-go',()=>{ logInteraction('simulador','abrir'); setTimeout(()=>closeUiModal('flightsim-modal'),150); });
   on('btn-donation-copy',copyDonationAlias);
   on('btn-donation-back',()=>closeUiModal('donation-modal'));
   const rf=document.getElementById('review-form'); if(rf) rf.addEventListener('submit',submitReview);
@@ -1825,6 +1829,7 @@ function setupInteractionUI(){
     else if(!document.getElementById('gate-modal').classList.contains('hidden')){ clearTimeout(_gateTimer); closeUiModal('gate-modal'); }
     else if(!document.getElementById('reviews-modal').classList.contains('hidden')) closeUiModal('reviews-modal');
     else if(!document.getElementById('donation-modal').classList.contains('hidden')) closeUiModal('donation-modal');
+    else if(!document.getElementById('flightsim-modal').classList.contains('hidden')) closeUiModal('flightsim-modal');
     else if(!document.getElementById('cafe-modal').classList.contains('hidden')){ clearTimeout(_cafeTimer); closeUiModal('cafe-modal'); }
     else if(!document.getElementById('mate-modal').classList.contains('hidden')){ clearTimeout(_mateTimer); closeUiModal('mate-modal'); }
     else if(!document.getElementById('zone-panel').classList.contains('hidden')) closeZonePanel();
@@ -2333,6 +2338,59 @@ function buildDonationTotem(){
   scene.add(g);
   addInteractable({id:'donation',x:spot.x,z:spot.z+1.3,radius:2.4,icon:'💙',label:'Aporte voluntario',
     root:g,marker:mk,markerBaseY:2.65,onTrigger:openDonationModal});
+}
+
+// ─── FASE 64: TÓTEM "PROBÁ UN SIMULADOR DE VUELO" ───────────
+// En el hall: invita a volar un Cessna 172 sobre la Ciudad de Buenos Aires en
+// GeoFS (simulador gratuito en el navegador). Se abre en otra pestaña.
+const FLIGHTSIM_URL='https://www.geo-fs.com/geofs.php?v=3.82&aircraft=2&lat=-34.56384&lon=-58.4075&alt=0&heading=313';
+function buildFlightSimTotem(){
+  scene.updateMatrixWorld(true);
+  const spots=[{x:13.6,z:33},{x:13.6,z:40},{x:-13.6,z:46.5},{x:13.6,z:27}];
+  const spot=spots.find(p=>_floorIsFree(p.x,p.z,0.6)&&_floorIsFree(p.x+(p.x<0?1:-1)*1.2,p.z,0.4))||spots[0];
+  const face=spot.x<0?1:-1;
+  const g=new THREE.Group(); g.name='flightSimTotem';
+  g.position.set(spot.x,0.09,spot.z); g.rotation.y=face*Math.PI/2;
+  const parts=new THREE.Group(); g.add(parts);
+  const B=(w,h,d,col,px,py,pz,r,m)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mkStd(col,r==null?0.4:r,m||0)); o.position.set(px,py+h/2,pz); o.castShadow=true; o.receiveShadow=true; parts.add(o); return o; };
+  B(0.86,0.06,0.52,0x4a5058,0,0,0,0.5,0.3);              // base
+  B(0.7,1.9,0.24,0x1d2a3a,0,0.06,0,0.4,0.1);             // cuerpo azul noche
+  B(0.72,0.12,0.26,0xf2c230,0,1.96,0,0.4,0.1);           // remate amarillo
+  B(0.72,0.05,0.26,0xf2c230,0,0.5,0,0.4,0.1);            // franja
+  _optimizeCharacter(parts);
+  const st=tex(320,640,(ctx)=>{
+    const gr=ctx.createLinearGradient(0,0,0,640); gr.addColorStop(0,'#2f78c8'); gr.addColorStop(0.55,'#9fd0f2'); gr.addColorStop(1,'#e9f4fb');
+    ctx.fillStyle=gr; ctx.fillRect(0,0,320,640);
+    ctx.fillStyle='#f2c230'; ctx.fillRect(0,0,320,104);
+    ctx.fillStyle='#14202c'; ctx.textAlign='center'; ctx.font='bold 30px Arial'; ctx.fillText('SIMULADOR',160,46); ctx.fillText('DE VUELO',160,84);
+    // Avioneta de ala alta (silueta propia)
+    ctx.save(); ctx.translate(160,228); ctx.fillStyle='#ffffff'; ctx.strokeStyle='#14202c'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.ellipse(0,0,92,15,0,0,Math.PI*2); ctx.fill(); ctx.stroke();                 // fuselaje
+    ctx.fillRect(-120,-30,240,12); ctx.strokeRect(-120,-30,240,12);                                  // ala alta
+    ctx.beginPath(); ctx.moveTo(70,-4); ctx.lineTo(96,-40); ctx.lineTo(108,-40); ctx.lineTo(96,2); ctx.closePath(); ctx.fill(); ctx.stroke(); // deriva
+    ctx.fillStyle='#2f78c8'; ctx.fillRect(-60,-8,26,9); ctx.fillRect(-28,-8,26,9);                   // ventanillas
+    ctx.fillStyle='#c62828'; ctx.fillRect(-92,4,184,4);                                              // franja
+    ctx.fillStyle='#14202c'; ctx.fillRect(-100,-12,6,24);                                            // hélice
+    ctx.restore();
+    // Skyline porteño simple con el Obelisco
+    ctx.fillStyle='#5d7891'; [[20,470,40,90],[64,500,30,60],[100,450,36,110],[200,480,34,80],[240,440,40,120],[284,495,30,65]].forEach(([x,y,w,h])=>ctx.fillRect(x,y,w,h));
+    ctx.fillStyle='#e9eef2'; ctx.beginPath(); ctx.moveTo(160,360); ctx.lineTo(172,388); ctx.lineTo(176,560); ctx.lineTo(144,560); ctx.lineTo(148,388); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#3d566e'; ctx.fillRect(0,560,320,80);
+    ctx.fillStyle='#ffffff'; ctx.font='bold 25px Arial'; ctx.fillText('Cessna 172',160,598); ctx.font='20px Arial'; ctx.fillText('sobre Buenos Aires',160,628);
+    ctx.fillStyle='#14202c'; ctx.font='bold 22px Arial'; ctx.fillText('¡Probalo vos!',160,330);
+  });
+  st.encoding=THREE.sRGBEncoding;
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(0.62,1.24),new THREE.MeshStandardMaterial({map:st,emissive:0xffffff,emissiveMap:st,emissiveIntensity:0.35,roughness:0.5}));
+  scr.position.set(0,1.28,0.125); g.add(scr);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(0.9,2.1,0.6),new THREE.MeshBasicMaterial({visible:false})); hit.position.set(0,1.05,0); g.add(hit);
+  const mk=_markerSprite('🛩️','Simulador de vuelo','#f2c230'); mk.position.set(0,2.65,0.1); mk.scale.multiplyScalar(0.85); g.add(mk);
+  scene.add(g);
+  addInteractable({id:'flightsim',x:spot.x+face*1.3,z:spot.z,radius:2.4,icon:'🛩️',label:'Probar un simulador de vuelo',
+    root:g,marker:mk,markerBaseY:2.65,onTrigger:openFlightSimModal});
+}
+function openFlightSimModal(){
+  openUiModal('flightsim-modal');
+  logInteraction('simulador','ver');
 }
 function openDonationModal(){
   document.getElementById('donation-alias').textContent=MP_ALIAS;

@@ -1941,3 +1941,7 @@ body.has-bag #bag-chip { display: block; }
 .psa-tip { margin-top: 14px; text-align: left; }
 #psa-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 @media (prefers-reduced-motion: reduce) { .psa-bubble.psa-in { animation: none; } }
+
+/* ── FASE 64: tótem del simulador de vuelo ── */
+.flightsim-tips { text-align: left; margin: 4px auto 18px; padding-left: 20px; max-width: 420px; color: var(--deep); line-height: 1.55; font-size: 0.93rem; }
+#btn-flightsim-go { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
