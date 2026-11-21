@@ -1107,6 +1107,7 @@ function buildInteractiveSpots(){
   buildFlightSimTotem();// FASE 64: simulador de vuelo (Cessna 172 en Buenos Aires)
   buildPackingSign();   // FASE 65: cómo armar una maleta de forma inteligente
   buildInfoSigns();     // FASE 66: RENAPER, mapa, farmacia y medicina aeronáutica
+  buildSaludMentalSign();// FASE 67: Centro virtual de Salud Mental
   buildMagazineStand(); // FASE 44: revistas digitales
   buildChargeStations();// FASE 44: estaciones de carga
   buildSeatSpot();      // FASE 46: asiento 14C (vuelo simulado)
@@ -1798,7 +1799,10 @@ function setupInteractionUI(){
   on('btn-close-packing',()=>closeUiModal('packing-modal'));
   on('btn-close-link',()=>closeUiModal('link-modal')); on('btn-link-back',()=>closeUiModal('link-modal'));
   on('btn-link-go',()=>{ if(_linkCur) logInteraction(_linkCur,'abrir'); setTimeout(()=>closeUiModal('link-modal'),150); });
-  on('btn-close-map',()=>closeUiModal('map-modal')); on('btn-map-back',()=>closeUiModal('map-modal'));
+  on('btn-close-map',()=>closeUiModal('map-modal'));
+  on('btn-close-sm',()=>closeUiModal('sm-modal')); on('btn-sm-back',()=>closeUiModal('sm-modal'));
+  on('btn-sm-go',()=>{ logInteraction('saludmental','abrir'); setTimeout(()=>closeUiModal('sm-modal'),150); });
+  on('sm-preview-link',()=>{ logInteraction('saludmental','abrir'); setTimeout(()=>closeUiModal('sm-modal'),150); }); on('btn-map-back',()=>closeUiModal('map-modal'));
   on('btn-packing-back',()=>closeUiModal('packing-modal'));
   on('btn-packing-go',()=>{ logInteraction('maleta','abrir'); setTimeout(()=>closeUiModal('packing-modal'),150); });
   on('btn-flightsim-back',()=>closeUiModal('flightsim-modal'));
@@ -1840,6 +1844,7 @@ function setupInteractionUI(){
     else if(!document.getElementById('packing-modal').classList.contains('hidden')) closeUiModal('packing-modal');
     else if(!document.getElementById('link-modal').classList.contains('hidden')) closeUiModal('link-modal');
     else if(!document.getElementById('map-modal').classList.contains('hidden')) closeUiModal('map-modal');
+    else if(!document.getElementById('sm-modal').classList.contains('hidden')) closeUiModal('sm-modal');
     else if(!document.getElementById('cafe-modal').classList.contains('hidden')){ clearTimeout(_cafeTimer); closeUiModal('cafe-modal'); }
     else if(!document.getElementById('mate-modal').classList.contains('hidden')){ clearTimeout(_mateTimer); closeUiModal('mate-modal'); }
     else if(!document.getElementById('zone-panel').classList.contains('hidden')) closeZonePanel();
@@ -2614,6 +2619,59 @@ function buildInfoSigns(){
       c.fillStyle='#e05a5a'; c.beginPath(); c.moveTo(40,70); c.bezierCurveTo(10,48,22,26,40,40); c.bezierCurveTo(58,26,70,48,40,70); c.fill(); c.restore();
       c.fillStyle='#1a2e42'; c.textAlign='left'; c.font='bold 26px Arial'; ['✓ Viajar con medicación','✓ Oídos y presión','✓ Circulación e hidratación'].forEach((t,i)=>c.fillText(t,70,420+i*42));
       c.fillStyle='#2f78c8'; c.textAlign='center'; c.font='bold 26px Arial'; c.fillText('Leé más  →',280,600); })});
+}
+
+
+// ─── FASE 67: CENTRO VIRTUAL DE SALUD MENTAL ────────────────
+// Cartel junto al consultorio con una vista previa dibujada del sitio de
+// profesionales asociados; al tocarlo, un panel la muestra en grande y lleva
+// al sitio (otra pestaña). La página no se puede embeber, por eso es un dibujo.
+function drawSaludMentalPreview(c,W,H){
+  const k=W/800;
+  const RR=(x,y,w,h,r)=>{ c.beginPath(); if(c.roundRect) c.roundRect(x,y,w,h,r); else c.rect(x,y,w,h); };
+  c.fillStyle='#0f2340'; c.fillRect(0,0,W,H);
+  c.fillStyle='#0b1a30'; c.fillRect(0,0,W,46*k); c.fillStyle='#e9eef5'; c.font=`bold ${15*k}px Arial`; c.textAlign='left';
+  c.fillText('Dr. Pedro Nicolas Dagnino | Consultorio de Psiquiatría y Medicina Aeronáutica',18*k,28*k,W*0.8);
+  c.fillStyle='#1d3557'; RR(18*k,62*k,150*k,24*k,12*k); c.fill();
+  c.fillStyle='#4ade80'; c.beginPath(); c.arc(32*k,74*k,4*k,0,Math.PI*2); c.fill();
+  c.fillStyle='#e9eef5'; c.font=`${11*k}px Arial`; c.fillText('Equipo profesional asociado',42*k,78*k);
+  c.fillStyle='#ffffff'; c.font=`bold ${44*k}px Arial`; c.fillText('Salud mental',18*k,138*k);
+  c.fillStyle='#c9d6e6'; c.font=`${15*k}px Arial`;
+  c.fillText('Red de profesionales con quienes se articulan derivaciones e',18*k,170*k); c.fillText('interconsultas, con un abordaje ético, humano e integral.',18*k,190*k);
+  const cx=18*k, cy=220*k, cw=W-36*k, ch=H-cy-14*k;
+  c.fillStyle='#f6f8fb'; c.fillRect(cx,cy,cw,ch);
+  c.fillStyle='#16324a'; c.font=`bold ${19*k}px Arial`; c.fillText('Profesionales asociados',cx+18*k,cy+32*k);
+  c.fillStyle='#6b7f95'; c.font=`${12*k}px Arial`; c.fillText('Seleccioná "Contacto" para acceder al canal oficial del profesional.',cx+18*k,cy+52*k);
+  c.fillStyle='#fdf1d8'; c.fillRect(cx+16*k,cy+64*k,cw-32*k,26*k); c.fillStyle='#8a5a12'; c.font=`${11*k}px Arial`;
+  c.fillText('Nota: el listado es informativo. La disponibilidad y los turnos dependen de cada profesional.',cx+26*k,cy+81*k,cw-50*k);
+  const roles=['Licenciada en Psicología','Médica Especialista en Psiquiatría','Licenciado en Psicología','Médica Especialista en Psiquiatría'];
+  roles.forEach((r,i)=>{ const y=cy+104*k+i*64*k; if(y+54*k>cy+ch) return;
+    c.fillStyle='#ffffff'; c.fillRect(cx+16*k,y,cw-32*k,54*k); c.strokeStyle='#e3e9f0'; c.lineWidth=1; c.strokeRect(cx+16*k,y,cw-32*k,54*k);
+    c.fillStyle=['#c7d7ea','#d9cfe8','#cfe3d6','#ecd9c9'][i]; c.beginPath(); c.arc(cx+46*k,y+27*k,19*k,0,Math.PI*2); c.fill();
+    c.fillStyle='#8aa1b8'; c.beginPath(); c.arc(cx+46*k,y+22*k,7*k,0,Math.PI*2); c.fill(); c.fillRect(cx+35*k,y+31*k,22*k,9*k);
+    c.fillStyle='#16324a'; c.fillRect(cx+76*k,y+15*k,150*k,9*k);
+    c.fillStyle='#6b7f95'; c.font=`${12*k}px Arial`; c.fillText(r,cx+76*k,y+42*k);
+    c.fillStyle='#0f2340'; c.fillRect(cx+cw-150*k,y+14*k,118*k,26*k); c.fillStyle='#fff'; c.font=`bold ${11*k}px Arial`; c.textAlign='center'; c.fillText('Contacto',cx+cw-91*k,y+31*k); c.textAlign='left'; });
+}
+function buildSaludMentalSign(){
+  scene.updateMatrixWorld(true);
+  const spots=[{x:-12,z:-2.2},{x:-12,z:-12.6},{x:-11,z:-13},{x:12,z:-12.6}];
+  const sp=spots.find(p=>_floorIsFree(p.x,p.z,0.7)&&_floorIsFree(p.x+(p.x<0?1.4:-1.4),p.z,0.5))||spots[0];
+  const ry=sp.x<0?Math.PI/2:-Math.PI/2;
+  _standSign({id:'saludmental',x:sp.x,z:sp.z,ry,w:1.7,h:1.7,icon:'💚',text:'Centro virtual de Salud Mental',color:'#2e9e7a',label:'Ver el Centro virtual de Salud Mental',onTrigger:openSaludMentalModal,frame:0x0f2340,
+    tex:_ckTex(600,600,(c)=>{ c.fillStyle='#eaf6f1'; c.fillRect(0,0,600,600);
+      c.fillStyle='#2e9e7a'; c.fillRect(0,0,600,104); c.fillStyle='#fff'; c.textAlign='center'; c.font='bold 36px Arial'; c.fillText('Centro virtual de',300,46); c.fillText('Salud Mental',300,88);
+      c.fillStyle='#1b2430'; c.fillRect(46,128,508,348);
+      const pv=document.createElement('canvas'); pv.width=800; pv.height=540; drawSaludMentalPreview(pv.getContext('2d'),800,540);
+      c.drawImage(pv,56,138,488,328);
+      c.fillStyle='#16324a'; c.textAlign='center'; c.font='bold 26px Arial'; c.fillText('Psicólogos y psiquiatras asociados',300,522);
+      c.fillStyle='#2e9e7a'; c.font='bold 26px Arial'; c.fillText('Tocá para ver  →',300,568); })});
+}
+function openSaludMentalModal(){
+  const cv=document.createElement('canvas'); cv.width=800; cv.height=540; drawSaludMentalPreview(cv.getContext('2d'),800,540);
+  document.getElementById('sm-preview').src=cv.toDataURL('image/png');
+  openUiModal('sm-modal');
+  logInteraction('saludmental','ver');
 }
 
 // ─── FASE 66: MAPA DE LA TERMINAL (estilo plano de aeropuerto, dibujo propio) ──
