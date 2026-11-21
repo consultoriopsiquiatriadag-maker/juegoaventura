@@ -3405,7 +3405,7 @@ function buildCheckIn(){
       box(cx,1.1,cz,4.6,0.12,1.6,0x9fb3c8);
       addMonitor(cx-0.8,1.2,cz-0.6);
       const nt=tex(128,64,(ctx)=>{ ctx.fillStyle='#1a2e42'; ctx.fillRect(0,0,128,64); ctx.fillStyle='#5ba4d4'; ctx.font='bold 36px Arial'; ctx.textAlign='center'; ctx.fillText(`${i<0?'A':'B'}${Math.abs(i)+1}`,64,46); });
-      sign(cx,1.75,cz-0.82,0.85,0.55,0.05,nt,0,0x111133);
+      sign(cx,2.62,cz-0.82,0.85,0.55,0.05,nt,0,0x111133);   // FASE 68: más arriba, ya no tapa la cara de la agente
     }
   });
   // Queue barrier
@@ -5954,7 +5954,12 @@ function spawnStaffNPCs(){
   agentX.forEach((ax,i)=>{
     const skin=SKINS[i%SKINS.length];
     const hair=HAIRS[i%HAIRS.length];
-    const npc=buildCharacter({skin,hair,top:agentTops[i],pants:0x1a2240,shoes:0x111111,role:'agent',tieCol:[0xcc2222,0x003399,0xcc7700,0x220099,0x009933][i]});
+    // FASE 68: la agente del mostrador B2 (la de la práctica): pelo largo rubio y
+    // lacio, ojos celestes con pestañas marcadas, piel clara, camisa celeste.
+    const npc=ax===5.5
+      ?buildCharacter({skin:0xf3d2bd,hair:0xe6cc86,top:0x1a3060,pants:0x1a2240,shoes:0x111111,role:'agent',tieCol:0xa9c8ea,
+          female:true,hairStyle:'long',noHat:true,lashes:true,lipColor:0xc98a85,iris:0x6f9fc8,glasses:false,seed:61})
+      :buildCharacter({skin,hair,top:agentTops[i],pants:0x1a2240,shoes:0x111111,role:'agent',tieCol:[0xcc2222,0x003399,0xcc7700,0x220099,0x009933][i]});
     npc.position.set(ax,0,24.2);
     npc.rotation.y=0; // faces player (z+)
     npc.userData.isNPC=true; npc.userData.isStaff=true;
