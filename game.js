@@ -2405,6 +2405,59 @@ function buildFlightSimTotem(){
 }
 
 
+
+// ─── FASE 69: CINTAS DEL CONTROL DE SEGURIDAD EN MOVIMIENTO ─
+// Banda de goma con listones que avanza hacia la sala de embarque (-z) en la
+// mesa de entrada y en la de salida; bandejas con mochila, notebook, campera o
+// bolsita de líquidos entran al escáner de rayos X, desaparecen en el túnel
+// (con cortinas de tiras) y salen del otro lado. En Modo Calma, más lento.
+let _secBelts=null;
+function buildSecurityBelts(xs,z){
+  const bt=_ckTex(64,256,(c)=>{ c.fillStyle='#24272c'; c.fillRect(0,0,64,256);
+    for(let y=0;y<256;y+=32){ c.fillStyle='#3a3e45'; c.fillRect(0,y,64,5); c.fillStyle='#17191c'; c.fillRect(0,y+5,64,2); }
+    c.fillStyle='rgba(255,255,255,0.05)'; c.fillRect(0,0,4,256); c.fillRect(60,0,4,256); });
+  bt.wrapS=bt.wrapT=THREE.RepeatWrapping; bt.repeat.set(1,5);
+  const beltM=new THREE.MeshStandardMaterial({map:bt,roughness:0.85,metalness:0.05});
+  const rollM=mkStd(0xb9bec4,0.3,0.7), curtM=mkStd(0x1c1e22,0.8,0);
+  const trayM=mkStd(0x8f969e,0.5,0.2);
+  const items=[[0x2f4f7a,'bag'],[0x3a3d42,'laptop'],[0x8d1f24,'coat'],[0xcfe6f5,'liquids'],[0x5a6b3a,'bag'],[0x6b4a2f,'shoes']];
+  const trays=[];
+  xs.forEach((bx,li)=>{
+    [z+4.1,z-4.1].forEach(tz=>{
+      const b=new THREE.Mesh(new THREE.PlaneGeometry(1.36,3.2),beltM); b.rotation.x=-Math.PI/2; b.position.set(bx,0.953,tz); b.receiveShadow=true; scene.add(b);
+      [tz-1.6,tz+1.6].forEach(rz=>{ const r=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.42,12),rollM); r.rotation.z=Math.PI/2; r.position.set(bx,0.92,rz); scene.add(r); });
+    });
+    // Cortinas de tiras en la boca del túnel del escáner
+    [z+2.31,z-2.31].forEach(cz=>{ for(let i=0;i<7;i++){ const st=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.5,0.01),curtM); st.position.set(bx-0.54+i*0.18,1.22,cz); scene.add(st); } });
+    // Bandejas con objetos
+    for(let k=0;k<3;k++){
+      const g=new THREE.Group();
+      const tr=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.07,0.46),trayM); tr.position.y=0.035; tr.castShadow=true; g.add(tr);
+      const [col,kind]=items[(li*3+k)%items.length], m=mkStd(col,0.6,0.05);
+      let o;
+      if(kind==='laptop'){ o=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.03,0.3),m); o.position.y=0.085; }
+      else if(kind==='liquids'){ o=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.14,0.16),new THREE.MeshStandardMaterial({color:col,transparent:true,opacity:0.6,roughness:0.1})); o.position.y=0.14; }
+      else if(kind==='coat'){ o=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.08,0.36),m); o.position.y=0.11; }
+      else if(kind==='shoes'){ o=new THREE.Group(); [-0.08,0.08].forEach(dx=>{ const sh=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.08,0.26),m); sh.position.set(dx,0.11,0); o.add(sh); }); }
+      else { o=new THREE.Mesh(new THREE.BoxGeometry(0.36,0.22,0.24),m); o.position.y=0.18; }
+      g.add(o); g.position.set(bx,0.953,z+5.6-k*3.75); scene.add(g);
+      trays.push({g,z0:z+5.65,z1:z-5.65});
+    }
+  });
+  _secBelts={tex:bt,trays,z};
+}
+function updateSecurityBelts(delta){
+  const S=_secBelts; if(!S) return;
+  const v=(calmMode?0.2:0.36)*delta;
+  S.tex.offset.y-=v*5/3.2;                    // la textura avanza a la misma velocidad que las bandejas
+  for(const T of S.trays){
+    let nz=T.g.position.z-v;
+    if(nz<T.z1) nz=T.z0;
+    T.g.position.z=nz;
+    T.g.visible=Math.abs(nz-S.z)>2.25;        // adentro del escáner no se ve
+  }
+}
+
 // ─── FASE 66: FRENTE VIDRIADO, VEREDA Y CALLE CON TRÁNSITO ──
 // Una gran pared de vidrio de piso a techo con tres puertas automáticas que se
 // abren al acercarte. Afuera: vereda con toldos de lona tensada, cordón
@@ -3451,8 +3504,8 @@ function buildSecurity(){
     const ledM=mkMat(0x00cc44,{emissive:0x00aa33,emissiveIntensity:0.9});
     const led=new THREE.Mesh(mkBox(0.16,0.16,0.16),ledM); led.position.set(lc+1.1,2.05,z+0.2); scene.add(led);
     [[z+4.1,'in'],[z-4.1,'out']].forEach(([tz])=>{ box(lc-2.6,0,tz,1.6,0.85,3.4,0x607d8b); box(lc-2.6,0.85,tz,1.5,0.1,3.2,0x9fb3c8); });
-    [-0.6,0.6].forEach(dz=>box(lc-2.6,0.95,z+4.1+dz,1.1,0.08,0.5,0x888899));
   });
+  buildSecurityBelts([-8,0,8].map(dx=>x+dx-2.6),z);   // FASE 69: cintas en movimiento con bandejas
   // Lane dividers
   [-4,4].forEach(dx=>box(x+dx,0,z,0.15,1.6,14,0x607d8b));
   // Rules board
@@ -9085,6 +9138,7 @@ function animate(){
   updateSecurityCheck(delta);   // FASE 62: control de la PSA en el arco
   updateCockpitPilots(delta,t);   // FASE 63: los pilotos saludan
   updateEntranceDoors(delta);     // FASE 66: puertas automáticas
+  updateSecurityBelts(delta);     // FASE 69: cintas del control de seguridad
   updateStreetTraffic(delta);     // FASE 66: autos, taxis y combis
   updateCabinSeq(delta);        // FASE 46: anuncios de a bordo
   if(_arrWalkTex) _arrWalkTex.offset.y-=delta*(calmMode?0.22:0.33); // FASE 48: cinta caminadora
