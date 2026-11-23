@@ -2800,7 +2800,11 @@ const LINK_INFO={
   medaero:{eyebrow:'🩺 Antes de volar',title:'Medicina Aeronáutica para pasajeros',
     sub:'Cómo cuidar tu salud antes y durante el vuelo: medicación, oídos, circulación, hidratación y más.',
     tips:['Material del Consultorio Dr. Pedro Nicolas Dagnino.','Se abre en otra pestaña; AeroCalma queda abierto acá.'],
-    url:'https://juegosconsultoriodagnino.netlify.app/medicina-aeronautica',btn:'🩺 Leer más'}
+    url:'https://juegosconsultoriodagnino.netlify.app/medicina-aeronautica',btn:'🩺 Leer más'},
+  tepaso:{eyebrow:'🤝 Próximamente',title:'Te Paso a Buscar',
+    sub:'Estás acompañado. Cuando lo necesites, un Operador de Apoyo Inmediato va a poder ir a encontrarte en la puerta de tu casa. Es un servicio complementario del consultorio que todavía está en preparación.',
+    tips:['PRÓXIMAMENTE: el servicio todavía no está activo. Ya podés conocer cómo va a funcionar.','No reemplaza a los servicios de emergencia: ante una urgencia llamá al 911, o al 135 (línea de prevención del suicidio).','Se abre en otra pestaña; AeroCalma queda abierto acá.'],
+    url:'https://tepasoabuscar.netlify.app/',btn:'🤝 Conocer Te Paso a Buscar'}
 };
 let _linkCur=null;
 function openLinkModal(id){
@@ -2864,6 +2868,19 @@ function buildInfoSigns(){
       c.fillStyle='#e05a5a'; c.beginPath(); c.moveTo(40,70); c.bezierCurveTo(10,48,22,26,40,40); c.bezierCurveTo(58,26,70,48,40,70); c.fill(); c.restore();
       c.fillStyle='#1a2e42'; c.textAlign='left'; c.font='bold 26px Arial'; ['✓ Viajar con medicación','✓ Oídos y presión','✓ Circulación e hidratación'].forEach((t,i)=>c.fillText(t,70,420+i*42));
       c.fillStyle='#2f78c8'; c.textAlign='center'; c.font='bold 26px Arial'; c.fillText('Leé más  →',280,600); })});
+  // FASE 71: Sala de equipajes, junto a la salida: "Te Paso a Buscar" (próximamente)
+  _standSign({id:'tepaso',x:10.6,z:-190.4,ry:0,w:1.5,h:1.7,icon:'🤝',text:'Te Paso a Buscar · Próximamente',color:'#7a4fc8',label:'Conocer "Te Paso a Buscar"',onTrigger:()=>openLinkModal('tepaso'),frame:0x2a1d4a,
+    tex:_ckTex(560,640,(c)=>{ c.fillStyle='#f6f3fc'; c.fillRect(0,0,560,640); _signHeader(c,560,'#7a4fc8','Te Paso a Buscar');
+      c.fillStyle='#2a1d4a'; c.textAlign='center'; c.font='bold 34px Arial'; c.fillText('Estás acompañado.',280,172);
+      c.fillStyle='#5a4a78'; c.font='23px Arial'; c.fillText('Un Operador de Apoyo Inmediato',280,214); c.fillText('puede ir a encontrarte',280,244);
+      // Dos figuras que se encuentran en la vereda
+      c.save(); c.translate(280,350); c.fillStyle='#e7defa'; c.beginPath(); c.arc(0,0,82,0,Math.PI*2); c.fill();
+      [[-30,'#7a4fc8'],[30,'#2e9e7a']].forEach(([dx,col])=>{ c.fillStyle=col; c.beginPath(); c.arc(dx,-30,16,0,Math.PI*2); c.fill(); c.beginPath(); c.ellipse(dx,22,22,36,0,0,Math.PI*2); c.fill(); });
+      c.fillStyle='#f2c230'; c.beginPath(); c.moveTo(0,4); c.bezierCurveTo(-16,-8,-10,-22,0,-14); c.bezierCurveTo(10,-22,16,-8,0,4); c.fill(); c.restore();
+      // Franja PRÓXIMAMENTE
+      c.save(); c.translate(280,500); c.rotate(-0.06); c.fillStyle='#f2c230'; c.fillRect(-250,-36,500,72);
+      c.fillStyle='#2a1d4a'; c.font='bold 46px Arial'; c.fillText('PRÓXIMAMENTE',0,16); c.restore();
+      c.fillStyle='#7a4fc8'; c.font='bold 24px Arial'; c.fillText('Tocá para conocerlo  →',280,604); })});
 }
 
 
