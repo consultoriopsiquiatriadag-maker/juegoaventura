@@ -1,12 +1,23 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <!-- Etiqueta de Google (Google Tag Manager · GTM-NLW39K7T) -->
-    <script async src="https://www.googletagmanager.com/gtm.js?id=GTM-NLW39K7T"></script>
+    <!-- Etiqueta de Google (Google Tag Manager · GTM-NLW39K7T)
+         Solo se carga si la persona acepta la medición en el aviso de privacidad.
+         Modo de consentimiento: todo denegado por defecto; al aceptar se habilita
+         únicamente la medición de visitas (analytics), nunca publicidad. -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
+      gtag('consent', 'default', {ad_storage:'denied', ad_user_data:'denied', ad_personalization:'denied', analytics_storage:'denied'});
       gtag('js', new Date());
+      window.aeroLoadGTM = function(){
+        if (window.__aeroGTM) return; window.__aeroGTM = true;
+        gtag('consent', 'update', {analytics_storage:'granted'});
+        var s = document.createElement('script'); s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtm.js?id=GTM-NLW39K7T';
+        document.head.appendChild(s);
+      };
+      try { if (localStorage.getItem('aerocalma_consent') === 'granted') window.aeroLoadGTM(); } catch (e) {}
     </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -83,6 +94,8 @@
             <a href="mailto:consultoriopsiquiatriadag@gmail.com" class="footer-link">
                 Contacto
             </a>
+            &nbsp;·&nbsp;
+            <button id="btn-privacy-open" class="footer-link footer-btn" type="button">Privacidad</button>
         </footer>
 
     </div>
@@ -848,5 +861,39 @@
 <script src="js/ceiling-signage.js"></script>
 <script src="js/light-shafts.js"></script>
 <script src="game.js"></script>
+    <!-- Aviso de privacidad y consentimiento de medición -->
+    <div id="privacy-banner" class="privacy-banner hidden" role="dialog" aria-modal="false" aria-labelledby="privacy-title">
+        <p id="privacy-title" class="pb-title">🔒 Tu privacidad</p>
+        <p class="pb-text">Con tu permiso, usamos una herramienta de Google para contar visitas y mejorar AeroCalma. Lo que anotás en el recorrido (diario, niveles de ansiedad, reseñas) queda solo en tu dispositivo y no se comparte.</p>
+        <details class="pb-more">
+            <summary>Más información</summary>
+            <ul>
+                <li>Si aceptás: se miden visitas y uso general del sitio, de forma estadística. No se usa para publicidad.</li>
+                <li>Si rechazás: no se carga ninguna herramienta de medición. El juego funciona igual.</li>
+                <li>Tus datos personales están protegidos por la Ley 25.326. Podés cambiar tu elección cuando quieras desde «Privacidad», al pie del menú.</li>
+                <li>Consultas: <a href="mailto:consultoriopsiquiatriadag@gmail.com">consultoriopsiquiatriadag@gmail.com</a></li>
+            </ul>
+        </details>
+        <div class="pb-actions">
+            <button id="btn-privacy-reject" class="btn-ghost" type="button">Rechazar</button>
+            <button id="btn-privacy-accept" class="btn-primary" type="button">Aceptar</button>
+        </div>
+    </div>
+    <script>
+      (function(){
+        var KEY='aerocalma_consent', b=document.getElementById('privacy-banner');
+        function get(){ try{ return localStorage.getItem(KEY); }catch(e){ return null; } }
+        function set(v){ try{ localStorage.setItem(KEY,v); }catch(e){} }
+        function show(){ b.classList.remove('hidden'); }
+        function hide(){ b.classList.add('hidden'); }
+        document.getElementById('btn-privacy-accept').addEventListener('click',function(){ set('granted'); hide(); window.aeroLoadGTM(); });
+        document.getElementById('btn-privacy-reject').addEventListener('click',function(){
+          var had=get()==='granted'; set('denied'); hide();
+          if(had){ gtag('consent','update',{analytics_storage:'denied'}); }
+        });
+        document.getElementById('btn-privacy-open').addEventListener('click',show);
+        if(!get()) show();
+      })();
+    </script>
 </body>
 </html>

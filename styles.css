@@ -1963,3 +1963,24 @@ body.has-bag #bag-chip { display: block; }
 .sm-preview-tag { position: absolute; right: 10px; bottom: 10px; background: rgba(46,158,122,.95); color: #fff; font-size: .8rem; font-weight: 600; padding: 5px 10px; border-radius: 999px; }
 #btn-sm-go { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { .sm-preview img { transition: none; } }
+
+/* ── Aviso de privacidad y consentimiento ── */
+.privacy-banner {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 9000;
+  width: min(560px, calc(100vw - 32px)); box-sizing: border-box;
+  background: #ffffff; color: var(--deep, #16324a); border-radius: 18px; padding: 18px 20px 16px;
+  box-shadow: 0 14px 40px rgba(10, 25, 45, .35); font-family: var(--ff-body, 'DM Sans', Arial, sans-serif);
+  animation: pbIn .35s ease-out;
+}
+.privacy-banner.hidden { display: none; }
+.pb-title { margin: 0 0 6px; font-weight: 700; font-size: 1rem; }
+.pb-text { margin: 0 0 8px; font-size: .9rem; line-height: 1.5; }
+.pb-more { font-size: .84rem; margin-bottom: 12px; }
+.pb-more summary { cursor: pointer; color: #2f78c8; font-weight: 600; }
+.pb-more ul { margin: 8px 0 0; padding-left: 18px; line-height: 1.5; }
+.pb-more a { color: #2f78c8; }
+.pb-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.pb-actions button { min-width: 120px; }
+.footer-btn { background: none; border: none; padding: 0; font: inherit; cursor: pointer; }
+@keyframes pbIn { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) { .privacy-banner { animation: none; } }
