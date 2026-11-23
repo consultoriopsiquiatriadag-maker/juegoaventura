@@ -217,6 +217,8 @@ function init(){
   if(scene.fog) _normalFogDensity=scene.fog.density;
   buildWorld();
   _arrHideIntruders(); // FASE 48: la sala de llegadas queda limpia
+  _airsideCut();       // FASE 70: el hall termina en el ventanal de la puerta A7
+  buildAirside();      // FASE 70: plataforma, avión completo por fuera y handling
   buildInteractiveSpots(); // FASE 37: mostrador B2 y kiosko de bienestar
   buildGuideArrows();      // FASE 58: flechas guía en el piso
   captureFloorReflections(); // después del mundo y antes de las personas
@@ -407,11 +409,11 @@ function buildWorld(){
 
 // ─── GROUND ──────────────────────────────────────
 function buildGround(){
-  const gm=new THREE.Mesh(new THREE.PlaneGeometry(600,600),mkMat(0x5a8a55));
-  gm.rotation.x=-Math.PI/2; gm.receiveShadow=true; scene.add(gm);
-  // Tarmac
-  const tm=new THREE.Mesh(new THREE.PlaneGeometry(130,320),mkMat(0x4a4a4a));
-  tm.rotation.x=-Math.PI/2; tm.position.set(0,0.02,-55); scene.add(tm);
+  // FASE 70: pasto y pista con un hueco donde está la plataforma (3 m más abajo)
+  const A=AIRSIDE, gMat=mkMat(0x5a8a55), tMat=mkMat(0x4a4a4a);
+  const R=(x0,x1,z0,z1,y,m)=>{ if(x1<=x0||z1<=z0) return; const p=new THREE.Mesh(new THREE.PlaneGeometry(x1-x0,z1-z0),m); p.rotation.x=-Math.PI/2; p.position.set((x0+x1)/2,y,(z0+z1)/2); p.receiveShadow=true; scene.add(p); };
+  R(-300,300,A.cutZ,300,0,gMat); R(-300,300,-300,A.z1,0,gMat); R(-300,A.x0,A.z1,A.cutZ,0,gMat); R(A.x1,300,A.z1,A.cutZ,0,gMat);
+  R(-65,65,A.cutZ,105,0.02,tMat); R(-65,65,-215,A.z1,0.02,tMat);
   // Touchdown zone markings (two rows of barred rectangles)
   const tdMat=mkMat(0xffffff,{roughness:0.5});
   for(let row=0;row<2;row++){
@@ -2129,7 +2131,7 @@ function _buildMateDispenser(x,z,face){
 function buildMateDispensers(){
   scene.updateMatrixWorld(true);
   // Uno por tramo del hall: check-in, seguridad, sala de espera, embarque
-  const bands=[[34,30,38],[14,12,16,18],[-4,-2,-6],[-24,-22,-26]];
+  const bands=[[34,30,38],[14,12,16,18],[-4,-2,-6],[-16,-18,-14]];   // FASE 70: el último, antes del ventanal
   let n=0;
   bands.forEach(zs=>{
     for(const z of zs){
@@ -2405,6 +2407,196 @@ function buildFlightSimTotem(){
 }
 
 
+
+
+// ─── FASE 70: LADO AIRE ─────────────────────────────────────
+// La terminal termina en un ventanal de pared a pared en la puerta A7: el único
+// paso es la puerta, que lleva a la manga. Del otro lado el hall ya no sigue:
+// la plataforma está 3 m más abajo (como en los aeropuertos reales, donde se
+// embarca desde el piso superior), con el avión completo por fuera (panza,
+// alas, motores, cola y tren de aterrizaje) y equipos de handling trabajando.
+const AIRSIDE={cutZ:GATE.z-0.15, ap:-3.0, x0:-45, x1:45, z1:-98};
+let _air=null;
+// Quita del hall todo lo que quedaba del otro lado del ventanal y recorta lo largo
+function _airsideCut(){
+  const A=AIRSIDE, C=A.cutZ, bb=new THREE.Box3(), sz=new THREE.Vector3(), ctr=new THREE.Vector3();
+  const drop=[], cut=[];
+  scene.updateMatrixWorld(true);
+  scene.children.forEach(o=>{
+    if(!(o.isMesh||o.isGroup)||o.isInstancedMesh) return;
+    if(o.userData.arr||o.name==='jetway') return;
+    bb.setFromObject(o); if(bb.isEmpty()) return;
+    bb.getSize(sz); bb.getCenter(ctr);
+    if(bb.max.z<=C+0.02){
+      if(bb.min.z<A.z1-1||bb.min.x<A.x0-1||bb.max.x>A.x1+1) return;            // pista lejana, piezas enormes
+      if(Math.abs(ctr.x)<=3.2&&sz.x<=6.5&&ctr.z>-63.5&&ctr.z<-25.5&&bb.max.y<3.7&&bb.min.y>-2.2) return;   // avión: fuselaje, nariz y cabina
+      drop.push(o);
+    } else if(bb.min.z<C-0.5&&sz.z>25&&sz.x<60&&o.isMesh&&Math.abs(ctr.x)<=21){   // (el cielo y el suelo no)
+      cut.push(o);
+    }
+  });
+  drop.forEach(o=>{ o.parent.remove(o); _staticProps.delete(o); });
+  const e=o=>o.matrixWorld.elements;
+  cut.forEach(o=>{
+    bb.setFromObject(o); const oldC=(bb.min.z+bb.max.z)/2, f=(bb.max.z-C)/(bb.max.z-bb.min.z);
+    const m=e(o); const dz=[Math.abs(m[2]),Math.abs(m[6]),Math.abs(m[10])];
+    const k=dz.indexOf(Math.max(...dz));
+    if(k===0) o.scale.x*=f; else if(k===1) o.scale.y*=f; else o.scale.z*=f;
+    o.position.z+=((C+bb.max.z)/2-oldC);
+    o.updateMatrixWorld(true);
+  });
+  return {dropped:drop.length,cut:cut.length};
+}
+// ¿Se puede estar acá? Del ventanal hacia el avión: solo manga, fuelle y cabina
+function _airsideOK(x,z){
+  const A=AIRSIDE;
+  if(z>=A.cutZ+0.05) return true;
+  for(let i=0;i<JETWAY.length-1;i++){
+    const [ax,az]=JETWAY[i], [bx,bz]=JETWAY[i+1], vx=bx-ax, vz=bz-az, L2=vx*vx+vz*vz;
+    const t=Math.max(0,Math.min(1,((x-ax)*vx+(z-az)*vz)/L2));
+    if(Math.hypot(x-(ax+vx*t),z-(az+vz*t))<0.78) return true;
+  }
+  if(x>-2.95&&x<-2.0&&z<PLANE_DOOR.z0-0.1&&z>PLANE_DOOR.z1+0.1) return true;        // fuelle y puerta
+  if(Math.abs(x)<2.05&&z<CABIN.zFront+3.2&&z>CABIN.zRear+0.3) return true;          // cabina y cockpit
+  return false;
+}
+function _clampAirside(pos,px,pz){
+  if(_airsideOK(pos.x,pos.z)) return;
+  if(_airsideOK(px,pos.z)){ pos.x=px; return; }
+  if(_airsideOK(pos.x,pz)){ pos.z=pz; return; }
+  if(_airsideOK(px,pz)){ pos.x=px; pos.z=pz; }
+}
+function buildAirside(){
+  const A=AIRSIDE, AP=A.ap, {cy,R,shell,zFront,zRear,x:cx}=CABIN, Ro=R+shell;
+  const add=(geo,m,x,y,z,rx=0,ry=0,rz=0)=>{ const o=new THREE.Mesh(geo,m); o.position.set(x,y,z); o.rotation.set(rx,ry,rz); o.castShadow=true; o.receiveShadow=true; scene.add(o); return o; };
+  const BX=(w,h,d,m,x,y,z,rx,ry,rz)=>add(new THREE.BoxGeometry(w,h,d),m,x,y,z,rx,ry,rz);
+  // ── Ventanal de pared a pared (piso a techo) en la línea de la puerta A7
+  const glassM=new THREE.MeshStandardMaterial({color:0xcfe6f5,transparent:true,opacity:0.16,roughness:0.05,metalness:0.1,depthWrite:false,side:THREE.DoubleSide});
+  const frameM=mkStd(0x5b6670,0.4,0.5), Z=GATE.z;
+  [[-17,-GATE.half],[GATE.half,17]].forEach(([a,b])=>{ const p=new THREE.Mesh(new THREE.PlaneGeometry(b-a,12.9),glassM); p.position.set((a+b)/2,6.55,Z); p.renderOrder=2; scene.add(p); });
+  { const p=new THREE.Mesh(new THREE.PlaneGeometry(GATE.half*2,9.75),glassM); p.position.set(0,3.25+9.75/2,Z); p.renderOrder=2; scene.add(p); }
+  [-17,-14,-11,-8,8,11,14,17].forEach(x=>BX(0.14,12.9,0.2,frameM,x,6.55,Z));
+  [-4,0,4].forEach(x=>BX(0.12,9.75,0.2,frameM,x,3.25+9.75/2,Z));
+  [[3.17,34],[6.6,34],[10,34],[12.95,34]].forEach(([y,w])=>BX(w,0.14,0.22,frameM,0,y,Z));
+  [-1,1].forEach(sd=>BX(9,0.12,0.18,frameM,sd*12.5,0.15,Z));
+  // ── Plataforma (hormigón) y bordes
+  const conc=_ckTex(256,256,(c)=>{ c.fillStyle='#9a9da1'; c.fillRect(0,0,256,256); c.strokeStyle='rgba(0,0,0,0.12)'; c.lineWidth=2; for(let i=0;i<=256;i+=64){ c.beginPath(); c.moveTo(i,0); c.lineTo(i,256); c.stroke(); c.beginPath(); c.moveTo(0,i); c.lineTo(256,i); c.stroke(); }
+    c.fillStyle='rgba(0,0,0,0.04)'; for(let i=0;i<300;i++) c.fillRect(Math.random()*256,Math.random()*256,3,3); });
+  conc.wrapS=conc.wrapT=THREE.RepeatWrapping; conc.repeat.set(18,15);
+  const apron=new THREE.Mesh(new THREE.PlaneGeometry(A.x1-A.x0,A.cutZ-A.z1),new THREE.MeshStandardMaterial({map:conc,roughness:0.9}));
+  apron.rotation.x=-Math.PI/2; apron.position.set(0,AP,(A.cutZ+A.z1)/2); apron.receiveShadow=true; scene.add(apron);
+  // Rampa de rodaje hacia la pista (fondo) y frente de la terminal (abajo del ventanal)
+  { const L=Math.hypot(12,-AP), r=new THREE.Mesh(new THREE.PlaneGeometry(A.x1-A.x0,L),mkMat(0x55585c)); r.rotation.x=-Math.PI/2-Math.atan2(-AP,12); r.position.set(0,AP/2,A.z1+6); scene.add(r); }
+  BX(A.x1-A.x0,-AP+0.1,0.4,mkStd(0xb8b2a6,0.8,0),0,AP/2,A.cutZ-0.1);
+  // Edificios laterales (muelles de la terminal) que cierran la plataforma
+  const bldT=_ckTex(512,128,(c)=>{ c.fillStyle='#d8d2c6'; c.fillRect(0,0,512,128); c.fillStyle='#4f7090'; for(let i=0;i<16;i++) c.fillRect(8+i*32,40,24,46); c.fillStyle='#b8b2a6'; c.fillRect(0,110,512,18); });
+  bldT.wrapS=THREE.RepeatWrapping; bldT.repeat.set(6,1);
+  const bldM=new THREE.MeshStandardMaterial({map:bldT,roughness:0.8});
+  [-1,1].forEach(sd=>{ BX(14,12-AP,70,bldM,sd*(A.x1+6),AP+(12-AP)/2,(A.cutZ+A.z1)/2+7);
+    BX(25,13-0.1,14,mkStd(0xd8d2c6,0.8,0),sd*32.5,6.5,A.cutZ+7); });                 // alas de la terminal a los costados del hall
+  // ── Marcas en la plataforma
+  const yel=new THREE.MeshBasicMaterial({color:0xf2c230}), red=new THREE.MeshBasicMaterial({color:0xc62828}), wht=new THREE.MeshBasicMaterial({color:0xf2f2f2});
+  const line=(x0,z0,x1,z1,w,m)=>{ const L=Math.hypot(x1-x0,z1-z0), p=new THREE.Mesh(new THREE.PlaneGeometry(w,L),m); p.rotation.x=-Math.PI/2; p.rotation.z=-Math.atan2(x1-x0,z1-z0); p.position.set((x0+x1)/2,AP+0.015,(z0+z1)/2); scene.add(p); };
+  line(0,-23,0,-96,0.22,yel); line(-1.6,-25.2,1.6,-25.2,0.3,yel);
+  [[-8,-23.5,-8,-70],[8,-23.5,8,-70],[-8,-70,8,-70]].forEach(([a,b,c2,d])=>line(a,b,c2,d,0.2,red));
+  for(let z=-30;z>-90;z-=12){ line(-22,z,-12,z,0.15,wht); line(12,z,22,z,0.15,wht); }
+  // ── Avión completo por fuera
+  const skinM=new THREE.MeshStandardMaterial({color:0xf3f1ec,roughness:0.45,metalness:0.1,side:THREE.DoubleSide});
+  const greyM=mkStd(0xd9dde2,0.5,0.3), darkM=mkStd(0x2a2f36,0.5,0.3), navyM=mkStd(0x16324a,0.5,0.1);
+  const a=Math.acos(Math.min(0.99,(cy-CABIN.floorY+0.02)/Ro));                       // panza: desde el piso hacia abajo
+  { const belly=new THREE.Mesh(new THREE.CylinderGeometry(Ro,Ro,zFront-zRear,48,1,true,-a,2*a),skinM); belly.rotation.x=Math.PI/2; belly.position.set(cx,cy,(zFront+zRear)/2); belly.castShadow=true; scene.add(belly);
+  }
+  // Cono de cola (sube hacia atrás) y tapa del mamparo trasero
+  { const tc=new THREE.Mesh(new THREE.CylinderGeometry(0.45,Ro,8,40,1,false),skinM); tc.rotation.x=-Math.PI/2+0.12; tc.position.set(cx,cy+0.3,zRear-3.9); tc.castShadow=true; scene.add(tc); }
+  // Alas (ala baja, con flecha) y estabilizadores
+  const wingGeo=(span,root,tip,sweep,th)=>{ const sh=new THREE.Shape(); sh.moveTo(0,0); sh.lineTo(span,-sweep); sh.lineTo(span,-sweep-tip); sh.lineTo(0,-root); sh.closePath();
+    const geo=new THREE.ExtrudeGeometry(sh,{depth:th,bevelEnabled:false}); geo.rotateX(Math.PI/2); return geo; };   // forma en el plano x–z (z hacia -)
+  const wingM=mkStd(0xdfe3e8,0.45,0.35);
+  [-1,1].forEach(sd=>{
+    const w=new THREE.Mesh(wingGeo(14.5,7.8,2.2,6.5,0.32),wingM); w.position.set(cx+sd*1.9,cy-1.55,-39.2); w.scale.x=sd; w.rotation.z=sd*0.07; w.castShadow=true; scene.add(w);
+    const hs=new THREE.Mesh(wingGeo(6.2,3.4,1.3,2.6,0.18),wingM); hs.position.set(cx+sd*0.5,cy+0.9,-64.2); hs.scale.x=sd; hs.rotation.z=sd*0.12; hs.castShadow=true; scene.add(hs);
+    // Motor debajo del ala, con pilón y toma oscura
+    const ex=cx+sd*6.0, ey=cy-2.45, ez=-41.6;
+    add(new THREE.CylinderGeometry(0.92,0.8,3.6,28),greyM,ex,ey,ez,Math.PI/2);
+    add(new THREE.CylinderGeometry(0.74,0.74,0.05,24),darkM,ex,ey,ez+1.81,Math.PI/2);
+    add(new THREE.CylinderGeometry(0.2,0.12,0.25,12),greyM,ex,ey,ez+1.9,Math.PI/2);
+    BX(0.28,0.8,2.4,greyM,ex,ey+0.95,ez-0.6);
+    // Tren principal: patas y ruedas dobles
+    const gx=cx+sd*2.6, gz=-47.6;
+    add(new THREE.CylinderGeometry(0.12,0.12,1.6,10),greyM,gx,AP+1.25,gz);
+    [-0.32,0.32].forEach(dz=>add(new THREE.CylinderGeometry(0.5,0.5,0.34,18),darkM,gx,AP+0.5,gz+dz,0,0,Math.PI/2));
+  });
+  // Deriva con franjas de color
+  { const sh=new THREE.Shape(); sh.moveTo(0,0); sh.lineTo(-4.6,5.6); sh.lineTo(-6.8,5.6); sh.lineTo(-6.9,0); sh.closePath();
+    const fg=new THREE.ExtrudeGeometry(sh,{depth:0.3,bevelEnabled:false}); fg.rotateY(-Math.PI/2);
+    const fin=new THREE.Mesh(fg,navyM); fin.position.set(cx+0.15,cy+Ro-0.35,-59.6); fin.castShadow=true; scene.add(fin);
+    const sg=new THREE.Shape(); sg.moveTo(-1.4,1.7); sg.lineTo(-3.3,4.0); sg.lineTo(-4.2,4.0); sg.lineTo(-2.3,1.7); sg.closePath();
+    const sgeo=new THREE.ExtrudeGeometry(sg,{depth:0.32,bevelEnabled:false}); sgeo.rotateY(-Math.PI/2);
+    const stripe=new THREE.Mesh(sgeo,mkStd(0x4ecdc4,0.5,0.1)); stripe.position.set(cx+0.16,cy+Ro-0.35,-59.6); scene.add(stripe); }
+  // Tren de nariz
+  add(new THREE.CylinderGeometry(0.1,0.1,1.2,10),greyM,cx,AP+1.05,-28.4);
+  [-0.18,0.18].forEach(dx=>add(new THREE.CylinderGeometry(0.34,0.34,0.22,16),darkM,cx+dx,AP+0.34,-28.4,0,0,Math.PI/2));
+  // Puerta de bodega delantera (lado derecho) abierta
+  BX(0.04,0.9,1.3,mkStd(0x1d2228,0.8,0),cx+Ro*0.93,cy-1.05,-36.8,0,0,0.38);
+  // ── Manga: columna de apoyo con ruedas, rotonda y vigas bajo el piso
+  add(new THREE.CylinderGeometry(0.65,0.75,-AP+0.1,20),mkStd(0xbfc4c9,0.5,0.3),0,AP/2,-23.0);
+  [[-4.3,-30.6]].forEach(([x,z])=>{ [-0.5,0.5].forEach(dx=>BX(0.22,-AP,0.22,mkStd(0x8e959c,0.4,0.5),x+dx,AP/2,z));
+    BX(1.6,0.3,0.9,mkStd(0x5b6168,0.5,0.4),x,AP+0.55,z); [-0.6,0.6].forEach(dx=>add(new THREE.CylinderGeometry(0.38,0.38,0.3,16),darkM,x+dx,AP+0.38,z,0,0,Math.PI/2)); });
+  for(let i=0;i<JETWAY.length-1;i++){ const [ax,az]=JETWAY[i],[bx,bz]=JETWAY[i+1], L=Math.hypot(bx-ax,bz-az);
+    BX(2.2,0.4,L+1.1,mkStd(0xaab1b8,0.6,0.2),(ax+bx)/2,-0.12,(az+bz)/2,0,Math.atan2(bx-ax,bz-az)); }
+  // ── Equipos de handling
+  const ylwM=mkStd(0xf2c230,0.5,0.2), orgM=mkStd(0xe8742a,0.5,0.1), whM=mkStd(0xf2f2f0,0.5,0.1);
+  // Cinta elevadora a la bodega, con valijas que suben
+  const bl=new THREE.Group(); bl.position.set(cx+4.4,AP,-36.8); scene.add(bl);
+  { const B2=(w,h,d,m,x,y,z,rz)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); o.position.set(x,y,z); if(rz) o.rotation.z=rz; o.castShadow=true; bl.add(o); return o; };
+    B2(3.4,0.6,1.5,ylwM,0.4,0.6,0); [-1.1,1.4].forEach(x=>[-0.6,0.6].forEach(z=>{ const w=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.22,14),darkM); w.rotation.x=Math.PI/2; w.position.set(x,0.3,z); bl.add(w); }));
+    B2(0.8,0.8,0.9,darkM,1.6,1.2,0); }
+  const bx0=cx+5.9, by0=AP+1.1, bx1=cx+2.75, by1=cy-1.05, bLen=Math.hypot(bx1-bx0,by1-by0), bAng=Math.atan2(by1-by0,bx1-bx0);
+  BX(bLen,0.12,0.75,darkM,(bx0+bx1)/2,(by0+by1)/2,-36.8,0,0,bAng);
+  const bags=[]; const bagCols=[0x2f4f7a,0x8d1f24,0x3a3d42,0x5a6b3a,0xd8b77c];
+  for(let i=0;i<4;i++){ const b=BX(0.55,0.32,0.4,mkStd(bagCols[i%5],0.6,0.05),0,0,-36.8); bags.push(b); }
+  // Tractor de equipajes con tres carros, dando vueltas despacio
+  const train=[]; const mkTractor=()=>{ const t=new THREE.Group(); const B3=(w,h,d,m,x,y,z)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); o.position.set(x,y,z); o.castShadow=true; t.add(o); };
+    B3(2.0,0.7,1.3,ylwM,0,0.65,0); B3(0.9,0.9,1.2,mkStd(0x1d2a35,0.2,0.5),-0.3,1.45,0); B3(1.1,0.08,1.3,ylwM,-0.3,1.92,0);
+    [[0.7,0.5],[0.7,-0.5],[-0.7,0.5],[-0.7,-0.5]].forEach(([x,z])=>{ const w=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,0.22,14),darkM); w.rotation.x=Math.PI/2; w.position.set(x,0.3,z); t.add(w); }); return t; };
+  const mkDolly=(k)=>{ const d=new THREE.Group(); const B3=(w,h,d2,m,x,y,z)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d2),m); o.position.set(x,y,z); o.castShadow=true; d.add(o); };
+    B3(2.2,0.12,1.4,mkStd(0x8e959c,0.4,0.5),0,0.55,0); [-1.08,1.08].forEach(x=>B3(0.06,0.9,1.4,mkStd(0x8e959c,0.4,0.5),x,1.05,0)); B3(2.2,0.06,1.42,mkStd(0x8e959c,0.4,0.5),0,1.5,0);
+    for(let i=0;i<3;i++) B3(0.55,0.35+((i+k)%2)*0.1,0.42,mkStd(bagCols[(i+k)%5],0.6,0.05),-0.7+i*0.7,0.8,0);
+    [[0.75,0.55],[0.75,-0.55],[-0.75,0.55],[-0.75,-0.55]].forEach(([x,z])=>{ const w=new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.2,0.16,12),darkM); w.rotation.x=Math.PI/2; w.position.set(x,0.2,z); d.add(w); }); return d; };
+  train.push(mkTractor()); for(let k=0;k<3;k++) train.push(mkDolly(k));
+  train.forEach(o=>{ o.position.y=AP; scene.add(o); });
+  // Camión de combustible bajo el ala izquierda, con manguera
+  { const ft=new THREE.Group(); ft.position.set(cx-11,AP,-45.5); scene.add(ft);
+    const B4=(w,h,d,m,x,y,z)=>{ const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); o.position.set(x,y,z); o.castShadow=true; ft.add(o); };
+    B4(1.8,1.6,2.2,whM,0,1.2,2.4); B4(1.7,0.6,1.9,mkStd(0x1d2a35,0.2,0.5),0,1.55,3.0);
+    const tk=new THREE.Mesh(new THREE.CylinderGeometry(1.05,1.05,4.6,24),whM); tk.rotation.x=Math.PI/2; tk.position.set(0,1.55,-0.8); tk.castShadow=true; ft.add(tk);
+    const bandA=new THREE.Mesh(new THREE.CylinderGeometry(1.07,1.07,0.3,24),orgM); bandA.rotation.x=Math.PI/2; bandA.position.set(0,1.55,-0.8); ft.add(bandA);
+    [[0.8,2.4],[-0.8,2.4],[0.8,-1.8],[-0.8,-1.8],[0.8,-0.6],[-0.8,-0.6]].forEach(([x,z])=>{ const w=new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.42,0.3,16),darkM); w.rotation.z=Math.PI/2; w.position.set(x,0.42,z); ft.add(w); });
+    const hose=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,3.2,8),darkM); hose.position.set(cx-9.6,AP+1.8,-44.2); hose.rotation.z=0.9; scene.add(hose); }
+  // Equipo de energía (GPU) junto a la nariz, con cable
+  { BX(1.4,1.0,0.9,ylwM,cx+2.9,AP+0.6,-26.6); const cb=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,2.6,6),darkM); cb.position.set(cx+1.7,AP+1.2,-27.2); cb.rotation.z=0.75; scene.add(cb); }
+  // Conos de seguridad
+  const coneM=mkStd(0xff6a1a,0.6,0), coneW=mkStd(0xffffff,0.6,0);
+  [[0,-25.2],[6,-39],[-6,-39],[16.6,-46.5],[-16.6,-46.5],[0,-71]].forEach(([x,z])=>{ add(new THREE.ConeGeometry(0.2,0.6,10),coneM,cx+x,AP+0.3,z); add(new THREE.CylinderGeometry(0.135,0.165,0.1,10),coneW,cx+x,AP+0.33,z); });
+  // Operarios con chaleco reflectivo y gorra
+  [[cx+5.4,-35.6,-Math.PI/2],[cx+3.9,-26.0,-2.2],[cx+8.5,-29.5,2.6]].forEach(([x,z,ry],i)=>{
+    const w=buildCharacter({skin:SKINS[(i+1)%SKINS.length],hair:HAIRS[i%HAIRS.length],top:0xd8ee3a,pants:0x23324a,shoes:0x111111,role:'civilian',female:i===1,hairStyle:'cap',glasses:false,seed:71+i});
+    w.position.set(x,AP,z); w.rotation.y=ry; scene.add(w);
+    BX(0.44,0.035,0.3,mkStd(0xeeeeee,0.3,0),x,AP+1.14,z,0,ry);                     // franja reflectiva
+  });
+  _air={bags,b0:{x:bx0,y:by0},b1:{x:bx1,y:by1},bAng,t:0,train,path:{cx:cx+14,cz:-31,rx:6.5,rz:4.6}};
+}
+function updateAirside(delta){
+  const S=_air; if(!S) return;
+  const k=calmMode?0.6:1; S.t+=delta*k;
+  // Valijas subiendo por la cinta elevadora
+  S.bags.forEach((b,i)=>{ const u=((S.t*0.18+i/S.bags.length)%1);
+    b.position.set(S.b0.x+(S.b1.x-S.b0.x)*u,S.b0.y+(S.b1.y-S.b0.y)*u+0.24,b.position.z); b.rotation.z=S.bAng; b.visible=u<0.96; });
+  // Tren de equipajes en un circuito elíptico, cada carro sigue al anterior
+  const P=S.path, w=0.085;
+  S.train.forEach((o,i)=>{ const th=S.t*w-i*0.24, x=P.cx+Math.cos(th)*P.rx, z=P.cz+Math.sin(th)*P.rz;
+    const dx=-Math.sin(th)*P.rx, dz=Math.cos(th)*P.rz; o.position.x=x; o.position.z=z; o.rotation.y=Math.atan2(dx,dz)-Math.PI/2; });
+}
 
 // ─── FASE 69: CINTAS DEL CONTROL DE SEGURIDAD EN MOVIMIENTO ─
 // Banda de goma con listones que avanza hacia la sala de embarque (-z) en la
@@ -3544,13 +3736,13 @@ function buildLounge(){
     sign(x+dx,5.6,z+6.5,5.4,5,0.08,wint,0,0x224466);
   });
   // Plants
-  addPlantLarge(x+16,z); addPlantLarge(x+16,z-5); addPlantLarge(x-16,z-5);
+  addPlantLarge(x+16,z);   // (FASE 70: las de z-5 quedaban dentro de los locales mudados)
   // Vending machines (FASE 56: corridas detrás del consultorio, que ocupa z -10…-4)
   addVending(x-16.5,z-1.1); addVending(x-16.5,z-2.4);
   // Charging station
-  box(x+15.5,0,z-4,1.2,2.2,0.8,0x374151);
+  box(x+15.5,0,z-1.2,1.2,2.2,0.8,0x374151);   // FASE 70: corrida, la tienda de regalos ocupa z -21…-13
   const ct=tex(256,256,(ctx)=>{ ctx.fillStyle='#1a2e42'; ctx.fillRect(0,0,256,256); ctx.fillStyle='#4ecdc4'; ctx.font='bold 32px Arial'; ctx.textAlign='center'; ctx.fillText('⚡ CARGA',128,90); ctx.fillText('FREE WiFi',128,148); ctx.fillStyle='#aaa'; ctx.font='20px Arial'; ctx.fillText('AeroCalma_Free',128,200); });
-  sign(x+15.5,1.6,z-4.42,1.0,1.8,0.05,ct,0,0x001122);
+  sign(x+15.5,1.6,z-1.62,1.0,1.8,0.05,ct,0,0x001122);
   // Central info kiosk
   cyl(x,0,z,0.6,0.8,1.1,12,0x2d4a63);
   const kt=tex(256,512,(ctx)=>{ ctx.fillStyle='#0d1e30'; ctx.fillRect(0,0,256,512); ctx.fillStyle='#10b981'; ctx.font='bold 26px Arial'; ctx.textAlign='center'; ctx.fillText('ℹ INFORMACIÓN',128,50); ['→ Gates A1-A20','→ Gates B1-B15','↑ Restaurantes','↓ Baños / WC','← WiFi: AeroCalma'].forEach((l,i)=>{ ctx.fillStyle='#fff'; ctx.font='22px Arial'; ctx.fillText(l,128,110+i*75); }); });
@@ -4061,10 +4253,10 @@ function _cabinLighting(){
 function buildShops(){
   buildCafe(-15.5,20);
   buildConvenienceStore(-15.5,40);   // FASE 56: pasa al lugar que dejó el consultorio
-  buildNewsstand(-15.5,-22);
+  buildNewsstand(-15.5,-17.2);   // FASE 70: entero dentro de la terminal
   buildPharmacy(15.5,15);
   buildRestaurant(15.5,-5);
-  buildGiftShop(15.5,-23);
+  buildGiftShop(15.5,-17.2);     // FASE 70: entero dentro de la terminal
 }
 
 // ── FACHADA BASE ── pared trasera, laterales, fascia, vidrios, zócalo
@@ -5857,7 +6049,7 @@ function spawnNPCs(lite){ // lite: celular -- menos personas, mismas rutas princ
   const civRoutes=[
     {x:-5,z:44,dx:-5,dz:25,spd:1.2},{x:3,z:42,dx:5,dz:20,spd:1.5},
     {x:-2,z:30,dx:-3,dz:45,spd:1.0},{x:7,z:15,dx:6,dz:-5,spd:1.3},
-    {x:-6,z:5,dx:-5,dz:30,spd:1.1},{x:4,z:-8,dx:3,dz:-25,spd:1.4},
+    {x:-6,z:5,dx:-5,dz:30,spd:1.1},{x:4,z:-8,dx:3,dz:-19.5,spd:1.4},
     {x:-3,z:-20,dx:-4,dz:-5,spd:0.9},{x:8,z:25,dx:7,dz:5,spd:1.6},
     {x:-8,z:-12,dx:-7,dz:10,spd:1.2},{x:3,z:32,dx:2,dz:48,spd:1.4}
     // (una ruta menos que antes: su lugar lo ocupa la pareja que camina junta, más abajo)
@@ -5896,7 +6088,7 @@ function spawnNPCs(lite){ // lite: celular -- menos personas, mismas rutas princ
   // 180° despacio y regresan. Dan sensación de flujo hacia el embarque.
   [
     {x:-4.2,z:47,dx:-4.2,dz:14,spd:0.75},
-    {x:4.2,z:3,dx:4.2,dz:-22,spd:0.7}
+    {x:4.2,z:3,dx:4.2,dz:-19.5,spd:0.7}
   ].forEach((d,i)=>{
     const npc=buildCharacter({skin:SKINS[(i+2)%SKINS.length],hair:HAIRS[(i+3)%HAIRS.length],top:TOPS[(i*3+1)%TOPS.length],pants:[0x2a3344,0x3a3428][i],shoes:0x111111,role:'civilian'});
     npc.userData.isNPC=true; npc.userData.isWalking=true;
@@ -9035,7 +9227,7 @@ function buildHallQuality(){
   // (La capa translúcida de 'brillo' sobre el piso se quitó: el piso ahora tiene
   //  reflejos reales con envMap, ver captureFloorReflections.)
   var signEmissiveData=[
-    {text:'EMBARQUE',x:0,z:-28,color:0x4a9eff},{text:'SALIDAS',x:-2,z:44,color:0x4ecdc4},
+    {text:'EMBARQUE',x:0,z:-19,color:0x4a9eff},{text:'SALIDAS',x:-2,z:44,color:0x4ecdc4},
     {text:'LLEGADAS',x:3,z:44,color:0x4ecdc4}
   ];
   signEmissiveData.forEach(function(s){
@@ -9070,6 +9262,7 @@ function animate(){
   // Suavizado de movimiento: sin sacudidas, transiciones graduales
   // Modo calma activa menor velocidad y FOV reducido
   if(isGameActive && !isPaused && !uiModalOpen && (isMobile || controls.isLocked)){
+    const _px=camera.position.x, _pz=camera.position.z;   // FASE 70: para frenar en el ventanal
     if(isMobile){
       // Botones de rotación: velocidad 1.8 rad/s
       if(rotateLeft)  mobileYaw+=1.8*delta;
@@ -9101,6 +9294,7 @@ function animate(){
     const inWC=pos.z>RESTROOM.z0+0.3&&pos.z<RESTROOM.z1-0.3&&pos.x<-15.5;
     if(pos.z<ARR.regionZ) _clampArrivals(pos,delta); // FASE 48: manga y pasillo de llegadas
     else { pos.x=Math.max(inWC?RESTROOM.x0+0.75:-16,Math.min(16,pos.x)); pos.z=Math.max(-60.6,Math.min(54,pos.z)); pos.y=PLAYER_HEIGHT; } // -60.6: fondo de la cabina (a Madrid se llega volando)
+    if(pos.z>=ARR.regionZ&&!_flight&&!_autoWalk&&!_deplaning) _clampAirside(pos,_px,_pz);   // FASE 70
     if(_flight) updateFlight(delta,t); // FASE 46: sentado en el 14C
     checkZones();
   }
@@ -9139,6 +9333,7 @@ function animate(){
   updateCockpitPilots(delta,t);   // FASE 63: los pilotos saludan
   updateEntranceDoors(delta);     // FASE 66: puertas automáticas
   updateSecurityBelts(delta);     // FASE 69: cintas del control de seguridad
+  updateAirside(delta);           // FASE 70: tractor de equipajes y cinta elevadora
   updateStreetTraffic(delta);     // FASE 66: autos, taxis y combis
   updateCabinSeq(delta);        // FASE 46: anuncios de a bordo
   if(_arrWalkTex) _arrWalkTex.offset.y-=delta*(calmMode?0.22:0.33); // FASE 48: cinta caminadora
