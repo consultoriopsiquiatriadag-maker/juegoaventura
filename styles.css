@@ -154,9 +154,10 @@ button { font-family: var(--ff-body); cursor: pointer; border: none; outline: no
   background: linear-gradient(90deg, var(--accent), var(--accent2));
   border-radius: 2px;
   width: 0%;
-  animation: load 2s ease-in-out forwards;
+  transition: width .15s linear;
 }
-@keyframes load { 0%{width:0%} 100%{width:100%} }
+/* FASE 73: porcentaje de carga */
+.loading-pct { margin-top: 12px; font-size: 1.05rem; font-weight: 600; color: rgba(255,255,255,0.85); font-variant-numeric: tabular-nums; letter-spacing: .02em; }
 
 /* ================================
    MAIN MENU
@@ -1411,7 +1412,7 @@ body.calm-mode .plane-loader {
   #zone-panel, #zone-panel-inner { transition: none !important; animation: none !important; }
   /* Carga */
   .plane-loader { animation: none !important; }
-  #loading-fill { animation: none !important; width: 100% !important; }
+  #loading-fill { animation: none !important; transition: none !important; }
 }
 
 /* Prevent text selection during touch drag */

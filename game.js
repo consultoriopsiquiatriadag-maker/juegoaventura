@@ -285,9 +285,11 @@ function setupPostProcessing(){
 }
 
 function animLoad(){
-  const f=document.getElementById('loading-fill');
-  f.style.animation='none'; f.style.width='0%';
-  let w=0; const iv=setInterval(()=>{ w+=1.5; f.style.width=Math.min(w,100)+'%';
+  // FASE 73: sigue desde el porcentaje real que dejó la carga de archivos
+  if(window.__loadIv) clearInterval(window.__loadIv);
+  const set=window.__setLoadPct||(()=>{});
+  let w=window.__loadPct||0; set(w);
+  const iv=setInterval(()=>{ w+=1.2; set(Math.min(w,100));
     if(w>=100){ clearInterval(iv); setTimeout(()=>{ document.getElementById('loading-screen').classList.add('hidden'); document.getElementById('main-menu').classList.remove('hidden'); startMenuAnimation(); updateDiaryDisplay(); },400); }
   },20);
 }

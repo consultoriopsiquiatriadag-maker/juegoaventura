@@ -55,9 +55,21 @@
             <div class="plane-loader">✈</div>
             <h2>AeroCalma</h2>
             <p>Preparando tu experiencia...</p>
-            <div class="loading-bar"><div id="loading-fill"></div></div>
+            <div class="loading-bar" role="progressbar" aria-label="Carga de AeroCalma" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="loading-fill"></div></div>
+            <div id="loading-pct" class="loading-pct" aria-hidden="true">0%</div>
         </div>
     </div>
+    <script>
+    // FASE 73: porcentaje de carga. Mientras se descargan los archivos avanza
+    // solo hasta 70-85% (nunca llega a 100 por su cuenta); al terminar de armar
+    // el aeropuerto, game.js lo completa hasta 100%.
+    (function(){
+      var f=document.getElementById('loading-fill'), t=document.getElementById('loading-pct'), bar=f.parentNode;
+      window.__setLoadPct=function(p){ p=Math.max(0,Math.min(100,p)); window.__loadPct=p; var r=Math.floor(p); f.style.width=p+'%'; t.textContent=r+'%'; bar.setAttribute('aria-valuenow',r); };
+      window.__setLoadPct(0);
+      window.__loadIv=setInterval(function(){ var top=document.readyState==='complete'?85:70; window.__setLoadPct(window.__loadPct+(top-window.__loadPct)*0.05+0.05); },100);
+    })();
+    </script>
 
 
     <!-- ===== MENÚ PRINCIPAL ===== -->
