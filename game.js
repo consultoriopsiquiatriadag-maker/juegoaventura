@@ -103,7 +103,7 @@ function _loadSoundPref(){ try{ return localStorage.getItem('aerocalma_sound')!=
 let audioCtx=null, ambientMaster=null, musicGainNode=null, hallGainNode=null;
 let ambientNodes=null;            // referencias para detener/limpiar al salir
 const AMBIENT_MUSIC_BASE=0.05;    // música -- volumen bajo, no invasivo
-const AMBIENT_HALL_BASE=0.032;    // murmullo de hall -- muy tenue
+const AMBIENT_HALL_BASE=0.35;     // FASE 72: grabación real de hall (ajustable)
 let textScale=1;                // Escala de texto del panel de zona (0.85 – 1.4)
 let guidedMode=true;            // true = panel abre automático al entrar a zona
 let startAtZone=-1;             // índice de zona para ir directo al iniciar (goToZone)
@@ -7413,55 +7413,25 @@ function buildAmbientPad(){
   });
 }
 
-// Murmullo de hall: ruido filtrado en banda media-baja, evocando la
-// sensación de espacio amplio y actividad lejana, sin voces inteligibles
-// ni anuncios -- sólo una textura de fondo casi imperceptible.
+// FASE 72: sonido real de hall. Se quitó el murmullo sintetizado (tenía
+// demasiados graves). Ahora suena en bucle una grabación real de un hall de
+// aeropuerto: audios/ambiente/hall-aeropuerto.mp3. Pasa por un filtro que
+// recorta los graves profundos (<100 Hz) para que no retumbe. Si el archivo
+// no está, el hall queda sólo con la música suave.
+const HALL_REC_URL='audios/ambiente/hall-aeropuerto.mp3';
 function buildHallMurmur(){
-  const now=audioCtx.currentTime;
-  const bufferSize=audioCtx.sampleRate*2;
-  const buffer=audioCtx.createBuffer(1,bufferSize,audioCtx.sampleRate);
-  const data=buffer.getChannelData(0);
-  for(let i=0;i<bufferSize;i++) data[i]=(Math.random()*2-1)*0.6;
-
-  const noise=audioCtx.createBufferSource();
-  noise.buffer=buffer;
-  noise.loop=true;
-
-  const bandpass=audioCtx.createBiquadFilter();
-  bandpass.type='bandpass';
-  bandpass.frequency.value=420;
-  bandpass.Q.value=0.6;
-
-  const lowpass=audioCtx.createBiquadFilter();
-  lowpass.type='lowpass';
-  lowpass.frequency.value=1100;
-
-  // LFO lento que varía el nivel del murmullo, como oleadas distantes de actividad
-  const lfo=audioCtx.createOscillator();
-  lfo.type='sine';
-  lfo.frequency.value=0.03;
-  const lfoGain=audioCtx.createGain();
-  lfoGain.gain.value=0.45;
-  const murmurShape=audioCtx.createGain();
-  murmurShape.gain.value=0.55;
-  lfo.connect(lfoGain);
-  lfoGain.connect(murmurShape.gain);
-  lfo.start(now);
-
-  noise.connect(bandpass);
-  bandpass.connect(lowpass);
-  lowpass.connect(murmurShape);
-  murmurShape.connect(hallGainNode);
-  // Retumbo grave del espacio (ventilación, eco del hall): el mismo ruido con
-  // un pasa-bajos muy bajo. Se siente más de lo que se oye.
-  const rumbleLP=audioCtx.createBiquadFilter();
-  rumbleLP.type='lowpass'; rumbleLP.frequency.value=160; rumbleLP.Q.value=0.5;
-  const rumbleGain=audioCtx.createGain(); rumbleGain.gain.value=0.9;
-  noise.connect(rumbleLP); rumbleLP.connect(rumbleGain); rumbleGain.connect(hallGainNode);
-  noise.start(now);
-
-  ambientNodes.noise=noise;
-  ambientNodes.lfo.push(lfo);
+  const ctx=audioCtx;
+  fetch(HALL_REC_URL).then(r=>{ if(!r.ok) throw new Error(r.status); return r.arrayBuffer(); })
+    .then(ab=>new Promise((ok,ko)=>ctx.decodeAudioData(ab,ok,ko)))
+    .then(buf=>{
+      if(audioCtx!==ctx||!hallGainNode) return;   // se cerró el audio mientras cargaba
+      const src=ctx.createBufferSource(); src.buffer=buf; src.loop=true;
+      const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=100; hp.Q.value=0.6;
+      src.connect(hp); hp.connect(hallGainNode);
+      src.start(ctx.currentTime, Math.random()*Math.max(0,buf.duration-1));   // arranca en un punto al azar
+      ambientNodes.noise=src;
+    })
+    .catch(()=>{ /* sin grabación: hall sólo con música */ });
 }
 
 // ── Sonidos de interfaz y avisos sutiles (Fase 37) ─────────────
