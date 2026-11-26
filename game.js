@@ -88,7 +88,18 @@ function setQuality(level,silent){
 // Auto-detect quality on mobile
 if(isMobile) setQuality('low');
 let calmMode=false;             // Modo Calma: estimulación reducida
-let isThirdPerson=false;
+let isThirdPerson=false;         // FASE 75: true cuando camMode>0 (se mantiene por compatibilidad)
+// ── FASE 75 (F41): CÁMARAS INTERCAMBIABLES ──
+// `camera` sigue siendo el jugador (posición, choques, zonas, interacciones);
+// en tercera persona la imagen se dibuja desde `viewCam`, que va detrás.
+const CAM_MODES=[
+  {name:'Primera persona',ico:'👁️'},
+  {name:'Tercera persona cercana',ico:'🧍',back:2.3,up:0.45,side:0.55,lift:0.35},
+  {name:'Tercera persona panorámica',ico:'🏞️',back:5.4,up:1.45,side:0.6,lift:0.6}
+];
+let camMode=0, viewCam=null, _renderPass=null, _camInstant=false;
+try{ const v=parseInt(localStorage.getItem('aerocalma_cam'),10); if(v>=0&&v<3) camMode=v; _camInstant=localStorage.getItem('aerocalma_cam_instant')==='1'; }catch(e){}
+isThirdPerson=camMode>0;
 let playerMesh=null;
 let playerWorldPos=new THREE.Vector3(0,PLAYER_HEIGHT,52);
 let _normalFogDensity=0.006;   // se lee después de setupLighting() para manejar Sky on/off
@@ -263,7 +274,8 @@ function setupPostProcessing(){
 
   // 1) Escena → buffer lineal. ACES se aplica acá (renderer.toneMapping),
   //    así el umbral del bloom trabaja sobre valores ya tonemapeados (0..1).
-  composer.addPass(new THREE.RenderPass(scene,camera));
+  _renderPass=new THREE.RenderPass(scene,camera);   // FASE 75: la cámara de dibujo cambia según el modo
+  composer.addPass(_renderPass);
 
   // 2) Bloom con umbral alto: solo lo casi blanco brilla (LEDs del techo,
   //    texto de las pantallas FIDS, claraboyas). El piso al sol queda debajo.
@@ -1790,6 +1802,8 @@ function setupInteractionUI(){
   on('btn-reg-water',coldWaterFace);
   on('btn-reg-breath',restroomBreathing);
   on('btn-hud-sound',toggleAmbientSound);
+  on('btn-hud-cam',cycleCamMode); on('btn-cam-pause',cycleCamMode); on('btn-cam-instant',toggleCamInstant);   // FASE 75
+  _syncCamUI();
   on('btn-flight-skip',skipToLanding);
   on('btn-flight-breath',()=>{ if(_flight) openBreathing(); });
   on('btn-bag-breath',()=>openBreathing());
@@ -6888,7 +6902,7 @@ function onKeyDown(e){
     case 'KeyD': case 'ArrowRight': movement.right=true;    break;
     case 'KeyB': openBreathing();        break;
     case 'KeyE': if(!triggerInteraction()) openCurrentZonePanel(); break;
-    case 'Tab': e.preventDefault(); isThirdPerson=!isThirdPerson; showToast(isThirdPerson?'Cámara tercera persona':'Cámara primera persona'); break;
+    case 'Tab': e.preventDefault(); cycleCamMode(); break;   // FASE 75: tres cámaras
   }
 }
 function releaseMovementKeys(){
@@ -8978,6 +8992,102 @@ function showToast(text){ const t=document.getElementById('toast'); t.textConten
 // ══════════════════════════════════════════════════
 let ringTime=0;
 
+
+// ─── FASE 75 (F41): CÁMARAS INTERCAMBIABLES ─────────────────
+// Tres vistas: primera persona, tercera cercana y tercera panorámica. La vista
+// externa sigue a la persona por detrás, se acerca si hay una pared o una
+// columna en el medio (un rayo contra la geometría fija, 20 veces por segundo)
+// y vuelve sola a primera persona donde el espacio es angosto: manga, cabina,
+// vuelo, desembarque y pasillo de llegadas. Suavizado corto (no deja la imagen
+// "flotando"); con Modo Calma, movimiento reducido o "cambio instantáneo", sin
+// animación.
+const _vc={ active:false, pos:new THREE.Vector3(), dist:0, hit:99, rayT:0, list:null, near:false,
+            fw:new THREE.Vector3(), head:new THREE.Vector3(), dir:new THREE.Vector3(), rc:new THREE.Raycaster() };
+function _camColliders(){
+  if(_vc.list) return _vc.list;
+  const L=[]; scene.updateMatrixWorld(true);
+  scene.traverse(o=>{
+    if(!o.isMesh||o.isInstancedMesh) return;
+    for(let a=o;a;a=a.parent){ if(!a.visible) return; const u=a.userData; if(u&&(u.isNPC||u.isPlayer||u.isStaff)) return; }
+    const m=Array.isArray(o.material)?o.material[0]:o.material;
+    if(!m||m.visible===false||(m.transparent&&m.opacity<0.15)) return;   // cajas de interacción invisibles
+    L.push(o);
+  });
+  return (_vc.list=L);
+}
+function _camForcedFirst(){
+  const p=camera.position;
+  if(_flight||_autoWalk||_deplaning) return true;
+  if(p.z<ARR.regionZ) return !_inBagHall();           // Madrid: sólo la sala de equipajes es amplia
+  return p.z<AIRSIDE.cutZ;                             // manga y cabina
+}
+function _camSmooth(){ return !(_camInstant||calmMode||prefersReducedMotion()); }
+function updateViewCam(delta){
+  const mode=CAM_MODES[camMode];
+  if(!isGameActive||camMode===0||_camForcedFirst()){ _vc.active=false; _vc.dist=0; return camera; }
+  if(!viewCam) viewCam=new THREE.PerspectiveCamera(camera.fov,camera.aspect,0.05,camera.far);
+  if(viewCam.fov!==camera.fov||viewCam.aspect!==camera.aspect){ viewCam.fov=camera.fov; viewCam.aspect=camera.aspect; viewCam.updateProjectionMatrix(); }
+  const p=camera.position, fw=_vc.fw; camera.getWorldDirection(fw);
+  const head=_vc.head.set(p.x,p.y-0.1,p.z);
+  let fx=fw.x, fz=fw.z; const fl=Math.hypot(fx,fz)||1; fx/=fl; fz/=fl;
+  const pitch=Math.asin(Math.max(-1,Math.min(1,fw.y)));
+  // Mirar hacia arriba baja la cámara; mirar hacia abajo la sube (como una órbita suave)
+  const elev=Math.max(-0.2,Math.min(1.0,Math.atan2(mode.up,mode.back)-pitch*0.55));
+  // Atrás y un poco a la derecha ("sobre el hombro"): el centro de la pantalla
+  // queda libre para la mira y los avisos de interacción
+  // Pantalla vertical (celular): menos corrimiento lateral y un poco más lejos
+  const narrow=Math.min(1,camera.aspect*1.15);
+  const rx=-fz, rz=fx, sd=(mode.side||0)*narrow*narrow;
+  const L0=Math.hypot(mode.back+(1-narrow)*1.6,mode.up);
+  const dir=_vc.dir.set(-fx*Math.cos(elev)*L0+rx*sd,Math.sin(elev)*L0,-fz*Math.cos(elev)*L0+rz*sd);
+  const L=dir.length(); dir.multiplyScalar(1/L);
+  // Rayo contra paredes, techo y estructuras (no contra personas)
+  _vc.rayT-=delta;
+  if(_vc.rayT<=0||!_vc.active){ _vc.rayT=0.05;
+    _vc.rc.set(head,dir); _vc.rc.near=0.1; _vc.rc.far=L+0.35;
+    const hit=_vc.rc.intersectObjects(_camColliders(),false)[0];
+    _vc.hit=hit?Math.max(0.3,hit.distance-0.35):L;
+  }
+  const want=Math.min(L,_vc.hit);
+  const smooth=_camSmooth();
+  if(!_vc.active) _vc.dist=smooth?0.6:want;           // al entrar en tercera persona se aleja de a poco
+  // Acercarse es inmediato (no atraviesa nada); alejarse es gradual
+  if(want<_vc.dist||!smooth) _vc.dist=want; else _vc.dist+=(want-_vc.dist)*Math.min(1,delta*3);
+  const tx=head.x+dir.x*_vc.dist, ty=Math.max(0.35,head.y+dir.y*_vc.dist), tz=head.z+dir.z*_vc.dist;
+  if(!_vc.active||!smooth) _vc.pos.set(tx,ty,tz);
+  else { const k=1-Math.exp(-delta*14); _vc.pos.x+=(tx-_vc.pos.x)*k; _vc.pos.y+=(ty-_vc.pos.y)*k; _vc.pos.z+=(tz-_vc.pos.z)*k; }
+  // Demasiado cerca de una pared: la vista externa no aporta, se usa la de los ojos
+  _vc.near=_vc.near?_vc.dist<1.6:_vc.dist<1.3;   // con margen, para que no parpadee
+  _vc.active=true; _vc.eye=_vc.near;
+  if(_vc.near) return camera;                          // se dibuja desde los ojos y el avatar se oculta
+  viewCam.position.copy(_vc.pos);
+  viewCam.lookAt(head.x+fw.x*3+rx*sd,head.y+fw.y*3+(mode.lift||0),head.z+fw.z*3+rz*sd);
+  return viewCam;
+}
+function setCamMode(m,silent){
+  camMode=((m%3)+3)%3; isThirdPerson=camMode>0;
+  try{ localStorage.setItem('aerocalma_cam',String(camMode)); }catch(e){}
+  _syncCamUI();
+  if(!silent){
+    const M=CAM_MODES[camMode];
+    showToast(M.ico+' '+M.name+(camMode>0&&isGameActive&&_camForcedFirst()?' · acá se ve en primera persona (espacio angosto)':''));
+  }
+}
+function cycleCamMode(){ setCamMode(camMode+1); }
+function toggleCamInstant(){
+  _camInstant=!_camInstant;
+  try{ localStorage.setItem('aerocalma_cam_instant',_camInstant?'1':'0'); }catch(e){}
+  _syncCamUI();
+}
+function _syncCamUI(){
+  const M=CAM_MODES[camMode];
+  const b=document.getElementById('btn-hud-cam');
+  if(b){ b.textContent='🎥 '+M.ico; b.setAttribute('aria-label','Cambiar cámara. Ahora: '+M.name); b.title='Cámara: '+M.name+' (Tab)'; }
+  const l=document.getElementById('cam-status-label'); if(l) l.textContent=M.name;
+  const i=document.getElementById('cam-instant-label'); if(i) i.textContent=_camInstant?'Instantáneo':'Suave';
+  const ib=document.getElementById('btn-cam-instant'); if(ib) ib.setAttribute('aria-pressed',_camInstant?'true':'false');
+}
+
 // ─── FASE 77 (F43): AVATAR DEL JUGADOR ──────────────────────
 // El cuerpo de cajas se reemplaza por el mismo sistema de personajes que usan
 // las personas del aeropuerto (buildCharacter): proporciones humanas, pelo,
@@ -9002,7 +9112,7 @@ function buildPlayerBody(look){
 }
 // El avatar sólo se ve cuando la imagen se dibuja desde una cámara distinta de
 // la del jugador (tercera persona de F75). Hasta entonces queda oculto, como antes.
-function _playerViewCam(){ return (typeof viewCam!=='undefined'&&viewCam&&isThirdPerson)?viewCam:camera; }
+function _playerViewCam(){ return (_vc.active&&!_vc.eye)?viewCam:camera; }   // FASE 75
 function updatePlayerAvatar(delta){
   const m=playerMesh; if(!m||delta<=0) return;
   const p=camera.position;
@@ -9377,12 +9487,14 @@ function animate(){
   camera.fov += (targetFov - camera.fov) * 0.03;
   camera.updateProjectionMatrix();
 
+  // FASE 75: cámara de dibujo (primera persona o detrás del avatar)
+  const _view=updateViewCam(delta);
   // FASE 77: avatar del jugador en su posición real, con rumbo y animación
   updatePlayerAvatar(delta);
 
   // Render: sin bloom en móvil o en modo calma
-  if(composer && !calmMode) composer.render(delta);
-  else renderer.render(scene,camera);
+  if(composer && !calmMode){ if(_renderPass) _renderPass.camera=_view; composer.render(delta); }
+  else renderer.render(scene,_view);
 }
 
 // ══════════════════════════════════════════════════
