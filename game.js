@@ -10123,11 +10123,20 @@ function runChecks(){
   results.push({name:'TTS', ok:typeof speechSynthesis!=='undefined', detail:speechSynthesis?'available':'NOT AVAILABLE'});
   try{localStorage.setItem('_test','1');localStorage.removeItem('_test');results.push({name:'localStorage',ok:true,detail:'writable'});}catch(e){results.push({name:'localStorage',ok:false,detail:e.message});}
   results.push({name:'Zones (7)', ok:ZONE_DATA&&ZONE_DATA.length===7, detail:ZONE_DATA?ZONE_DATA.length+' zones loaded':'NONE'});
-  var fns=['init','setupEvents','startGame','endGame','toggleCalmMode','openBreathing','openGrounding','narrateCurrentZone','checkZones','enterZone','returnToMenu'];
+  var fns=['init','setupEvents','startGame','endGame','toggleCalmMode','openBreathing','openGrounding','narrateCurrentZone','checkZones','enterZone','returnToMenu',
+           // FASE 82: funciones de F75–F81
+           'setCamMode','updateViewCam','updatePlayerAvatar','openProfileModal','saveProfileModal','openAeroInfo','openCare','careOpenTool','openFlightSetup','startFlight','openLinkModal'];
   fns.forEach(function(fn){results.push({name:'fn:'+fn, ok:typeof window[fn]==='function', detail:typeof window[fn]});});
+  // FASE 82: paneles, puntos de interacción y datos nuevos
+  ['profile-modal','aeroinfo-modal','care-modal','flight-setup','link-modal','btn-hud-cam','btn-care','btn-profile','btn-flight-motion','btn-flight-engine'].forEach(function(id){ results.push({name:'dom:'+id, ok:!!document.getElementById(id), detail:document.getElementById(id)?'ok':'FALTA'}); });
+  ['aeroinfo','aerolineas','seat-14c','kiosk','tepaso','saludmental'].forEach(function(id){ var ok=typeof interactables!=='undefined'&&interactables.some(function(i){return i.id===id;}); results.push({name:'spot:'+id, ok:ok, detail:ok?'ok':'FALTA'}); });
+  results.push({name:'AEROINFO (8)', ok:typeof AEROINFO!=='undefined'&&AEROINFO.length===8, detail:typeof AEROINFO!=='undefined'?AEROINFO.length+' tarjetas':'NONE'});
+  results.push({name:'GROUNDING_STEPS', ok:typeof GROUNDING_STEPS!=='undefined'&&GROUNDING_STEPS.length>0, detail:typeof GROUNDING_STEPS!=='undefined'?GROUNDING_STEPS.length+' pasos':'NONE'});
+  results.push({name:'Avatar', ok:!!playerMesh||!isGameActive, detail:playerMesh?playerMesh.name:'(se crea al empezar)'});
   var allOk=results.every(function(r){return r.ok;});
   var okCount=results.filter(function(r){return r.ok;}).length;
-  showToast('Tests: '+okCount+'/'+results.length+(allOk?' -- OK':' -- FALLS'));
+  // FASE 82: el resultado va a la consola; el aviso en pantalla sólo con ?debug (antes lo veían todos)
+  if(/[?&]debug/.test(location.search)) showToast('Tests: '+okCount+'/'+results.length+(allOk?' -- OK':' -- FALLAS'));
   console.table(results);
   return {ok:allOk, total:results.length, passed:okCount, results:results};
 }
