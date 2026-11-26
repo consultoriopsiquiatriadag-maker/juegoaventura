@@ -222,26 +222,29 @@ function init(){
   // GLTF Loader
   if(typeof THREE.GLTFLoader !== 'undefined') gltfLoader=new THREE.GLTFLoader();
 
-  setupLighting();
-  setupDustParticles();
+  _T('setupLighting',()=>setupLighting());
+  _T('setupDustParticles',()=>setupDustParticles());
   // Guardar densidad base de niebla (depende de si Three.Sky está disponible)
   if(scene.fog) _normalFogDensity=scene.fog.density;
-  buildWorld();
-  _arrHideIntruders(); // FASE 48: la sala de llegadas queda limpia
-  _airsideCut();       // FASE 70: el hall termina en el ventanal de la puerta A7
-  buildAirside();      // FASE 70: plataforma, avión completo por fuera y handling
-  buildInteractiveSpots(); // FASE 37: mostrador B2 y kiosko de bienestar
-  buildGuideArrows();      // FASE 58: flechas guía en el piso
-  captureFloorReflections(); // después del mundo y antes de las personas
-  spawnNPCs(isMobile); // en celular, versión liviana (5 caminantes + tripulación)
-  spawnStaffNPCs();
-  loadCabinCrew();
-  optimizeSceneResources(); // FASE 36: comparte materiales/geometrías y fusiona props fijos
+  _T('buildWorld',()=>buildWorld());
+  _T('_arrHideIntruders',()=>_arrHideIntruders()); // FASE 48: la sala de llegadas queda limpia
+  _T('_airsideCut',()=>_airsideCut());       // FASE 70: el hall termina en el ventanal de la puerta A7
+  _T('buildAirside',()=>buildAirside());      // FASE 70: plataforma, avión completo por fuera y handling
+  _T('buildInteractiveSpots',()=>buildInteractiveSpots()); // FASE 37: mostrador B2 y kiosko de bienestar
+  _T('buildGuideArrows',()=>buildGuideArrows());      // FASE 58: flechas guía en el piso
+  // FASE 83-A: las luces se ajustan a la GPU ANTES del primer dibujo. Antes se hacía
+  // después del reflejo: en celular los sombreados se compilaban dos veces (con
+  // 58 luces y otra vez con 12), unos 5 s de carga perdidos.
   window._lightFit=fitLightsToGPU(); // FASE 41: evita la pantalla blanca en GPUs de celular
-  setupPostProcessing();
-  setupEvents();
-  setupInteractionUI();
-  animate();
+  _T('captureFloorReflections',()=>captureFloorReflections()); // después del mundo y antes de las personas
+  _T('spawnNPCs',()=>spawnNPCs(isMobile)); // en celular, versión liviana (5 caminantes + tripulación)
+  _T('spawnStaffNPCs',()=>spawnStaffNPCs());
+  _T('loadCabinCrew',()=>loadCabinCrew());
+  _T('optimizeSceneResources',()=>optimizeSceneResources()); // FASE 36: comparte materiales/geometrías y fusiona props fijos
+  _T('setupPostProcessing',()=>setupPostProcessing());
+  _T('setupEvents',()=>setupEvents());
+  _T('setupInteractionUI',()=>setupInteractionUI());
+  _T('animate',()=>animate());
   setTimeout(animLoad,200);
 }
 
@@ -392,33 +395,36 @@ function setupDustParticles(){
 // ══════════════════════════════════════════════════
 // BUILD WORLD
 // ══════════════════════════════════════════════════
+// FASE 83-A: cuánto tarda cada parte del armado (window.__initTimes, en ms)
+window.__initTimes=[];
+function _T(name,fn){ const t=performance.now(); const r=fn(); window.__initTimes.push([name,Math.round(performance.now()-t)]); return r; }
 function buildWorld(){
-  buildGround(); buildShell(); buildFloorTile(); buildCeiling();
-  buildWalls(); buildPillars();
-  buildEntrance(); buildCheckIn(); buildSecurity();
-  buildLounge(); buildBoarding(); buildPlane(); buildArrivals(); // FASE 48: llegadas en Madrid (reemplaza la zona vieja)
-  buildShops(); buildDirectionSigns(); buildFlightBoard(); // Fase 6: tiendas laterales enriquecidas
+  _T('buildGround',()=>buildGround()); _T('buildShell',()=>buildShell()); _T('buildFloorTile',()=>buildFloorTile()); _T('buildCeiling',()=>buildCeiling());
+  _T('buildWalls',()=>buildWalls()); _T('buildPillars',()=>buildPillars());
+  _T('buildEntrance',()=>buildEntrance()); _T('buildCheckIn',()=>buildCheckIn()); _T('buildSecurity',()=>buildSecurity());
+  _T('buildLounge',()=>buildLounge()); _T('buildBoarding',()=>buildBoarding()); _T('buildPlane',()=>buildPlane()); _T('buildArrivals',()=>buildArrivals()); // FASE 48: llegadas en Madrid (reemplaza la zona vieja)
+  _T('buildShops',()=>buildShops()); _T('buildDirectionSigns',()=>buildDirectionSigns()); _T('buildFlightBoard',()=>buildFlightBoard()); // Fase 6: tiendas laterales enriquecidas
   // ── FASE 2: Estructuras base del hall ──────────
-  buildTransitionBenches();
-  buildInfoPosts();
-  buildSidewallWindows();
+  _T('buildTransitionBenches',()=>buildTransitionBenches());
+  _T('buildInfoPosts',()=>buildInfoPosts());
+  _T('buildSidewallWindows',()=>buildSidewallWindows());
   // F31: haces de luz volumétrica entrando por los ventanales soleados
   if(window.AeroLightShafts){ AeroLightShafts.build(scene,SUN_DIRECTION); AeroLightShafts.setCalm(calmMode); }
-  buildCorridorEdgeMarkers();
+  _T('buildCorridorEdgeMarkers',()=>buildCorridorEdgeMarkers());
   // ── FASE 3: Puestos funcionales del hall ───────
-  buildServicePosts();
-  buildHallAmbience();
+  _T('buildServicePosts',()=>buildServicePosts());
+  _T('buildHallAmbience',()=>buildHallAmbience());
   // ───────────────────────────────────────────────
   // (FASE 66: la vista de "pista" pintada frente a la entrada se reemplazó por la calle real)
-  buildExterior(); buildZoneRings();
+  _T('buildExterior',()=>buildExterior()); _T('buildZoneRings',()=>buildZoneRings());
   // ── FASE 25: Calidad máxima del hall ───────────
-  buildEntranceFacade();   // FASE 66: frente vidriado con puertas y calle con autos
-  buildEntranceSideWindows();
-  buildHallQuality();
+  _T('buildEntranceFacade',()=>buildEntranceFacade());   // FASE 66: frente vidriado con puertas y calle con autos
+  _T('buildEntranceSideWindows',()=>buildEntranceSideWindows());
+  _T('buildHallQuality',()=>buildHallQuality());
   // ── FASE 29: Señalética suspendida (puertas, baños, FIDS) ──
   if(window.AeroSignage){ AeroSignage.build(scene); AeroSignage.setCalm(calmMode); }
   // ── FASE 33: Sendero de tránsito + delimitadores (al final: ve todo lo construido) ──
-  buildTransitGuide();
+  _T('buildTransitGuide',()=>buildTransitGuide());
 }
 
 // ─── GROUND ──────────────────────────────────────
@@ -594,6 +600,9 @@ function buildFloorTile(){
 // mueve no aparecen en el reflejo.
 function captureFloorReflections(){
   if(!hallFloorMat || !THREE.CubeCamera || !THREE.PMREMGenerator) return;
+  // FASE 83-A: en calidad baja (celular) no se captura: el reflejo casi no se
+  // nota en pantallas chicas y la captura compilaba otra tanda de sombreados.
+  if(currentQuality==='low') return;
   const caps=renderer.capabilities;
   const halfFloatOK=caps.isWebGL2 || !!renderer.extensions.get('OES_texture_half_float');
   const cubeRT=new THREE.WebGLCubeRenderTarget(isMobile?128:256,{
@@ -603,16 +612,15 @@ function captureFloorReflections(){
   });
   const cubeCam=new THREE.CubeCamera(0.3,300,cubeRT);
   cubeCam.position.set(0,1.6,-5); // altura de ojos, centro del hall
-  // Capturar en lineal sin tone mapping: ACES se aplica una sola vez, al final
-  const tm=renderer.toneMapping;
-  renderer.toneMapping=THREE.NoToneMapping;
+  // FASE 83-A: se captura con el mismo tone mapping que la pasada principal
+  // (que también dibuja en un buffer lineal): así ambas usan los mismos
+  // sombreados y se compilan una sola vez (antes: sin tone mapping, otra tanda).
   scene.add(cubeCam);
-  cubeCam.update(renderer,scene);
+  _T('refl:cubo',()=>cubeCam.update(renderer,scene));
   scene.remove(cubeCam);
-  renderer.toneMapping=tm;
 
   const pmrem=new THREE.PMREMGenerator(renderer);
-  const env=pmrem.fromCubemap(cubeRT.texture).texture; // mips prefiltrados por rugosidad
+  const env=_T('refl:pmrem',()=>pmrem.fromCubemap(cubeRT.texture)).texture; // mips prefiltrados por rugosidad
   pmrem.dispose(); cubeRT.dispose();
 
   [hallFloorMat,...reflectiveFloorMats].forEach(m=>{
@@ -3292,6 +3300,9 @@ function fitLightsToGPU(){
   const pls=[]; scene.traverse(o=>{ if(o.isPointLight) pls.push(o); });
   let budget=Math.max(0,Math.floor((maxU-60-48)/4)); // ~60 del material + margen
   if(isMobile) budget=Math.min(budget,12);
+  // FASE 83-A: en computadora, como máximo 24. Cada luz agranda TODOS los
+  // sombreados: con 58 la carga tardaba ~5 s más (compilación en Windows/ANGLE).
+  else budget=Math.min(budget,24);
   if(pls.length<=budget) return {kept:pls.length,removed:0,maxU};
   pls.sort((a,b)=>b.intensity*(b.distance||30)-a.intensity*(a.distance||30));
   const drop=pls.slice(budget);
