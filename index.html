@@ -188,6 +188,9 @@
         <!-- Flash de transición al entrar a una zona -->
         <div id="zone-transition" aria-hidden="true"></div>
 
+        <!-- FASE 79: Necesito una pausa — siempre visible durante el recorrido -->
+        <button id="btn-care" type="button" aria-label="Necesito una pausa: detener el recorrido y elegir una herramienta de calma (tecla P)">🤲 Necesito una pausa</button>
+
         <!-- Botón de salida de emergencia — siempre visible durante el juego -->
         <button id="btn-emergency-exit" aria-label="Salir del juego y volver al menú principal">
             ← Salir
@@ -575,6 +578,37 @@
         </div>
     </div>
 
+    <!-- FASE 79: Necesito una pausa -->
+    <div id="care-modal" class="overlay-dark overlay-soft hidden" role="dialog" aria-modal="true" aria-labelledby="care-title">
+        <div class="interact-box care-box">
+            <button id="btn-close-care" class="close-btn" type="button" aria-label="Cerrar y seguir el recorrido">✕</button>
+            <p class="ib-eyebrow">🤲 Necesito una pausa</p>
+            <div id="care-menu">
+                <h2 id="care-title">Tomate el tiempo que necesites</h2>
+                <p class="ib-sub">El recorrido quedó en pausa y bajamos el sonido. Elegí lo que te sirva, o nada: quedarte acá un rato también está bien.</p>
+                <div class="care-grid">
+                    <button type="button" class="care-opt" data-care="present"><span>🌍</span>Volver al presente</button>
+                    <button type="button" class="care-opt" data-care="ground"><span>🖐️</span>Grounding 5-4-3-2-1</button>
+                    <button type="button" class="care-opt" data-care="breath"><span>🌬️</span>Respiración cómoda</button>
+                    <button type="button" class="care-opt" data-care="muscle"><span>💪</span>Relajación muscular breve</button>
+                    <button type="button" class="care-opt" data-care="body"><span>💓</span>Qué le pasa a mi cuerpo</button>
+                    <button type="button" class="care-opt" data-care="thoughts"><span>💭</span>Pensamientos que se adelantan</button>
+                    <button type="button" class="care-opt care-calm" data-care="calm"><span>🧘</span>Bajar la intensidad<small>Modo Calma: <b id="care-calm-label">desactivado</b></small></button>
+                </div>
+                <div class="ib-actions care-actions">
+                    <button id="btn-care-continue" class="btn-primary" type="button">Seguir el recorrido</button>
+                    <button id="btn-care-end" class="btn-ghost" type="button">Terminar por hoy</button>
+                </div>
+            </div>
+            <div id="care-detail" class="hidden">
+                <h2 id="care-dt"></h2>
+                <div id="care-body"></div>
+                <button id="btn-care-back" class="care-back" type="button">← Volver a las opciones</button>
+            </div>
+            <p class="care-foot">AeroCalma es un material de apoyo: no reemplaza un tratamiento profesional. Ante una urgencia llamá al 911, o al 135 (línea de prevención del suicidio).</p>
+        </div>
+    </div>
+
     <!-- FASE 78: Centro de Información Aeronáutica y Calma -->
     <div id="aeroinfo-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="aeroinfo-title">
         <div class="interact-box aeroinfo-box">
@@ -822,8 +856,12 @@
     <div id="breathing-modal" class="overlay-dark hidden">
         <div class="breathing-box">
             <button id="btn-close-breath" class="close-btn">✕</button>
-            <h2>Técnica 4 · 7 · 8</h2>
-            <p class="breath-subtitle">Inhala 4 seg · Retén 7 seg · Exhala 8 seg</p>
+            <h2>Respiración suave</h2>
+            <p class="breath-subtitle">Inhalá 4 seg · Soltá el aire 6 seg · Sin retener</p>
+            <div class="breath-patterns" role="group" aria-label="Patrón de respiración">
+                <button type="button" class="pf-choice" data-breath="suave" aria-pressed="true">Suave 4 · 6</button>
+                <button type="button" class="pf-choice" data-breath="478" aria-pressed="false">4 · 7 · 8</button>
+            </div>
             <div id="breath-circle">
                 <svg viewBox="0 0 200 200" class="breath-ring">
                     <defs>
@@ -845,7 +883,7 @@
                 <button id="btn-start-breath" class="btn-primary">Iniciar</button>
                 <button id="btn-stop-breath" class="btn-ghost hidden">Detener</button>
             </div>
-            <p class="breath-tip">💡 Esta técnica activa el sistema nervioso parasimpático, reduciendo la frecuencia cardíaca en 60–90 segundos.</p>
+            <p class="breath-tip">💡 Soltar el aire más lento de lo que lo tomás ayuda al cuerpo a bajar un cambio. Si en algún momento incomoda, respirá a tu ritmo.</p>
         </div>
     </div>
 

@@ -1071,7 +1071,7 @@ function playWaterSplash(){
 function restroomBreathing(){
   closeUiModal('restroom-modal');
   openBreathing();
-  const sub=document.querySelector('#breathing-modal .breath-subtitle'); if(sub) sub.textContent='Pausa en el baño · Inhala 4 · Retén 7 · Exhala 8';
+  const sub=document.querySelector('#breathing-modal .breath-subtitle'); if(sub) sub.textContent='Pausa en el baño · '+BREATH_PATTERNS[breathPattern].sub;
   startBreathing();
   logInteraction('baño','respiracion');
 }
@@ -1807,6 +1807,10 @@ function setupInteractionUI(){
   on('btn-reg-breath',restroomBreathing);
   on('btn-hud-sound',toggleAmbientSound);
   setupProfileUI();   // FASE 76
+  on('btn-care',openCare); on('btn-care-continue',closeCare); on('btn-close-care',closeCare); on('btn-care-end',endForToday); on('btn-care-back',_careMenu);   // FASE 79
+  document.querySelectorAll('#care-modal [data-care]').forEach(b=>b.addEventListener('click',()=>careOpenTool(b.dataset.care)));
+  document.querySelectorAll('#breathing-modal [data-breath]').forEach(b=>b.addEventListener('click',()=>setBreathPattern(b.dataset.breath)));
+  _syncBreathUI();
   on('btn-close-aeroinfo',closeAeroInfo); on('btn-ai-back-airport',closeAeroInfo); on('btn-ai-list',_aiShowList); on('btn-ai-listen',_aiSpeak);   // FASE 78
   on('btn-ai-prev',()=>_aiShowCard(_ai.idx-1)); on('btn-ai-next',()=>_aiShowCard(_ai.idx+1));
   const _aig=document.getElementById('aeroinfo-grid'); if(_aig) _aig.addEventListener('click',(e)=>{ const b=e.target.closest('[data-ai]'); if(b) _aiShowCard(+b.dataset.ai); });
@@ -1873,6 +1877,7 @@ function setupInteractionUI(){
     else if(!document.getElementById('link-modal').classList.contains('hidden')) closeUiModal('link-modal');
     else if(!document.getElementById('map-modal').classList.contains('hidden')) closeUiModal('map-modal');
     else if(!document.getElementById('profile-modal').classList.contains('hidden')) closeProfileModal();
+    else if(!document.getElementById('care-modal').classList.contains('hidden')){ if(!document.getElementById('care-detail').classList.contains('hidden')) _careMenu(); else closeCare(); }
     else if(!document.getElementById('aeroinfo-modal').classList.contains('hidden')){ if(_ai.idx>=0) _aiShowList(); else closeAeroInfo(); }
     else if(!document.getElementById('sm-modal').classList.contains('hidden')) closeUiModal('sm-modal');
     else if(!document.getElementById('cafe-modal').classList.contains('hidden')){ clearTimeout(_cafeTimer); closeUiModal('cafe-modal'); }
@@ -6949,6 +6954,7 @@ function onKeyDown(e){
     case 'KeyA': case 'ArrowLeft':  movement.left=true;     break;
     case 'KeyD': case 'ArrowRight': movement.right=true;    break;
     case 'KeyB': openBreathing();        break;
+    case 'KeyP': openCare();             break;   // FASE 79: necesito una pausa
     case 'KeyE': if(!triggerInteraction()) openCurrentZonePanel(); break;
     case 'Tab': e.preventDefault(); cycleCamMode(); break;   // FASE 75: tres cámaras
   }
@@ -7152,7 +7158,7 @@ function goToArrivals(){
   deplaneToArrivals();
 }
 function resumeGame(){ isPaused=false; document.getElementById('pause-menu').classList.add('hidden'); if(!isMobile)controls.lock(); resumeAmbientAudioIfEnabled(); _voicePause(false); }
-function returnToMenu(){ if(_flight) endFlight(false); _cabinSeq=null; isGameActive=false; isPaused=false; stopSpeech(); stopAmbientAudio(); if(!isMobile)controls.unlock(); closeZonePanel(); closeGrounding(); closeBreathing(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('pause-menu').classList.add('hidden'); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); showScreen('main-menu'); startMenuAnimation(); updateDiaryDisplay(); }
+function returnToMenu(){ if(_care.open){ _care.open=false; _care.ret=false; document.getElementById('care-modal').classList.add('hidden'); } if(_flight) endFlight(false); _cabinSeq=null; isGameActive=false; isPaused=false; stopSpeech(); stopAmbientAudio(); if(!isMobile)controls.unlock(); closeZonePanel(); closeGrounding(); closeBreathing(); document.getElementById('game-hud').classList.add('hidden'); document.getElementById('pause-menu').classList.add('hidden'); document.getElementById('click-to-play').classList.add('hidden'); document.getElementById('controls-hint').classList.add('hidden'); showScreen('main-menu'); startMenuAnimation(); updateDiaryDisplay(); }
 function restartGame(){ showScreen(null); startGame(); }
 function resetProgressUI(){
   document.getElementById('progress-fill').style.width='0%';
@@ -7327,6 +7333,7 @@ function closeZonePanel(){
 function openCurrentZonePanel(){ if(currentZoneIndex>=0) openZonePanel(currentZoneIndex); else showToast('Acércate a una zona del aeropuerto primero.'); }
 
 // ── GROUNDING MODAL ───────────────────────────────
+let groundingStep=0;   // FASE 79: se había perdido al mover GROUNDING_STEPS a js/data.js (Fase 5) y el grounding no abría
 function openGrounding(){
   groundingStep=0;
   closeZonePanel();
@@ -7336,6 +7343,7 @@ function openGrounding(){
 }
 function closeGrounding(){
   document.getElementById('grounding-modal').classList.add('hidden');
+  if(_care.ret){ _careBack(); return; }   // FASE 79: vuelve al menú de la pausa
   if(!isMobile&&isGameActive&&!isPaused) controls.lock();
 }
 function renderGroundingStep(){
@@ -9037,12 +9045,31 @@ function stopSpeech(){
 }
 
 function openBreathing(){ closeZonePanel(); uiModalOpen=true; if(!isMobile)controls.unlock(); document.getElementById('breathing-modal').classList.remove('hidden'); resetBreathUI(); }
-function closeBreathing(){ document.getElementById('breathing-modal').classList.add('hidden'); stopBreathing(); uiModalOpen=false; const _bs=document.querySelector('#breathing-modal .breath-subtitle'); if(_bs) _bs.textContent='Inhala 4 seg · Retén 7 seg · Exhala 8 seg'; if(!isMobile&&isGameActive&&!isPaused)controls.lock(); }
+function closeBreathing(){ document.getElementById('breathing-modal').classList.add('hidden'); stopBreathing(); uiModalOpen=false; _syncBreathUI(); if(_care.ret){ _careBack(); return; } if(!isMobile&&isGameActive&&!isPaused)controls.lock(); }
 function resetBreathUI(){ document.getElementById('breath-phase').textContent='LISTO'; document.getElementById('breath-count').textContent='--'; document.getElementById('breath-instruction').textContent='Presiona "Iniciar" cuando estés preparado'; document.getElementById('btn-start-breath').classList.remove('hidden'); document.getElementById('btn-stop-breath').classList.add('hidden'); const el=document.getElementById('breath-ring-progress'); if(el){el.style.transition='none';el.style.strokeDashoffset='502';} }
 function startBreathing(){ breathCycles=0; breathCount++; document.getElementById('btn-start-breath').classList.add('hidden'); document.getElementById('btn-stop-breath').classList.remove('hidden'); runBreathPhase('inhale'); }
 function stopBreathing(){ if(breathPhaseTimer||breathInterval) _stopVoiceClip(); if(breathInterval){clearInterval(breathInterval);breathInterval=null;} if(breathPhaseTimer){clearTimeout(breathPhaseTimer);breathPhaseTimer=null;} }
-function runBreathPhase(phase){ stopBreathing(); const phases={inhale:{label:'INHALA',instruction:'Respira profundo por la nariz',seconds:4,next:'hold'},hold:{label:'RETÉN',instruction:'Mantén el aire en los pulmones',seconds:7,next:'exhale'},exhale:{label:'EXHALA',instruction:'Suelta el aire lentamente por la boca',seconds:8,next:'inhale'}}; const p=phases[phase]; playVoice(phase); document.getElementById('breath-phase').textContent=p.label; document.getElementById('breath-instruction').textContent=p.instruction; let sec=p.seconds; document.getElementById('breath-count').textContent=sec; animBreathRing(phase); breathInterval=setInterval(()=>{ sec--; document.getElementById('breath-count').textContent=sec>0?sec:''; if(sec<=0){ clearInterval(breathInterval); breathInterval=null; if(phase==='exhale')breathCycles++; if(breathCycles>=3){ document.getElementById('breath-phase').textContent='✓'; document.getElementById('breath-count').textContent=''; document.getElementById('breath-instruction').textContent='¡Excelente! Tu sistema nervioso se ha calmado.'; document.getElementById('btn-start-breath').classList.remove('hidden'); document.getElementById('btn-stop-breath').classList.add('hidden'); } else breathPhaseTimer=setTimeout(()=>runBreathPhase(p.next),300); } },1000); }
-function animBreathRing(phase){ const el=document.getElementById('breath-ring-progress'); if(!el)return; const targets={inhale:0,hold:150,exhale:502}; const durs={inhale:4,hold:0.5,exhale:8}; el.style.transition=`stroke-dashoffset ${durs[phase]}s linear`; el.style.strokeDashoffset=targets[phase]; }
+// FASE 79: dos patrones. Por defecto "suave" (inhalá 4, soltá 6, sin retener);
+// el 4-7-8 queda como opción. Sin promesas de resultado al terminar.
+const BREATH_PATTERNS={
+  suave:{title:'Respiración suave',sub:'Inhalá 4 seg · Soltá el aire 6 seg · Sin retener',inhale:4,hold:0,exhale:6},
+  '478':{title:'Técnica 4 · 7 · 8',sub:'Inhalá 4 seg · Retené 7 seg · Exhalá 8 seg',inhale:4,hold:7,exhale:8}
+};
+let breathPattern='suave';
+try{ if(localStorage.getItem('aerocalma_breath')==='478') breathPattern='478'; }catch(e){}
+function setBreathPattern(p){
+  if(!BREATH_PATTERNS[p]) return; stopBreathing(); breathPattern=p;
+  try{ localStorage.setItem('aerocalma_breath',p); }catch(e){}
+  _syncBreathUI(); resetBreathUI();
+}
+function _syncBreathUI(){
+  const P=BREATH_PATTERNS[breathPattern];
+  const t=document.querySelector('#breathing-modal h2'); if(t) t.textContent=P.title;
+  const sub=document.querySelector('#breathing-modal .breath-subtitle'); if(sub) sub.textContent=P.sub;
+  document.querySelectorAll('#breathing-modal [data-breath]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.breath===breathPattern?'true':'false'));
+}
+function runBreathPhase(phase){ stopBreathing(); const P=BREATH_PATTERNS[breathPattern]; const phases={inhale:{label:'INHALÁ',instruction:'Tomá aire por la nariz, sin forzar',seconds:P.inhale,next:P.hold?'hold':'exhale'},hold:{label:'RETENÉ',instruction:'Sostené el aire, sólo si te resulta cómodo',seconds:P.hold,next:'exhale'},exhale:{label:'SOLTÁ',instruction:'Soltá el aire despacio por la boca',seconds:P.exhale,next:'inhale'}}; const p=phases[phase]; playVoice(phase); document.getElementById('breath-phase').textContent=p.label; document.getElementById('breath-instruction').textContent=p.instruction; let sec=p.seconds; document.getElementById('breath-count').textContent=sec; animBreathRing(phase); breathInterval=setInterval(()=>{ sec--; document.getElementById('breath-count').textContent=sec>0?sec:''; if(sec<=0){ clearInterval(breathInterval); breathInterval=null; if(phase==='exhale')breathCycles++; if(breathCycles>=3){ document.getElementById('breath-phase').textContent='✓'; document.getElementById('breath-count').textContent=''; document.getElementById('breath-instruction').textContent='Bien hecho. Si querés, podés repetirlo o seguir a tu ritmo.'; document.getElementById('btn-start-breath').classList.remove('hidden'); document.getElementById('btn-stop-breath').classList.add('hidden'); } else breathPhaseTimer=setTimeout(()=>runBreathPhase(p.next),300); } },1000); }
+function animBreathRing(phase){ const el=document.getElementById('breath-ring-progress'); if(!el)return; const P=BREATH_PATTERNS[breathPattern]; const targets={inhale:0,hold:0,exhale:502}; const durs={inhale:P.inhale,hold:0.3,exhale:P.exhale}; el.style.transition=`stroke-dashoffset ${durs[phase]}s linear`; el.style.strokeDashoffset=targets[phase]; }
 
 function showToast(text){ const t=document.getElementById('toast'); t.textContent=text; t.classList.remove('hidden'); t.classList.add('show'); setTimeout(()=>{t.classList.remove('show');setTimeout(()=>t.classList.add('hidden'),300);},3200); }
 
@@ -9245,6 +9272,128 @@ function _syncCamUI(){
   const ib=document.getElementById('btn-cam-instant'); if(ib) ib.setAttribute('aria-pressed',_camInstant?'true':'false');
 }
 
+
+
+// ─── FASE 79 (F45): "NECESITO UNA PAUSA" ────────────────────
+// Botón siempre visible durante el recorrido (y tecla P). Detiene el
+// recorrido, baja el sonido y el movimiento de la escena, y ofrece
+// herramientas de regulación. Nada es obligatorio: se puede volver al
+// recorrido o terminar por hoy en cualquier momento. No reemplaza un
+// tratamiento ni es un servicio de urgencias.
+const CARE_PRESENT=[
+  'Mirá a tu alrededor, fuera de la pantalla. Nombrá en voz baja dónde estás, qué día es y más o menos qué hora.',
+  'Sentí el apoyo: los pies en el piso, la espalda en el respaldo, las manos sobre algo firme.',
+  'Esto es una simulación. Lo que tu cuerpo siente es real, y también es real que ahora estás en tu lugar, a salvo.',
+  'Mové despacio los dedos de las manos y de los pies. Cuando quieras, volvé a mirar la pantalla.'
+];
+const CARE_MUSCLE=[
+  {zona:'Manos',tensa:'Cerrá los puños con fuerza moderada',suelta:'Abrí las manos y dejalas pesadas'},
+  {zona:'Hombros',tensa:'Subí los hombros hacia las orejas',suelta:'Dejalos caer y alejarse de las orejas'},
+  {zona:'Cara',tensa:'Apretá suavemente los dientes y los ojos',suelta:'Aflojá la mandíbula y la frente'},
+  {zona:'Piernas',tensa:'Empujá los pies contra el piso',suelta:'Soltá y sentí el peso de las piernas'}
+];
+const CARE_THOUGHTS=[
+  {q:'¿Y si me agarra un ataque de pánico y no puedo salir?',a:'Un ataque de pánico es muy incómodo, pero no es peligroso, y siempre termina: sube, llega a un pico y baja. Aunque no puedas bajarte, sí podés hacer cosas: soltar el aire lento, avisar a la tripulación, usar esta pausa.'},
+  {q:'¿Y si el avión se cae?',a:'Es un pensamiento que aparece con mucha fuerza cuando hay miedo, pero es un pensamiento, no un pronóstico. Volar en avión comercial es una de las formas más seguras de viajar y cada vuelo tiene muchas capas de control.'},
+  {q:'¿Y si hay turbulencia y no lo soporto?',a:'La turbulencia es incómoda y dura un rato. El avión está preparado para ella; tu parte es el cinturón y respirar. Lo incómodo se puede atravesar aunque no te guste.'},
+  {q:'¿Y si me descompongo o me mareo?',a:'La tripulación está entrenada para ayudar y hay elementos a bordo. Avisar no es molestar: es para lo que están.'},
+  {q:'¿Y si los demás notan que tengo miedo?',a:'Mucha gente siente miedo al volar: es más común de lo que parece. Lo que te pasa por dentro se ve mucho menos de lo que lo sentís.'}
+];
+let _care={ open:false, ret:false, step:0, timer:null };
+function openCare(){
+  if(!isGameActive||_care.open) return;
+  if(isPaused) return;
+  _care.open=true; _care.ret=false;
+  stopSpeech(); if(typeof _voicePause==='function') _voicePause(true);
+  if(audioCtx&&ambientMaster) setAmbientMasterTarget(0.3,1.0);
+  _careMenu();
+  openUiModal('care-modal');
+  logInteraction('pausa','abrir');
+}
+function _careRestoreAudio(){ if(audioCtx&&ambientMaster&&audioEnabled) setAmbientMasterTarget(calmMode?0.45:1.0,1.6); if(typeof _voicePause==='function') _voicePause(false); }
+function closeCare(){
+  clearInterval(_care.timer); _care.timer=null;
+  _care.open=false; _care.ret=false;
+  _careRestoreAudio();
+  closeUiModal('care-modal');
+  showToast('🌿 Seguimos cuando quieras. La pausa está siempre arriba a la izquierda.');
+}
+function endForToday(){
+  clearInterval(_care.timer); _care.open=false; _care.ret=false;
+  document.getElementById('care-modal').classList.add('hidden'); uiModalOpen=false;
+  logInteraction('pausa','terminar');
+  returnToMenu();
+}
+function _careMenu(){
+  clearInterval(_care.timer); _care.timer=null;
+  document.getElementById('care-menu').classList.remove('hidden');
+  document.getElementById('care-detail').classList.add('hidden');
+  const cl=document.getElementById('care-calm-label'); if(cl) cl.textContent=calmMode?'activado':'desactivado';
+}
+function _careDetail(title,html){
+  document.getElementById('care-menu').classList.add('hidden');
+  document.getElementById('care-detail').classList.remove('hidden');
+  document.getElementById('care-dt').textContent=title;
+  const b=document.getElementById('care-body'); b.innerHTML=''; if(html) b.appendChild(html);
+  const box=document.querySelector('#care-modal .interact-box'); if(box) box.scrollTop=0;
+}
+function _el(tag,cls,txt){ const e=document.createElement(tag); if(cls) e.className=cls; if(txt!=null) e.textContent=txt; return e; }
+function _careSteps(list,render){
+  const wrap=_el('div','care-steps'); let i=0;
+  const body=_el('div','care-step'); const nav=_el('div','care-nav');
+  const prev=_el('button','btn-ghost','←'), next=_el('button','btn-primary','Siguiente');
+  prev.type=next.type='button'; prev.setAttribute('aria-label','Paso anterior');
+  const draw=()=>{ body.innerHTML=''; render(body,list[i],i); prev.disabled=i===0; next.textContent=i===list.length-1?'Listo ✓':'Siguiente'; };
+  prev.onclick=()=>{ if(i>0){ i--; clearInterval(_care.timer); draw(); } };
+  next.onclick=()=>{ clearInterval(_care.timer); if(i<list.length-1){ i++; draw(); } else _careMenu(); };
+  nav.append(prev,next); wrap.append(body,nav); draw(); return wrap;
+}
+function careOpenTool(id){
+  logInteraction('pausa',id);
+  if(id==='present'){
+    _careDetail('🌍 Volver al presente',_careSteps(CARE_PRESENT,(b,t,i)=>{ b.append(_el('p','care-n',(i+1)+' de '+CARE_PRESENT.length),_el('p','care-big',t)); }));
+  } else if(id==='muscle'){
+    const intro=_el('p','care-note','Tensá sin llegar al dolor. Si alguna zona duele o tenés una lesión, salteala o sólo soltá, sin tensar.');
+    const steps=_careSteps(CARE_MUSCLE,(b,m,i)=>{
+      const cnt=_el('div','care-count','');
+      const go=_el('button','btn-ghost','▶ Guiarme con tiempos'); go.type='button';
+      go.onclick=()=>{ clearInterval(_care.timer); let ph='tensa', n=5; cnt.textContent='Tensá… '+n; go.disabled=true;
+        _care.timer=setInterval(()=>{ n--; if(n>0){ cnt.textContent=(ph==='tensa'?'Tensá… ':'Soltá y notá la diferencia… ')+n; return; }
+          if(ph==='tensa'){ ph='suelta'; n=10; cnt.textContent='Soltá y notá la diferencia… '+n; }
+          else { clearInterval(_care.timer); cnt.textContent='✓ Bien. Cuando quieras, pasá a la siguiente.'; go.disabled=false; } },1000); };
+      b.append(_el('p','care-n',(i+1)+' de '+CARE_MUSCLE.length+' · '+m.zona),_el('p','care-big',m.tensa+' durante 5 segundos…'),_el('p','care-big care-soft','…y '+m.suelta.charAt(0).toLowerCase()+m.suelta.slice(1)+' durante 10 segundos.'),go,cnt);
+    });
+    const w=_el('div'); w.append(intro,steps); _careDetail('💪 Relajación muscular breve',w);
+  } else if(id==='body'){
+    const it=AEROINFO.find(a=>a.id==='cuerpo'); const ul=_el('ul','care-list');
+    (it?it.points:[]).forEach(p=>ul.appendChild(_el('li',null,p)));
+    const w=_el('div'); w.append(_el('p','care-note','Lo que sentís es real y es la respuesta de alarma del cuerpo. No significa que algo malo esté pasando.'),ul);
+    _careDetail('💓 Sensaciones de ansiedad',w);
+  } else if(id==='thoughts'){
+    const w=_el('div'); w.append(_el('p','care-note','Elegí el pensamiento que más se parece al tuyo:'));
+    const list=_el('div','care-thoughts'); const ans=_el('div','care-answer hidden');
+    CARE_THOUGHTS.forEach(t=>{ const b=_el('button','care-thought',t.q); b.type='button';
+      b.onclick=()=>{ list.querySelectorAll('.care-thought').forEach(x=>x.setAttribute('aria-pressed','false')); b.setAttribute('aria-pressed','true');
+        ans.innerHTML=''; ans.append(_el('p','care-big',t.a),_el('p','care-n','Preguntas que ayudan:'));
+        const q=_el('ul','care-list'); ['¿Qué tan probable es, de verdad, comparado con lo que siento?','¿Qué le diría a una persona querida que piensa esto?','Si pasara algo incómodo, ¿qué podría hacer yo?'].forEach(x=>q.appendChild(_el('li',null,x)));
+        ans.append(q); ans.classList.remove('hidden'); ans.scrollIntoView({block:'nearest'}); };
+      list.appendChild(b); });
+    w.append(list,ans); _careDetail('💭 Pensamientos que se adelantan',w);
+  } else if(id==='breath'||id==='ground'){
+    _care.ret=true;
+    document.getElementById('care-modal').classList.add('hidden');
+    if(id==='breath') openBreathing(); else { uiModalOpen=true; openGrounding(); }
+  } else if(id==='calm'){
+    toggleCalmMode(); if(audioCtx&&ambientMaster) setAmbientMasterTarget(0.3,0.6);
+    _careMenu();
+  }
+}
+// Al cerrar respiración o grounding abiertos desde la pausa, se vuelve al menú de la pausa
+function _careBack(){
+  if(!_care.ret||!_care.open) return;
+  _care.ret=false;
+  setTimeout(()=>{ _careMenu(); openUiModal('care-modal'); },60);
+}
 
 // ─── FASE 78 (F44): CENTRO DE INFORMACIÓN AERONÁUTICA Y CALMA ───
 // Pantalla en la sala de embarque con 8 tarjetas educativas: explicación
@@ -9797,7 +9946,7 @@ function animate(){
   }
 
     // Fase 9: parametrizar NPCs para calmMode - reduccion de velocidad y actividad
-  updateNPCs(delta * (calmMode ? 0.2 : 1.0)); // calm=0.2x, normal=1x (mas lento que antes)
+  updateNPCs(delta * (_care.open ? 0.08 : (calmMode ? 0.2 : 1.0)));   // FASE 79: casi quietos durante la pausa // calm=0.2x, normal=1x (mas lento que antes)
 
   // Ciclo sutil de luz ambiental -- simula variación de iluminación del aeropuerto
   // Período ~52 s, amplitud ±0.03 → imperceptible pero da vida al espacio
