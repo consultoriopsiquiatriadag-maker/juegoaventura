@@ -1,1 +1,1 @@
-Actualizar: este build agrega botón ← Juegos (../juegos.html), overlay de Mapa (tecla M), controles táctiles y persistencia.
+Ver README.md (documentacion actualizada en F83, 26/11/2026).
