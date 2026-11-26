@@ -1822,6 +1822,11 @@ function setupInteractionUI(){
   on('btn-flight-breath',()=>{ if(_flight) openBreathing(); });
   on('btn-bag-breath',()=>openBreathing());
   on('btn-flight-stand',()=>endFlight(false));
+  on('btn-flight-motion',toggleFlightMotion); on('btn-flight-engine',toggleFlightEngine);   // FASE 80
+  on('btn-fs-start',_fsStart); on('btn-fs-cancel',()=>closeUiModal('flight-setup')); on('btn-close-fs',()=>closeUiModal('flight-setup'));
+  on('fs-motion',toggleFlightMotion); on('fs-engine',toggleFlightEngine);
+  document.querySelectorAll('#flight-setup [data-seat]').forEach(b=>b.addEventListener('click',()=>{ _flightPrefs.seat=b.dataset.seat; _fsSync(); }));
+  document.querySelectorAll('#flight-setup [data-level]').forEach(b=>b.addEventListener('click',()=>{ _flightPrefs.level=+b.dataset.level; _fsSync(); }));
   syncSoundButtons();
   on('btn-gate-walk',walkToAircraft);
   on('btn-close-gate',()=>{ clearTimeout(_gateTimer); closeUiModal('gate-modal'); });
@@ -1877,6 +1882,7 @@ function setupInteractionUI(){
     else if(!document.getElementById('link-modal').classList.contains('hidden')) closeUiModal('link-modal');
     else if(!document.getElementById('map-modal').classList.contains('hidden')) closeUiModal('map-modal');
     else if(!document.getElementById('profile-modal').classList.contains('hidden')) closeProfileModal();
+    else if(!document.getElementById('flight-setup').classList.contains('hidden')) closeUiModal('flight-setup');
     else if(!document.getElementById('care-modal').classList.contains('hidden')){ if(!document.getElementById('care-detail').classList.contains('hidden')) _careMenu(); else closeCare(); }
     else if(!document.getElementById('aeroinfo-modal').classList.contains('hidden')){ if(_ai.idx>=0) _aiShowList(); else closeAeroInfo(); }
     else if(!document.getElementById('sm-modal').classList.contains('hidden')) closeUiModal('sm-modal');
@@ -7805,14 +7811,61 @@ let _cabinSeq=null;          // secuencia de audios (bienvenida a bordo o vuelo)
 let _seat14C=null;           // {x,z}
 let _skyMul=0;               // velocidad de lo que pasa por la ventanilla (0 = estacionado)
 let _eng=null;               // nodos del sonido de motores
+// ── FASE 80 (F46): asiento, intensidad, movimiento y sonido del vuelo ──
+// Antes de sentarse se elige dónde y cómo volar. Intensidad: 0 baja (sin
+// turbulencia ni sacudidas), 1 moderada, 2 mayor familiarización (turbulencia
+// leve un poco más larga; nunca sacudidas fuertes). Movimiento y sonido de
+// motores se pueden apagar por separado, también durante el vuelo.
+const FLIGHT_SEATS={
+  '14C':{row:14,col:'C',name:'Pasillo · 14C',tip:'Sensación de espacio y salida fácil al pasillo. Es el asiento de tu tarjeta de embarque.'},
+  '14A':{row:14,col:'A',name:'Ventanilla · 14A',tip:'Ver afuera ayuda a entender lo que pasa. Si en algún momento preferís no mirar, se puede bajar la persiana.'},
+  '4C': {row:4, col:'C',name:'Adelante · 4C',tip:'Adelante suele oírse menos el motor y sentirse un poco menos el movimiento.'},
+  '24C':{row:24,col:'C',name:'Atrás · 24C',tip:'Atrás suele sentirse un poco más el movimiento. Puede servir para familiarizarse más.'}
+};
+let _flightPrefs={seat:'14C',level:1,motion:true,engine:true};
+try{ const p=JSON.parse(localStorage.getItem('aerocalma_flight')||'null'); if(p){ if(FLIGHT_SEATS[p.seat]) _flightPrefs.seat=p.seat; if(p.level>=0&&p.level<=2) _flightPrefs.level=p.level|0; _flightPrefs.motion=p.motion!==false; _flightPrefs.engine=p.engine!==false; } }catch(e){}
+let _seatNow=null;           // asiento del vuelo en curso {x,z,id}
+function _saveFlightPrefs(){ try{ localStorage.setItem('aerocalma_flight',JSON.stringify(_flightPrefs)); }catch(e){} }
+function _fl(a,b,c){ const L=_flightPrefs.level; return L===0?a:(L===1?b:c); }
+function _seatPos(id){
+  const S=FLIGHT_SEATS[id]||FLIGHT_SEATS['14C'], rows=_cabinRowsZ(); const z=rows[Math.min(rows.length-1,S.row-1)];
+  const k={A:2.5,B:1.5,C:0.5}[S.col]; return {id, x:CABIN.x-(CABIN.aisleHalf+CABIN.seatW*k), z, col:S.col};
+}
+function openFlightSetup(){
+  if(_flight||!_seat14C) return;
+  if(!_flightPrefs._init){ _flightPrefs._init=true; if(calmMode) _flightPrefs.level=0; }
+  _fsSync(); openUiModal('flight-setup');
+}
+function _fsSync(){
+  const P=_flightPrefs;
+  document.querySelectorAll('#flight-setup [data-seat]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.seat===P.seat?'true':'false'));
+  document.querySelectorAll('#flight-setup [data-level]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.level===P.level?'true':'false'));
+  document.getElementById('fs-seat-tip').textContent=FLIGHT_SEATS[P.seat].tip;
+  document.getElementById('fs-level-tip').textContent=['Sin turbulencia y con vibración mínima. Ideal para empezar.','El vuelo típico: despegue, un rato de turbulencia leve y aterrizaje.','Turbulencia leve un poco más larga y algo de movimiento en el descenso. Nunca sacudidas fuertes.'][P.level];
+  const m=document.getElementById('fs-motion'), e=document.getElementById('fs-engine');
+  m.setAttribute('aria-pressed',P.motion?'true':'false'); m.querySelector('b').textContent=P.motion?'Sí':'No';
+  e.setAttribute('aria-pressed',P.engine?'true':'false'); e.querySelector('b').textContent=P.engine?'Sí':'No';
+}
+function _fsStart(){ _saveFlightPrefs(); closeUiModal('flight-setup'); startFlight(); }
+function toggleFlightMotion(){ _flightPrefs.motion=!_flightPrefs.motion; _saveFlightPrefs(); _syncFlightToggles(); if(document.getElementById('flight-setup')&&!document.getElementById('flight-setup').classList.contains('hidden')) _fsSync(); }
+function toggleFlightEngine(){
+  _flightPrefs.engine=!_flightPrefs.engine; _saveFlightPrefs(); _syncFlightToggles();
+  if(_flight){ if(!_flightPrefs.engine) _engineSet(0,300,1.2); else _engineSet(_flight.engLevel||0.075,_flight.engFreq||480,1.5); }
+  if(!document.getElementById('flight-setup').classList.contains('hidden')) _fsSync();
+}
+function _syncFlightToggles(){
+  const m=document.getElementById('btn-flight-motion'), e=document.getElementById('btn-flight-engine');
+  if(m){ m.textContent='〰️ Movimiento: '+(_flightPrefs.motion?'sí':'no'); m.setAttribute('aria-pressed',_flightPrefs.motion?'true':'false'); }
+  if(e){ e.textContent='🔊 Motores: '+(_flightPrefs.engine?'sí':'no'); e.setAttribute('aria-pressed',_flightPrefs.engine?'true':'false'); }
+}
 
 function buildSeatSpot(){
   const rows=_cabinRowsZ(); if(rows.length<14) return;
   _seat14C={ x:CABIN.x-(CABIN.aisleHalf+CABIN.seatW*0.5), z:rows[13] };
   const hit=new THREE.Mesh(new THREE.BoxGeometry(0.5,1.2,0.6),new THREE.MeshBasicMaterial({visible:false}));
   hit.position.set(_seat14C.x,0.75,_seat14C.z); scene.add(hit);
-  addInteractable({id:'seat-14c',x:_seat14C.x+0.35,z:_seat14C.z,radius:1.3,icon:'💺',label:'Sentarte en tu asiento 14C',
-    root:hit,onTrigger:startFlight});
+  addInteractable({id:'seat-14c',x:_seat14C.x+0.35,z:_seat14C.z,radius:1.3,icon:'💺',label:'Sentarte: elegí asiento e intensidad del vuelo',
+    root:hit,onTrigger:openFlightSetup});   // FASE 80
 }
 
 // ── Secuenciador: reproduce clips, esperas y acciones en orden ──
@@ -7838,6 +7891,7 @@ function updateCabinSeq(delta){
   const it=s.items[s.i];
   if(it.skipIf&&it.skipIf()){ s.i++; return; }
   if(it.cap) _flightCaption(it.cap);
+  if(it.tag) _flightTag(it.tag[0],it.tag[1]);   // FASE 80
   if(it.f) it.f();
   if(it.a){
     if(isSpeaking) return;                         // espera a que termine otra voz (p. ej. la del doctor)
@@ -7862,14 +7916,18 @@ function startFlight(){
   stopSpeech(); releaseMovementKeys();
   _autoWalk=null;
   // Asomado apenas al pasillo: así se ve adelante (y a la azafata) por sobre el respaldo
-  _flight={ seat:new THREE.Vector3(_seat14C.x+0.21,CABIN.floorY+1.2,_seat14C.z+0.05),
+  _seatNow=_seatPos(_flightPrefs.seat);   // FASE 80: el asiento elegido
+  const _aisle=_seatNow.col==='C';
+  _flight={ seat:new THREE.Vector3(_seatNow.x+(_aisle?0.21:0.12),CABIN.floorY+1.2,_seatNow.z+(_aisle?0.05:-0.1)),
             shake:0, shakeTarget:0, bump:0, tilt:0, tiltTarget:0, skyTarget:0, t:0 };
+  const fhf=document.querySelector('#flight-hud .fh-flight'); if(fhf) fhf.textContent='✈ Vuelo 3421 · Madrid · '+_seatNow.id;
+  _syncFlightToggles();
   _crewWalkers(false); _setWindowView('ground');
   if(cabinSky&&cabinSky.shades) cabinSky.shades.visible=false; // persianas arriba, como pide la tripulación
   // Mirando hacia adelante (la nariz está hacia +Z)
   camera.rotation.order='YXZ';
   // En pantallas angostas (celular vertical) se gira un poco más hacia el pasillo
-  const yaw=Math.PI+(camera.aspect<1?0.42:0.18);
+  const yaw=_seatNow.col==='A'?Math.PI-(camera.aspect<1?0.9:0.75):Math.PI+(camera.aspect<1?0.42:0.18);   // ventanilla: mira hacia afuera
   if(isMobile){ mobileYaw=yaw; mobilePitch=-0.04; } else camera.rotation.set(-0.04,yaw,0);
   camera.position.copy(_flight.seat);
   document.getElementById('flight-hud').classList.remove('hidden');
@@ -7881,7 +7939,7 @@ function startFlight(){
   logInteraction('vuelo','inicio');
   const T=CREW_DIR, C=CAPT_DIR;
   _runCabinSeq([
-    {cap:['💺','Asiento 14C','Abrochate el cinturón. El avión todavía está en la puerta.'],f:()=>_beltSign(true,true),w:2.5},
+    {cap:['💺','Asiento '+_seatNow.id,'Abrochate el cinturón. El avión todavía está en la puerta.','a','Para vos: cartel de cinturón encendido → abrochado'],f:()=>_beltSign(true,true),w:2.5},
     {f:()=>_attendantDemo(true)},
     // Mientras la tripulación muestra la seguridad, el avión carretea despacio hacia la pista
     {cap:['👋','Demostración de seguridad','Miremos juntos las indicaciones de la tripulación.'],f:()=>{ _flight.skyTarget=0.12; _engineSet(0.07,340,4); },a:T+'TC03-seguridad-intro.mp3'},
@@ -7892,19 +7950,20 @@ function startFlight(){
     {cap:['📄','Tarjeta de seguridad','En el bolsillo del asiento de adelante.'],a:T+'TC08-seguridad-tarjeta.mp3'},
     {cap:['📱','Modo avión','Respaldo derecho, mesita cerrada. No se fuma a bordo.'],a:T+'TC09-seguridad-electronicos.mp3'},
     {f:()=>_attendantDemo(false),w:1},
+    {cap:['🛞','Rodaje hacia la pista','El avión avanza despacio por las calles del aeropuerto. Puede frenar, girar y esperar su turno.','n','Normal: frenadas suaves y giros lentos'],w:4},
     {cap:['🎙️','El comandante','Bienvenida, tiempo de vuelo y clima en la ruta.'],a:C+'CM01-antes-del-despegue.mp3'},
-    {cap:['🔊','Ruidos normales','Motores fuertes, un golpe al guardar las ruedas, menos potencia al subir: todo normal.'],a:C+'CM02-ruidos-normales.mp3'},
+    {cap:['🔊','Ruidos normales','Motores fuertes, un golpe al guardar las ruedas, menos potencia al subir: todo normal.','n','Si hay que hacer algo, la tripulación lo dice en voz clara'],a:C+'CM02-ruidos-normales.mp3'},
     {cap:['🛫','En la cabecera de la pista','La tripulación se sienta y las luces bajan, como en todo despegue.'],
      f:()=>{ _cabinDim(true); _flight.skyTarget=0; _engineSet(0.06,320,2); },a:C+'CM03-tripulacion-despegue.mp3'},
     // Carrera de despegue
-    {cap:['🛫','Carrera de despegue','Vas a sentir el empuje en la espalda. Si querés, tocá 🌬️ y respiramos juntos.'],
-     f:()=>{ _engineSet(0.17,950,4); _flight.shakeTarget=calmMode?0.0025:0.005; _flight.skyTarget=calmMode?2.2:3.2; },w:7},
-    {cap:['🛫','Despegando','Las ruedas dejan la pista. Inhalá en 4… exhalá en 8.'],
-     f:()=>{ _flight.tiltTarget=calmMode?0.06:0.1; _flight.shakeTarget=calmMode?0.0015:0.003; },w:4},
-    {f:()=>{ _thump(0.5); _flight.skyTarget=1.2; },w:3},                     // se guarda el tren de aterrizaje
+    {cap:['🛫','Carrera de despegue','Vas a sentir el empuje en la espalda. Si querés, tocá 🌬️ y respiramos juntos.','n','Normal: ruido fuerte y empuje en la espalda'],
+     f:()=>{ _engineSet(0.17,950,4); _flight.shakeTarget=_fl(0.0015,0.005,0.006); _flight.skyTarget=_fl(2.2,3.2,3.2); },w:7},
+    {cap:['🛫','Despegando','Las ruedas dejan la pista. Inhalá en 4… soltá el aire en 6.','n','Normal: un pequeño vacío en el estómago'],
+     f:()=>{ _flight.tiltTarget=_fl(0.05,0.1,0.11); _flight.shakeTarget=_fl(0.001,0.003,0.004); },w:4},
+    {cap:['⬇️','Un golpe debajo del piso','Es el tren de aterrizaje que se guarda.','n','Normal: se oye y se siente, y es esperado'],f:()=>{ _thump(0.5); _flight.skyTarget=1.2; },w:3},
     {cap:['☁️','Atravesando las nubes','Afuera se ve todo blanco un momento. Es normal.'],f:()=>_setWindowView('fog'),w:6},
     {cap:['⬆️','Sobre las nubes','La potencia baja un poco: es lo previsto.'],
-     f:()=>{ _setWindowView('sky'); _flight.skyTarget=1; _engineSet(0.11,650,5); },w:7},
+     f:()=>{ _setWindowView('sky'); _flight.skyTarget=1; _engineSet(0.11,650,5); },w:7,tag:['n','Normal: menos ruido = menos potencia, planificado']},
     {f:()=>{ _flight.tiltTarget=0; _flight.shakeTarget=0.0006; _engineSet(0.075,480,6); _cabinDim(false); },w:3},
     // Crucero
     {label:'cruise',cap:['☁️','En crucero','Diez mil metros. El vuelo avanza tranquilo.'],a:C+'CM04-en-crucero.mp3'},
@@ -7912,25 +7971,28 @@ function startFlight(){
     {cap:['🥤','Servicio a bordo','Bebidas y algo para comer. Podés llamar con el botón de asistencia.'],f:()=>_startService(),a:T+'TC10-servicio.mp3'},
     {w:14},
     // Turbulencia leve (se omite en Modo Calma)
-    {skipIf:()=>calmMode,cap:['〰️','Un poco de movimiento','Como pozos en el camino: incómodo, pero seguro.'],f:()=>{ _beltSign(true,true); if(_svc) _svc.phase='back'; },a:C+'CM05-turbulencia.mp3'},
-    {skipIf:()=>calmMode,f:()=>{ _flight.shakeTarget=0.014; },w:6},
-    {skipIf:()=>calmMode,a:T+'TC11-turbulencia.mp3'},
-    {skipIf:()=>calmMode,f:()=>{ _flight.shakeTarget=0.0006; _beltSign(false,true); },w:3},
+    {skipIf:()=>_flightPrefs.level===0,cap:['〰️','Un poco de movimiento','Como pozos en el camino: incómodo, y el avión está preparado para esto.','a','Para vos: cartel encendido → cinturón abrochado y quedate sentado'],f:()=>{ _beltSign(true,true); if(_svc) _svc.phase='back'; },a:C+'CM05-turbulencia.mp3'},
+    {skipIf:()=>_flightPrefs.level===0,f:()=>{ _flight.shakeTarget=_fl(0,0.014,0.017); },w:6},
+    {skipIf:()=>_flightPrefs.level===0,a:T+'TC11-turbulencia.mp3'},
+    {skipIf:()=>_flightPrefs.level<2,cap:['〰️','Sigue un poco movido','Dura un rato más y pasa. Soltá el aire despacio; el avión sigue su ruta normal.','n','Normal: subidas y bajadas de pocos metros'],w:6},
+    {skipIf:()=>_flightPrefs.level===0,f:()=>{ _flight.shakeTarget=0.0006; _beltSign(false,true); },w:3},
     // Descenso
     {cap:['🛬','Descenso','Faltan unos minutos para llegar a Madrid.'],
-     f:()=>{ _stopService(); _beltSign(true,true); _flight.tiltTarget=-0.035; _engineSet(0.06,420,5); },a:C+'CM06-inicio-descenso.mp3'},
+     f:()=>{ _stopService(); _beltSign(true,true); _flight.tiltTarget=-0.035; _engineSet(0.06,420,5); },a:C+'CM06-inicio-descenso.mp3',tag:['n','Normal: oídos tapados → tragá, bostezá o masticá']},
     {a:T+'TC12-descenso.mp3'},
     {w:3},
+    {skipIf:()=>_flightPrefs.level<2,cap:['☁️','Aire movido al bajar','Al atravesar nubes en el descenso es habitual que se mueva un poco.','n','Normal: el cinturón ya está abrochado'],f:()=>{ _flight.shakeTarget=0.008; },w:5},
+    {skipIf:()=>_flightPrefs.level<2,f:()=>{ _flight.shakeTarget=0.0006; },w:1},
     // Aproximación y aterrizaje
     {label:'landing',cap:['🛬','Aproximación','Atravesamos las nubes. Las luces bajan para aterrizar.'],
-     f:()=>{ _cabinDim(true); _setWindowView('fog'); _flight.skyTarget=1.2; _flight.tiltTarget=0.02; _engineSet(0.07,450,3); _flight.shakeTarget=0.002; },w:5},
+     f:()=>{ _cabinDim(true); _setWindowView('fog'); _flight.skyTarget=1.2; _flight.tiltTarget=0.02; _engineSet(0.07,450,3); _flight.shakeTarget=_fl(0.001,0.002,0.003); },w:5,tag:['n','Normal: zumbidos de flaps y el golpe del tren al bajar']},
     {cap:['🛬','Aterrizando','Ya se ve la pista. Un toque suave y listo.'],f:()=>{ _setWindowView('ground'); _flight.skyTarget=3.2; },w:4},
-    {f:()=>{ _thump(1); _flight.bump=calmMode?0.012:0.025; _flight.tiltTarget=0; _engineSet(0.15,820,0.8); _flight.skyTarget=0.8; },w:4},
+    {cap:['🛬','Toque en la pista','Puede ser suave o firme. Después, un rugido y un empuje hacia adelante: es para frenar.','n','Normal: reversores y frenos'],f:()=>{ _thump(1); _flight.bump=_fl(0.008,0.025,0.03); _flight.tiltTarget=0; _engineSet(0.15,820,0.8); _flight.skyTarget=0.8; },w:4},
     {f:()=>{ _engineSet(0.045,300,4); _flight.skyTarget=0.12; _flight.shakeTarget=0.001; },w:2},
     {cap:['🏁','¡Llegaste a Madrid!','Nuestro vuelo ha llegado a su fin.'],f:()=>_cabinDim(false),a:C+'CM07-fin-del-vuelo.mp3'},
     {a:T+'TC13-aterrizaje.mp3'},
     {cap:['🏁','En la puerta','El avión se detuvo. Ya podés desabrocharte.'],
-     f:()=>{ _flight.skyTarget=0; _flight.shakeTarget=0; _engineSet(0,300,6); _beltSign(false,true); },a:C+'CM08-puertas.mp3'},
+     f:()=>{ _flight.skyTarget=0; _flight.shakeTarget=0; _engineSet(0,300,6); _beltSign(false,true); },a:C+'CM08-puertas.mp3',tag:['a','Para vos: esperá a que se apague el cartel de cinturón']},
     {a:T+'TC14-despedida.mp3'},
     {f:()=>endFlight(true)}
   ]);
@@ -7965,7 +8027,7 @@ function endFlight(completed){
   if(completed){
     logInteraction('vuelo','completo');
     deplaneToArrivals();          // FASE 48: fundido y desembarco en Madrid
-  } else showToast('💺 Te levantaste. Podés volver a sentarte en el 14C cuando quieras.');
+  } else showToast('💺 Te levantaste. Podés volver a sentarte cuando quieras (en la fila 14).');
 }
 
 // La azafata se ubica en el pasillo, frente a los pasajeros, para la demostración
@@ -7974,16 +8036,24 @@ function _attendantDemo(on){
   if(!a||!_seat14C) return;
   if(on){
     if(!a.userData._home) a.userData._home={x:a.position.x,z:a.position.z,r:a.rotation.y,b:a.userData.baseRotY};
-    a.position.set(CABIN.x,0,_seat14C.z+2.6);
+    a.position.set(CABIN.x,0,(_seatNow||_seat14C).z+2.6);
     a.rotation.y=Math.PI; a.userData.baseRotY=Math.PI;       // mirando a la cola (a los pasajeros)
   } else if(a.userData._home){
     const h=a.userData._home; a.position.set(h.x,0,h.z); a.rotation.y=h.r; a.userData.baseRotY=h.b;
   }
 }
 
+// FASE 80: etiqueta que distingue lo normal (✓) de lo que te pide algo (👂)
+function _flightTag(kind,tag){
+  const el=document.querySelector('#flight-hud .fh-tag'); if(!el) return;
+  if(!tag){ el.classList.add('hidden'); return; }
+  el.classList.remove('hidden'); el.classList.toggle('fh-tag-a',kind==='a');
+  el.textContent=(kind==='a'?'👂 ':'✓ ')+tag;
+}
 // Cartel del vuelo (icono + título + texto corto)
-function _flightCaption([ico,title,text]){
+function _flightCaption([ico,title,text,kind,tag]){
   const hud=document.getElementById('flight-hud'); if(!hud) return;
+  _flightTag(kind,tag);   // FASE 80
   hud.querySelector('.fh-ico').textContent=ico;
   hud.querySelector('.fh-title').textContent=title;
   hud.querySelector('.fh-text').textContent=text;
@@ -8003,9 +8073,11 @@ function updateFlight(delta,t){
   f.shake+=(f.shakeTarget-f.shake)*Math.min(1,delta*1.5);
   f.bump*=Math.pow(0.02,delta);
   _skyMul+=(f.skyTarget-_skyMul)*Math.min(1,delta*0.6);
-  const k=Math.min(1,delta*(f.tiltTarget>f.tilt?0.35:0.5));
-  const nt=f.tilt+(f.tiltTarget-f.tilt)*k; _applyTilt(nt-f.tilt); f.tilt=nt;
-  const a=f.shake, b=f.bump;
+  const mot=_flightPrefs.motion;                       // FASE 80: sin movimiento simulado si se apagó
+  const tt=mot?f.tiltTarget:0;
+  const k=Math.min(1,delta*(tt>f.tilt?0.35:0.5));
+  const nt=f.tilt+(tt-f.tilt)*k; _applyTilt(nt-f.tilt); f.tilt=nt;
+  const a=mot?f.shake:0, b=mot?f.bump:0;
   camera.position.set(
     f.seat.x+(Math.sin(t*23.1)*0.6+Math.sin(t*37.7)*0.4)*a,
     f.seat.y+(Math.sin(t*29.3)*0.5+Math.sin(t*17.9)*0.5)*a*1.4+Math.sin(t*40)*b,
@@ -8016,6 +8088,7 @@ function updateFlight(delta,t){
 // ── Sonido de motores (Web Audio): ruido grave filtrado + zumbido ──
 function _engineSet(level,freq,ramp){
   if(!audioCtx||!ambientMaster){ return; }
+  if(_flight){ if(level>0){ _flight.engLevel=level; _flight.engFreq=freq; } if(!_flightPrefs.engine) level=0; }   // FASE 80
   if(_eng&&_eng.g.context!==audioCtx) _eng=null;
   if(!_eng){
     if(level<=0) return;
@@ -8182,7 +8255,7 @@ function _att(){ return npcs.find(n=>n.userData.role==='attendant'&&n.userData.i
 function _startService(){
   if(_svc||!serviceCart||!_seat14C) return;
   const a=_att();
-  _svc={phase:'go',z:-35.3,stopZ:_seat14C.z+1.35,wait:0,
+  _svc={phase:'go',z:-35.3,stopZ:(_seatNow||_seat14C).z+1.35,wait:0,
         cartHome:{x:serviceCart.position.x,z:serviceCart.position.z,r:serviceCart.rotation.y},
         attHome:a?{x:a.position.x,z:a.position.z,r:a.rotation.y,b:a.userData.baseRotY}:null};
 }

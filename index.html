@@ -276,12 +276,16 @@
             <div class="fh-head"><span class="fh-flight">✈ Vuelo 3421 · Madrid · 14C</span><span class="fh-belt" title="Cartel de cinturón">💺 Cinturón</span></div>
             <div class="fh-body">
                 <span class="fh-ico" aria-hidden="true">💺</span>
-                <div><p class="fh-title">Asiento 14C</p><p class="fh-text"></p></div>
+                <div><p class="fh-title">Asiento 14C</p><p class="fh-text"></p><p class="fh-tag hidden"></p></div>
             </div>
             <div class="fh-actions">
                 <button id="btn-flight-breath" type="button"><span class="fh-key">B</span> 🌬️ Respirar</button>
                 <button id="btn-flight-skip" type="button"><span class="fh-key">L</span> Ir al aterrizaje</button>
                 <button id="btn-flight-stand" type="button"><span class="fh-key">E</span> Levantarme</button>
+            </div>
+            <div class="fh-actions fh-toggles">
+                <button id="btn-flight-motion" type="button" aria-pressed="true">〰️ Movimiento: sí</button>
+                <button id="btn-flight-engine" type="button" aria-pressed="true">🔊 Motores: sí</button>
             </div>
         </div>
 
@@ -574,6 +578,40 @@
             <div class="ib-actions">
                 <a id="btn-link-go" class="btn-primary" href="#" target="_blank" rel="noopener">Abrir</a>
                 <button id="btn-link-back" class="btn-ghost" type="button">Volver al aeropuerto</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- FASE 80: Antes de despegar (asiento e intensidad) -->
+    <div id="flight-setup" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="fs-title">
+        <div class="interact-box fs-box">
+            <button id="btn-close-fs" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">✈ Vuelo 3421 · Buenos Aires → Madrid</p>
+            <h2 id="fs-title">Antes de sentarte</h2>
+            <p class="ib-sub">Hoy hay lugares libres: elegí dónde y cómo querés vivir el vuelo. Todo se puede cambiar o detener después.</p>
+            <p class="pf-label">Asiento</p>
+            <div class="pf-choices" role="group" aria-label="Asiento">
+                <button type="button" class="pf-choice" data-seat="14C">🚶 Pasillo · 14C</button>
+                <button type="button" class="pf-choice" data-seat="14A">🌅 Ventanilla · 14A</button>
+                <button type="button" class="pf-choice" data-seat="4C">⬆️ Adelante · 4C</button>
+                <button type="button" class="pf-choice" data-seat="24C">⬇️ Atrás · 24C</button>
+            </div>
+            <p id="fs-seat-tip" class="fs-tip"></p>
+            <p class="pf-label">Intensidad</p>
+            <div class="pf-choices" role="group" aria-label="Intensidad del vuelo">
+                <button type="button" class="pf-choice" data-level="0">🌱 Baja</button>
+                <button type="button" class="pf-choice" data-level="1">🌤️ Moderada</button>
+                <button type="button" class="pf-choice" data-level="2">⛅ Mayor familiarización</button>
+            </div>
+            <p id="fs-level-tip" class="fs-tip"></p>
+            <div class="pf-choices fs-switches">
+                <button id="fs-motion" type="button" class="pf-choice" aria-pressed="true">〰️ Movimiento simulado: <b>Sí</b></button>
+                <button id="fs-engine" type="button" class="pf-choice" aria-pressed="true">🔊 Sonido de motores: <b>Sí</b></button>
+            </div>
+            <p class="fs-note">Simulación educativa: no representa un vuelo ni un clima reales. Podés tocar 🌬️ Respirar, 🤲 Necesito una pausa o «Levantarme» en cualquier momento.</p>
+            <div class="ib-actions">
+                <button id="btn-fs-start" class="btn-primary" type="button">💺 Sentarme y empezar</button>
+                <button id="btn-fs-cancel" class="btn-ghost" type="button">Todavía no</button>
             </div>
         </div>
     </div>
