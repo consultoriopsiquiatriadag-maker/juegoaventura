@@ -1802,6 +1802,9 @@ function setupInteractionUI(){
   on('btn-reg-water',coldWaterFace);
   on('btn-reg-breath',restroomBreathing);
   on('btn-hud-sound',toggleAmbientSound);
+  setupProfileUI();   // FASE 76
+  on('btn-profile',openProfileModal); on('btn-profile-save',saveProfileModal); on('btn-profile-cancel',closeProfileModal);
+  on('btn-close-profile',closeProfileModal); on('btn-profile-reset',resetProfileModal);
   on('btn-hud-cam',cycleCamMode); on('btn-cam-pause',cycleCamMode); on('btn-cam-instant',toggleCamInstant);   // FASE 75
   _syncCamUI();
   on('btn-flight-skip',skipToLanding);
@@ -1862,6 +1865,7 @@ function setupInteractionUI(){
     else if(!document.getElementById('packing-modal').classList.contains('hidden')) closeUiModal('packing-modal');
     else if(!document.getElementById('link-modal').classList.contains('hidden')) closeUiModal('link-modal');
     else if(!document.getElementById('map-modal').classList.contains('hidden')) closeUiModal('map-modal');
+    else if(!document.getElementById('profile-modal').classList.contains('hidden')) closeProfileModal();
     else if(!document.getElementById('sm-modal').classList.contains('hidden')) closeUiModal('sm-modal');
     else if(!document.getElementById('cafe-modal').classList.contains('hidden')){ clearTimeout(_cafeTimer); closeUiModal('cafe-modal'); }
     else if(!document.getElementById('mate-modal').classList.contains('hidden')){ clearTimeout(_mateTimer); closeUiModal('mate-modal'); }
@@ -7073,6 +7077,7 @@ function startGame(){
   camera.position.set(ci.position.x,PLAYER_HEIGHT,ci.position.z+ci.radius+0.8); // más cerca del check-in que de la Entrada
   _welcomeShown=false;
   if(playerMesh) scene.remove(playerMesh);   // FASE 77: una sola instancia aunque se juegue de nuevo
+  if(playerProfile.cam!=null) setCamMode(playerProfile.cam,true);   // FASE 76: cámara inicial elegida
   playerMesh=buildPlayerBody();
   playerMesh.visible=false;
   scene.add(playerMesh);
@@ -7146,19 +7151,20 @@ function enterZone(i){
     if(welcomeNow){
       _welcomeShown=true;
       // Bienvenida extendida en la primera zona
+      const hi=playerProfile.name?('¡Hola, '+playerProfile.name+'! '):'';   // FASE 76
       const msg=isMobile
-        ? '✈ ¡Primera zona! Si querés más info, tocá el cartel de abajo. 🌬️ para respirar.'
-        : '✈ Primera zona. Si querés más info, presioná E (o tocá el cartel de abajo). B para respirar.';
+        ? '✈ '+hi+'¡Primera zona! Si querés más info, tocá el cartel de abajo. 🌬️ para respirar.'
+        : '✈ '+hi+'Primera zona. Si querés más info, presioná E (o tocá el cartel de abajo). B para respirar.';
       showToast(msg);
     }
     if(guidedMode){
       // Igual en todas las zonas y dispositivos: la guía se escucha y la
       // información queda a mano en el cartel flotante (no se abre sola).
       narrateZone(i);
-      if(!welcomeNow) showToast(`${zone.emoji} ${zone.name}`);
+      if(!welcomeNow) showToast(`${zone.emoji} ${zone.name}`+(playerProfile.name?` · Vas muy bien, ${playerProfile.name}`:''));   // FASE 76
     } else {
       // Modo libre: solo toast suave, sin panel ni narración automática
-      if(!welcomeNow) showToast(`${zone.emoji} ${zone.name}`);
+      if(!welcomeNow) showToast(`${zone.emoji} ${zone.name}`+(playerProfile.name?` · Vas muy bien, ${playerProfile.name}`:''));   // FASE 76
     }
   }
   // FASE 49: el recorrido termina cuando retirás tu valija (y deja terminar la voz)
@@ -7205,6 +7211,8 @@ function endGame(){
   saveDiary(d);
 
   // Mensaje personalizado según recorridos completados (sello discreto)
+  const endH=document.querySelector('#end-screen .end-inner h1');   // FASE 76
+  if(endH) endH.textContent=playerProfile.name?('¡Lo lograste, '+playerProfile.name+'!'):'¡Lo lograste!';
   const subEl=document.getElementById('end-subtitle');
   if(subEl) subEl.textContent=getCompletionMessage(d.completedCount);
 
@@ -8816,6 +8824,12 @@ function _bagHallBlock(pos){
 const EXITH={ cz0:-192, cz1:-198, x0:0, x1:30, z0:-198, z1:-224, H:6, cx0:12.9, cx1:17.1, meet:{x:15,z:-209.6} };
 let _ex=null;
 
+// FASE 76: quien espera en Madrid sostiene un cartel con el nombre elegido
+function _updateGreeterName(){
+  const m=_ex&&_ex.greeter&&_ex.greeter.userData.signMesh; if(!m) return;
+  const n=playerProfile.name?playerProfile.name.toUpperCase():'VIAJERO/A AEROCALMA';
+  const old=m.material.map; m.material.map=_greeterSign(n,'¡Bienvenido/a! · Dr. Dagnino',1.1,0.6); m.material.needsUpdate=true; if(old) old.dispose();
+}
 function _greeterSign(text,sub,w,h){
   return _arrTex(512,Math.round(512*h/w),(ctx,c)=>{
     ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,c.width,c.height);
@@ -8891,7 +8905,7 @@ function buildExitHall(){
   const add=(x,z,ry,i,sign)=>{
     const p=buildCharacter({skin:SKINS[i%SKINS.length],hair:HAIRS[(i*3)%HAIRS.length],top:TOPS[(i*7+3)%TOPS.length],pants:PANTS[(i*3+1)%PANTS.length],role:'civilian'});
     p.position.set(x,0.07,z); p.rotation.y=ry; scene.add(p); people.push(p);
-    if(sign){ const t=_greeterSign(sign[0],sign[1],sign[2]||0.7,sign[3]||0.4); const m=new THREE.Mesh(new THREE.PlaneGeometry(sign[2]||0.7,sign[3]||0.4),new THREE.MeshBasicMaterial({map:t,toneMapped:false,side:THREE.DoubleSide}));
+    if(sign){ const t=_greeterSign(sign[0],sign[1],sign[2]||0.7,sign[3]||0.4); const m=p.userData.signMesh=new THREE.Mesh(new THREE.PlaneGeometry(sign[2]||0.7,sign[3]||0.4),new THREE.MeshBasicMaterial({map:t,toneMapped:false,side:THREE.DoubleSide}));
       m.position.set(x+Math.sin(ry)*0.42,1.3,z+Math.cos(ry)*0.42); m.rotation.y=ry; scene.add(m); }
     return p;
   };
@@ -8902,6 +8916,7 @@ function buildExitHall(){
   const ring=new THREE.Mesh(new THREE.RingGeometry(0.9,1.15,40),new THREE.MeshBasicMaterial({color:0x2bb8ae,transparent:true,opacity:0.55,side:THREE.DoubleSide}));
   ring.rotation.x=-Math.PI/2; ring.position.set(E.meet.x,0.09,E.meet.z+1.1); scene.add(ring);
   _ex={ greeter, ring, final:false, warnT:0 };
+  _updateGreeterName();
 }
 
 // Puerta de salida: se abre solo con la valija retirada
@@ -8992,6 +9007,104 @@ function showToast(text){ const t=document.getElementById('toast'); t.textConten
 // ══════════════════════════════════════════════════
 let ringTime=0;
 
+
+
+// ─── FASE 76 (F42): PANTALLA "PERSONALIZAR MI EXPERIENCIA" ──
+// Vista previa 3D con un renderizador propio y chico que existe sólo mientras
+// la pantalla está abierta (se libera al cerrar).
+let _pf=null;   // estado de la pantalla abierta
+function openProfileModal(){
+  const draft=Object.assign({},playerProfile);
+  if(draft.cam==null) draft.cam=camMode;
+  _pf={draft,raf:0,renderer:null,scene:null,cam:null,char:null};
+  document.getElementById('profile-name').value=draft.name;
+  _pfSync();
+  openUiModal('profile-modal');
+  _pfStartPreview();
+  setTimeout(()=>{ const i=document.getElementById('profile-name'); if(i&&!isMobile) i.focus(); },60);
+}
+function _pfSync(){
+  const d=_pf.draft;
+  document.querySelectorAll('#profile-modal [data-look]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.look===d.look?'true':'false'));
+  document.querySelectorAll('#profile-modal [data-cam]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.cam===d.cam?'true':'false'));
+  document.querySelectorAll('#profile-modal [data-top]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.top===d.top?'true':'false'));
+  document.querySelectorAll('#profile-modal [data-hair]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.hair===d.hair?'true':'false'));
+  const nm=document.getElementById('profile-preview-name'); if(nm) nm.textContent=d.name||'Tu personaje';
+  document.getElementById('profile-count').textContent=(d.name.length)+'/24';
+  _pfRebuild();
+}
+function _pfBuildSwatches(){
+  const tops=document.getElementById('profile-tops'), hairs=document.getElementById('profile-hairs');
+  if(tops&&!tops.children.length) PROFILE_TOPS.forEach((col,i)=>{ const b=document.createElement('button'); b.type='button'; b.className='pf-swatch'; b.dataset.top=i; b.style.background='#'+col.toString(16).padStart(6,'0'); b.setAttribute('aria-label','Color de ropa '+(i+1)); tops.appendChild(b); });
+  if(hairs&&!hairs.children.length) PROFILE_HAIRS.forEach((col,i)=>{ const b=document.createElement('button'); b.type='button'; b.className='pf-swatch'+(col==null?' pf-auto':''); b.dataset.hair=i;
+    if(col!=null) b.style.background='#'+col.toString(16).padStart(6,'0'); else b.textContent='A';
+    b.setAttribute('aria-label',col==null?'Color de pelo del aspecto elegido':'Color de pelo '+i); hairs.appendChild(b); });
+}
+function _pfStartPreview(){
+  const cv=document.getElementById('profile-preview'); if(!cv) return;
+  try{
+    const r=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
+    r.setPixelRatio(Math.min(devicePixelRatio,2)); r.setSize(cv.clientWidth||220,cv.clientHeight||280,false);
+    r.outputEncoding=THREE.sRGBEncoding; r.toneMapping=THREE.ACESFilmicToneMapping; r.toneMappingExposure=1.1;
+    const sc=new THREE.Scene();
+    sc.add(new THREE.HemisphereLight(0xffffff,0x8a9aa8,1.0));
+    const dl=new THREE.DirectionalLight(0xffffff,1.1); dl.position.set(1.5,3,2.5); sc.add(dl);
+    const floor=new THREE.Mesh(new THREE.CircleGeometry(0.7,40),new THREE.MeshBasicMaterial({color:0xdfe8f0})); floor.rotation.x=-Math.PI/2; sc.add(floor);
+    const cam=new THREE.PerspectiveCamera(30,(cv.clientWidth||220)/(cv.clientHeight||280),0.1,20); cam.position.set(0,1.1,4.1); cam.lookAt(0,0.92,0);
+    Object.assign(_pf,{renderer:r,scene:sc,cam});
+    _pfRebuild();
+    const still=prefersReducedMotion();
+    const loop=()=>{ if(!_pf||!_pf.renderer) return; if(_pf.char&&!still) _pf.char.rotation.y+=0.012; _pf.renderer.render(_pf.scene,_pf.cam); _pf.raf=requestAnimationFrame(loop); };
+    loop();
+  }catch(e){ cv.classList.add('hidden'); }
+}
+function _pfRebuild(){
+  if(!_pf||!_pf.scene) return;
+  const ry=_pf.char?_pf.char.rotation.y:0.5;
+  if(_pf.char) _pf.scene.remove(_pf.char);
+  _pf.char=buildPlayerBody(_pf.draft); _pf.char.rotation.y=ry; _pf.scene.add(_pf.char);
+}
+function _pfStopPreview(){
+  if(!_pf) return;
+  cancelAnimationFrame(_pf.raf);
+  if(_pf.renderer){ _pf.renderer.dispose(); if(_pf.renderer.forceContextLoss) _pf.renderer.forceContextLoss(); }
+  _pf=null;
+}
+function closeProfileModal(){ _pfStopPreview(); closeUiModal('profile-modal'); }
+function saveProfileModal(){
+  if(!_pf) return;
+  const d=_pf.draft; d.name=_cleanName(document.getElementById('profile-name').value);
+  playerProfile=Object.assign({},d); playerLook=d.look;
+  const ok=saveProfile();
+  setCamMode(d.cam,true);
+  _updateGreeterName(); _updateProfileButton();
+  closeProfileModal();
+  showToast(ok?('✓ Listo'+(d.name?', '+d.name:'')+'. Tus preferencias quedan guardadas en este dispositivo.'):'No se pudieron guardar las preferencias en este navegador.');
+}
+function resetProfileModal(){
+  clearProfile(); setCamMode(0,true);
+  _updateGreeterName(); _updateProfileButton();
+  if(_pf){ _pf.draft=Object.assign({},playerProfile,{cam:0}); document.getElementById('profile-name').value=''; _pfSync(); }
+  showToast('Se borraron tus preferencias de este dispositivo.');
+}
+function _updateProfileButton(){
+  const b=document.getElementById('btn-profile'); if(!b) return;
+  b.querySelector('span').textContent=playerProfile.name?('Personaje: '+playerProfile.name):'Personalizar mi experiencia';
+}
+function setupProfileUI(){
+  loadProfile(); _pfBuildSwatches(); _updateProfileButton();
+  const m=document.getElementById('profile-modal'); if(!m) return;
+  m.addEventListener('click',(e)=>{
+    const b=e.target.closest('button'); if(!b||!_pf) return;
+    const d=_pf.draft;
+    if(b.dataset.look){ d.look=b.dataset.look; _pfSync(); }
+    else if(b.dataset.cam!=null&&b.dataset.cam!==''){ d.cam=+b.dataset.cam; _pfSync(); }
+    else if(b.dataset.top!=null&&b.dataset.top!==''){ d.top=+b.dataset.top; _pfSync(); }
+    else if(b.dataset.hair!=null&&b.dataset.hair!==''){ d.hair=+b.dataset.hair; _pfSync(); }
+  });
+  document.getElementById('profile-name').addEventListener('input',(e)=>{ if(!_pf) return; _pf.draft.name=_cleanName(e.target.value); const nm=document.getElementById('profile-preview-name'); if(nm) nm.textContent=_pf.draft.name||'Tu personaje'; document.getElementById('profile-count').textContent=e.target.value.length+'/24'; });
+  document.getElementById('profile-name').addEventListener('keydown',(e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveProfileModal(); } });
+}
 
 // ─── FASE 75 (F41): CÁMARAS INTERCAMBIABLES ─────────────────
 // Tres vistas: primera persona, tercera cercana y tercera panorámica. La vista
@@ -9101,10 +9214,58 @@ const PLAYER_LOOKS={
   neutro:{skin:0xe9bf98,hair:0x6b4a2e,top:0x2a6f8f,pants:0x3b3f46,shoes:0x2b2b2b,female:false,hairStyle:'swept',seed:773}
 };
 let playerLook='neutro';
+// ─── FASE 76 (F42): PERFIL LOCAL DEL VISITANTE ──────────────
+// Nombre (hasta 24 caracteres), aspecto, colores y cámara inicial. Se guarda
+// sólo en este navegador (localStorage 'aerocalma_profile'); no se envía a
+// ningún servicio ni se agrega al resumen que se comparte.
+const PROFILE_KEY='aerocalma_profile';
+const PROFILE_TOPS=[0x2a6f8f,0x7a4fc8,0xb5483f,0x2e8b57,0x3b3f46,0xd9a441];
+const PROFILE_HAIRS=[null,0x0f0b08,0x3b1f0f,0x6b4a2e,0xd4a832,0x9a9a9a];   // null: el del aspecto elegido
+let playerProfile={name:'',look:'neutro',top:0,hair:0,cam:null};
+function _cleanName(n){ return String(n==null?'':n).replace(/[\u0000-\u001f\u007f<>]/g,'').replace(/\s+/g,' ').trim().slice(0,24); }
+function loadProfile(){
+  try{
+    const p=JSON.parse(localStorage.getItem(PROFILE_KEY)||'null');
+    if(p&&typeof p==='object'){
+      playerProfile.name=_cleanName(p.name);
+      if(PLAYER_LOOKS[p.look]) playerProfile.look=p.look;
+      if(p.top>=0&&p.top<PROFILE_TOPS.length) playerProfile.top=p.top|0;
+      if(p.hair>=0&&p.hair<PROFILE_HAIRS.length) playerProfile.hair=p.hair|0;
+      playerProfile.cam=(p.cam>=0&&p.cam<3)?(p.cam|0):null;
+    }
+  }catch(e){}
+  playerLook=playerProfile.look;
+}
+function saveProfile(){ try{ localStorage.setItem(PROFILE_KEY,JSON.stringify(playerProfile)); return true; }catch(e){ return false; } }
+function clearProfile(){
+  try{ localStorage.removeItem(PROFILE_KEY); localStorage.removeItem('aerocalma_cam'); }catch(e){}
+  playerProfile={name:'',look:'neutro',top:0,hair:0,cam:null}; playerLook='neutro';
+}
+function _profileLook(prof){
+  const P=prof||playerProfile;
+  const L=Object.assign({},PLAYER_LOOKS[P.look]||PLAYER_LOOKS.neutro);
+  L.top=PROFILE_TOPS[P.top]||L.top;
+  if(PROFILE_HAIRS[P.hair]!=null) L.hair=PROFILE_HAIRS[P.hair];
+  return L;
+}
+// Cartelito con el nombre sobre el avatar (sólo se ve en tercera persona)
+function _nameTag(name){
+  const t=tex(512,128,(ctx)=>{ ctx.clearRect(0,0,512,128); ctx.font='bold 54px Arial';
+    const w=Math.min(500,ctx.measureText(name).width+64);
+    ctx.fillStyle='rgba(16,32,48,0.72)'; ctx.beginPath(); if(ctx.roundRect) ctx.roundRect(256-w/2,20,w,88,44); else ctx.rect(256-w/2,20,w,88); ctx.fill();
+    ctx.fillStyle='#ffffff'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(name,256,66,480); });
+  t.encoding=THREE.sRGBEncoding;
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false,toneMapped:false}));
+  sp.scale.set(0.9,0.225,1); sp.position.set(0,2.08,0); sp.renderOrder=5; sp.name='nameTag';
+  return sp;
+}
 const _pav={ last:null, speed:0, k:0, ph:0, heading:0, yawPrev:null, turnRate:0, idle:0 };
 function buildPlayerBody(look){
-  const L=Object.assign({role:'civilian',glasses:false,noHat:true},PLAYER_LOOKS[look||playerLook]||PLAYER_LOOKS.neutro);
+  // FASE 76: sin argumento usa el perfil guardado (aspecto, ropa y pelo)
+  const base=look?(typeof look==='object'?_profileLook(look):PLAYER_LOOKS[look]):_profileLook();
+  const L=Object.assign({role:'civilian',glasses:false,noHat:true},base||PLAYER_LOOKS.neutro);
   const g=buildCharacter(L);
+  if(!look&&playerProfile.name) g.add(_nameTag(playerProfile.name));
   g.name='playerAvatar'; g.userData.isPlayer=true;
   g.userData.armLag=0.22; g.userData.armAmp=0.28; g.userData.strideAmp=0.4;   // paso fijo (sin azar)
   _pav.last=null; _pav.k=0; _pav.speed=0; _pav.yawPrev=null;

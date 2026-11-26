@@ -90,6 +90,7 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </button>
             </div>
+            <button id="btn-profile" class="btn-ghost btn-profile" type="button" aria-label="Personalizar mi experiencia: nombre, personaje y cámara">✨ <span>Personalizar mi experiencia</span></button>
             <div class="menu-toggles">
                 <button id="btn-toggle-calm" class="btn-calm-toggle" aria-pressed="false" aria-label="Modo Calma: estimulación reducida, para ansiedad alta o sensibilidad sensorial">🧘 Calma</button>
                 <button id="btn-toggle-guided" class="btn-calm-toggle btn-guided-toggle" aria-pressed="true" aria-label="Modo Guiado: la información de cada zona se abre sola. Desactivalo para explorar libremente">📍 Guiado</button>
@@ -571,6 +572,47 @@
                 <a id="btn-link-go" class="btn-primary" href="#" target="_blank" rel="noopener">Abrir</a>
                 <button id="btn-link-back" class="btn-ghost" type="button">Volver al aeropuerto</button>
             </div>
+        </div>
+    </div>
+
+    <!-- FASE 76: Personalizar mi experiencia -->
+    <div id="profile-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="profile-title">
+        <div class="interact-box profile-box">
+            <button id="btn-close-profile" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">✨ Personalizar mi experiencia</p>
+            <h2 id="profile-title">Tu personaje</h2>
+            <div class="pf-grid">
+                <div class="pf-preview-wrap">
+                    <canvas id="profile-preview" width="220" height="280" aria-label="Vista previa de tu personaje"></canvas>
+                    <div id="profile-preview-name" class="pf-preview-name">Tu personaje</div>
+                </div>
+                <div class="pf-fields">
+                    <label class="pf-label" for="profile-name">Nombre <span id="profile-count" class="pf-count">0/24</span></label>
+                    <input id="profile-name" class="pf-input" type="text" maxlength="24" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Cómo querés que te llamemos">
+                    <p class="pf-label" id="pf-look-l">Personaje</p>
+                    <div class="pf-choices" role="group" aria-labelledby="pf-look-l">
+                        <button type="button" class="pf-choice" data-look="femenino">Femenino</button>
+                        <button type="button" class="pf-choice" data-look="masculino">Masculino</button>
+                        <button type="button" class="pf-choice" data-look="neutro">Neutro</button>
+                    </div>
+                    <p class="pf-label" id="pf-top-l">Color de ropa</p>
+                    <div id="profile-tops" class="pf-swatches" role="group" aria-labelledby="pf-top-l"></div>
+                    <p class="pf-label" id="pf-hair-l">Color de pelo</p>
+                    <div id="profile-hairs" class="pf-swatches" role="group" aria-labelledby="pf-hair-l"></div>
+                    <p class="pf-label" id="pf-cam-l">Cámara al empezar</p>
+                    <div class="pf-choices" role="group" aria-labelledby="pf-cam-l">
+                        <button type="button" class="pf-choice" data-cam="0">👁️ Primera persona</button>
+                        <button type="button" class="pf-choice" data-cam="1">🧍 Detrás, cerca</button>
+                        <button type="button" class="pf-choice" data-cam="2">🏞️ Panorámica</button>
+                    </div>
+                </div>
+            </div>
+            <p class="pf-privacy">🔒 Se guarda sólo en este dispositivo. No se envía a ningún lado ni hace falta crear una cuenta.</p>
+            <div class="ib-actions pf-actions">
+                <button id="btn-profile-save" class="btn-primary" type="button">Guardar</button>
+                <button id="btn-profile-cancel" class="btn-ghost" type="button">Cancelar</button>
+            </div>
+            <button id="btn-profile-reset" class="pf-reset" type="button">Borrar mis preferencias</button>
         </div>
     </div>
 
