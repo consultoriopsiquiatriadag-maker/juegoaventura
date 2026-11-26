@@ -2081,3 +2081,5 @@ body.has-bag #bag-chip { display: block; }
 #flight-hud .fh-toggles { margin-top: 6px; }
 #flight-hud .fh-toggles button { font-size: .78rem; opacity: .9; }
 #flight-setup { z-index: 120; }
+/* FASE 81: los paneles tapan los botones del HUD (Salir, Necesito una pausa) */
+.overlay-dark { z-index: 98; }

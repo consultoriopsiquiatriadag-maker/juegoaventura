@@ -1124,6 +1124,7 @@ function buildInteractiveSpots(){
   buildPackingSign();   // FASE 65: cómo armar una maleta de forma inteligente
   buildInfoSigns();     // FASE 66: RENAPER, mapa, farmacia y medicina aeronáutica
   buildSaludMentalSign();// FASE 67: Centro virtual de Salud Mental
+  buildAerolineasScreen(); // FASE 81: biblioteca audiovisual "Animate a volar"
   buildMagazineStand(); // FASE 44: revistas digitales
   buildChargeStations();// FASE 44: estaciones de carga
   buildSeatSpot();      // FASE 46: asiento 14C (vuelo simulado)
@@ -2844,7 +2845,12 @@ const LINK_INFO={
   tepaso:{eyebrow:'🤝 Próximamente',title:'Te Paso a Buscar',
     sub:'Estás acompañado. Cuando lo necesites, un Operador de Apoyo Inmediato va a poder ir a encontrarte en la puerta de tu casa. Es un servicio complementario del consultorio que todavía está en preparación.',
     tips:['PRÓXIMAMENTE: el servicio todavía no está activo. Ya podés conocer cómo va a funcionar.','No reemplaza a los servicios de emergencia: ante una urgencia llamá al 911, o al 135 (línea de prevención del suicidio).','Se abre en otra pestaña; AeroCalma queda abierto acá.'],
-    url:'https://tepasoabuscar.netlify.app/',btn:'🤝 Conocer Te Paso a Buscar'}
+    url:'https://tepasoabuscar.netlify.app/',btn:'🤝 Conocer Te Paso a Buscar'},
+  // FASE 81 (F47): playlist oficial verificada el 26/11/2026 — canal de Aerolíneas Argentinas, 4 episodios
+  aerolineas:{eyebrow:'▶️ Biblioteca audiovisual',title:'Animate a volar — Recursos audiovisuales de Aerolíneas Argentinas',
+    sub:'Una serie de videos en la que personas que trabajan en la aviación, y un psicólogo, cuentan cómo es su tarea y qué hacen para que viajar sea más tranquilo. Puede ayudarte a conocer por dentro lo que pasa en un vuelo.',
+    tips:['Episodios: un copiloto, un licenciado en psicología, una tripulante de cabina y una integrante del personal de tierra.','Es contenido de Aerolíneas Argentinas publicado en YouTube. AeroCalma sólo recomienda el enlace: no tiene patrocinio ni convenio con la aerolínea.','Se abre YouTube en otra pestaña; AeroCalma queda abierto acá.'],
+    url:'https://www.youtube.com/playlist?list=PL9TgSYGZPjWANnpJELTBeEiHuoasN8rqJ',btn:'▶️ Ver la playlist en YouTube'}
 };
 let _linkCur=null;
 function openLinkModal(id){
@@ -2856,6 +2862,28 @@ function openLinkModal(id){
   const a=document.getElementById('btn-link-go'); a.href=L.url; a.textContent=L.btn;
   openUiModal('link-modal');
   logInteraction(id,'ver');
+}
+// FASE 81 (F47): pantalla "Animate a volar" en la sala de embarque, frente a la
+// puerta A7 (para mirar mientras se espera). Sin logos de la aerolínea: sólo
+// el nombre de la serie y la atribución en texto.
+function buildAerolineasScreen(){
+  scene.updateMatrixWorld(true);
+  const spots=[{x:-5.8,z:-12.2,ry:0.35},{x:-12.6,z:-6.5,ry:Math.PI/2},{x:12.6,z:-6.5,ry:-Math.PI/2}];
+  const sp=spots.find(p=>_floorIsFree(p.x,p.z,1.1)&&_floorIsFree(p.x+Math.sin(p.ry)*1.4,p.z+Math.cos(p.ry)*1.4,0.6))||spots[0];
+  _standSign({id:'aerolineas',x:sp.x,z:sp.z,ry:sp.ry,w:2.2,h:1.35,icon:'▶️',text:'Animate a volar · Videos',color:'#2f6fb5',label:'Ver la biblioteca audiovisual "Animate a volar"',onTrigger:()=>openLinkModal('aerolineas'),frame:0x10223a,radius:2.8,
+    tex:_ckTex(1000,620,(c)=>{
+      const gr=c.createLinearGradient(0,0,0,620); gr.addColorStop(0,'#123a66'); gr.addColorStop(1,'#0b2240'); c.fillStyle=gr; c.fillRect(0,0,1000,620);
+      c.fillStyle='#9fd3ff'; c.font='26px Arial'; c.textAlign='center'; c.fillText('BIBLIOTECA AUDIOVISUAL',500,58);
+      c.fillStyle='#ffffff'; c.font='bold 74px Georgia'; c.fillText('Animate a volar',500,140);
+      c.fillStyle='#cfe3f7'; c.font='30px Arial'; c.fillText('Recursos audiovisuales de Aerolíneas Argentinas',500,188,940);
+      // Botón de reproducir
+      c.fillStyle='rgba(255,255,255,0.12)'; c.beginPath(); c.arc(500,300,70,0,Math.PI*2); c.fill();
+      c.fillStyle='#ffffff'; c.beginPath(); c.moveTo(478,262); c.lineTo(478,338); c.lineTo(540,300); c.closePath(); c.fill();
+      // Cuatro episodios (por rol)
+      [['✈️','Copiloto'],['💬','Psicólogo'],['🧑‍✈️','Tripulante de cabina'],['🛄','Personal de tierra']].forEach(([ic,t],i)=>{ const x=40+i*235, y=400;
+        c.fillStyle='#1c3f68'; c.fillRect(x,y,215,120); c.fillStyle='#fff'; c.font='40px Arial'; c.fillText(ic,x+107,y+52);
+        c.font='bold 22px Arial'; c.fillStyle='#e6f1fb'; c.fillText('Episodio '+(i+1),x+107,y+86); c.font='19px Arial'; c.fillStyle='#9fc6e4'; c.fillText(t,x+107,y+110,205); });
+      c.fillStyle='#9fc6e4'; c.font='20px Arial'; c.fillText('Contenido externo en YouTube · Tocá para ver  →',500,592); })});
 }
 // Cartel de pie genérico (marco, parantes, lámina dibujada, aviso flotante)
 function _standSign(o){
