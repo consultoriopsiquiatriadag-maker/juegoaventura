@@ -575,6 +575,31 @@
         </div>
     </div>
 
+    <!-- FASE 78: Centro de Información Aeronáutica y Calma -->
+    <div id="aeroinfo-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="aeroinfo-title">
+        <div class="interact-box aeroinfo-box">
+            <button id="btn-close-aeroinfo" class="close-btn" type="button" aria-label="Cerrar">✕</button>
+            <p class="ib-eyebrow">🛩️ Centro de Información Aeronáutica y Calma</p>
+            <h2 id="aeroinfo-title">Entender el vuelo</h2>
+            <p class="ai-note">Contenido educativo: no corresponde a un vuelo real ni predice condiciones.</p>
+            <div id="aeroinfo-list">
+                <div id="aeroinfo-grid" class="ai-grid"></div>
+                <div class="ib-actions"><button id="btn-ai-back-airport" class="btn-ghost" type="button">Volver al aeropuerto</button></div>
+            </div>
+            <div id="aeroinfo-detail" class="hidden">
+                <h3 id="aeroinfo-dt" class="ai-dt"></h3>
+                <canvas id="aeroinfo-canvas" class="ai-canvas" width="560" height="260" aria-hidden="true"></canvas>
+                <ul id="aeroinfo-points" class="ai-points"></ul>
+                <div class="ai-nav">
+                    <button id="btn-ai-prev" class="btn-ghost" type="button" aria-label="Tema anterior">←</button>
+                    <button id="btn-ai-listen" class="btn-ghost" type="button">🔊 Escuchar</button>
+                    <button id="btn-ai-list" class="btn-ghost" type="button">Todos los temas</button>
+                    <button id="btn-ai-next" class="btn-ghost" type="button" aria-label="Tema siguiente">→</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- FASE 76: Personalizar mi experiencia -->
     <div id="profile-modal" class="overlay-dark hidden" role="dialog" aria-modal="true" aria-labelledby="profile-title">
         <div class="interact-box profile-box">
@@ -864,7 +889,7 @@
             <p class="end-subtitle" id="end-subtitle">Completaste el recorrido completo del aeropuerto.</p>
             <div class="end-message">
                 <p>Ahora conoces exactamente lo que te espera en cada zona. Con práctica, la ansiedad se transforma en preparación.</p>
-                <p><strong>Recuerda:</strong> el avión es el medio de transporte más seguro del mundo. Un vuelo comercial tiene una tasa de accidente de 1 en 11 millones.</p>
+                <p><strong>Recuerda:</strong> volar en avión comercial es una de las formas más seguras de viajar.</p>
             </div>
             <div class="end-stats">
                 <div class="stat"><span class="stat-n">7</span><span>Zonas exploradas</span></div>

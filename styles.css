@@ -2016,3 +2016,23 @@ body.has-bag #bag-chip { display: block; }
   #profile-preview { height: 200px; }
   .interact-box.profile-box { padding: 26px 18px 22px; }
 }
+
+/* ── FASE 78: Centro de Información Aeronáutica y Calma ── */
+.interact-box.aeroinfo-box { width: min(760px, 94vw); }
+.ai-note { display: inline-block; font-size: .8rem; color: #6b7f95; background: #f1f6fa; border-radius: 999px; padding: 4px 12px; margin: 0 0 16px; }
+.ai-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.ai-card { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 8px; border-radius: 16px; border: 1.5px solid #dbe6ef; background: #f8fbfd; cursor: pointer; transition: border-color .2s, transform .2s; }
+.ai-card:hover, .ai-card:focus-visible { border-color: var(--accent); transform: translateY(-2px); }
+.ai-ico { font-size: 1.8rem; }
+.ai-t { font-weight: 600; color: var(--deep); font-size: .92rem; line-height: 1.25; }
+.ai-s { font-size: .78rem; color: var(--text-light); }
+.ai-dt { font-family: var(--ff-display); color: var(--deep); font-size: 1.3rem; margin-bottom: 10px; }
+#aeroinfo-canvas.ai-canvas { position: static; z-index: auto; width: 100%; height: auto; max-height: 260px; border-radius: 14px; display: block; touch-action: auto; }
+.ai-points { text-align: left; margin: 14px 0 6px; padding-left: 20px; color: var(--mid); font-size: .95rem; line-height: 1.5; }
+.ai-points li { margin-bottom: 8px; }
+.ai-nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+.ai-nav .btn-ghost { padding: 10px 16px; }
+.ai-nav .btn-ghost:disabled { opacity: .35; cursor: default; }
+@media (max-width: 640px) { .ai-grid { grid-template-columns: repeat(2, 1fr); } .ai-points { font-size: .9rem; } }
+@media (prefers-reduced-motion: reduce) { .ai-card { transition: none; } .ai-card:hover { transform: none; } }
+.aeroinfo-box .ib-eyebrow { padding: 0 38px; }

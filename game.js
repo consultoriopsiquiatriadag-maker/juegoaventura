@@ -1116,7 +1116,7 @@ function buildInteractiveSpots(){
   buildWellnessKiosk();
   buildConsultorio();   // FASE 38
   buildRestrooms();     // FASE 44: sector de baños (antes que los demás: ocupa su lugar)
-  buildCafeSpot();      // FASE 40: pausa de café en AeroCafé
+  buildAeroInfoCenter(); // FASE 78: Centro de Información (local ex AeroCafé)
   buildMateDispensers();// FASE 40: agua caliente para el mate
   buildReviewsMural();  // FASE 42: mural de reseñas
   buildDonationTotem(); // FASE 42: aporte voluntario
@@ -1643,16 +1643,18 @@ function _talkAnswer(q,n){
     tx=RESTROOM.x1+1.2; tz=(RESTROOM.door0+RESTROOM.door1)/2;
     const D=_talkDir(tx,tz);
     txt=pastSec
-      ?`Los baños están en el hall de entrada, antes del control de seguridad: volvé por el pasillo central; quedan junto a la pared del hall, al lado de AeroCafé, ${D.dist} de acá. Buscá el cartel 🚻.`
-      :`Los baños están ${D.dir}, ${D.dist}, junto a la pared del hall, al lado de AeroCafé. Buscá el cartel 🚻 en la puerta.`;
+      ?`Los baños están en el hall de entrada, antes del control de seguridad: volvé por el pasillo central; quedan junto a la pared del hall, al lado del Centro de Información Aeronáutica, ${D.dist} de acá. Buscá el cartel 🚻.`
+      :`Los baños están ${D.dir}, ${D.dist}, junto a la pared del hall, al lado del Centro de Información Aeronáutica. Buscá el cartel 🚻 en la puerta.`;
     nodes=[{x:0,z:-4},{x:0,z:16},{x:-6,z:26},{x:-6,z:tz},{x:tx,z:tz}];
   } else if(q==='cafe'){
-    tx=-10.2; tz=20;
+    // FASE 78: el café está en la sala de embarque (kiosko "Pausa · Café & Agua")
+    const K=interactables.find(o=>o.id==='kiosk')||{x:-6.5,z:-14.5};
+    tx=K.x; tz=K.z;
     const D=_talkDir(tx,tz);
     txt=pastSec
-      ?`AeroCafé queda en el hall, antes de seguridad, junto a la pared y al lado de los baños (${D.dist}). Si preferís no volver, acá en la sala de embarque hay máquinas de bebidas.`
-      :`AeroCafé está ${D.dir}, ${D.dist}, junto a la pared del hall, al lado de los baños. Hay café, té y agua; tomar algo tibio ayuda a bajar un cambio.`;
-    nodes=[{x:0,z:-4},{x:0,z:16},{x:tx,z:tz}];
+      ?`El café está acá en la sala de embarque: el kiosko "Pausa · Café & Agua", ${D.dir}, ${D.dist}. Hay café, té y agua; tomar algo tibio ayuda a bajar un cambio.`
+      :`El café está del otro lado del control de seguridad, en la sala de embarque: el kiosko "Pausa · Café & Agua". Hay café, té y agua; tomar algo tibio ayuda a bajar un cambio.`;
+    nodes=pastSec?[{x:tx,z:tz}]:[{x:0,z:16},{x:0,z:-4},{x:tx,z:tz}];
   } else {
     tx=0.4; tz=GATE.z+2.1;
     const D=_talkDir(tx,tz);
@@ -1756,6 +1758,8 @@ function openKioskModal(){
 }
 function chooseKioskItem(id){
   const it=KIOSK_ITEMS[id]; if(!it) return;
+  // FASE 78: el café se toma en tres sorbos lentos (la pausa de café vive ahora acá)
+  if(id==='cafe'){ document.getElementById('kiosk-modal').classList.add('hidden'); logInteraction('kiosk',id); openCafeModal(); return; }
   document.querySelectorAll('#kiosk-modal .kiosk-item').forEach(b=>{ b.classList.toggle('chosen',b.dataset.item===id); b.disabled=true; });
   const r=document.getElementById('kiosk-result');
   r.innerHTML=`<p class="kr-msg">${it.msg}</p><p class="kr-tip">${it.tip}</p>`;
@@ -1803,6 +1807,9 @@ function setupInteractionUI(){
   on('btn-reg-breath',restroomBreathing);
   on('btn-hud-sound',toggleAmbientSound);
   setupProfileUI();   // FASE 76
+  on('btn-close-aeroinfo',closeAeroInfo); on('btn-ai-back-airport',closeAeroInfo); on('btn-ai-list',_aiShowList); on('btn-ai-listen',_aiSpeak);   // FASE 78
+  on('btn-ai-prev',()=>_aiShowCard(_ai.idx-1)); on('btn-ai-next',()=>_aiShowCard(_ai.idx+1));
+  const _aig=document.getElementById('aeroinfo-grid'); if(_aig) _aig.addEventListener('click',(e)=>{ const b=e.target.closest('[data-ai]'); if(b) _aiShowCard(+b.dataset.ai); });
   on('btn-profile',openProfileModal); on('btn-profile-save',saveProfileModal); on('btn-profile-cancel',closeProfileModal);
   on('btn-close-profile',closeProfileModal); on('btn-profile-reset',resetProfileModal);
   on('btn-hud-cam',cycleCamMode); on('btn-cam-pause',cycleCamMode); on('btn-cam-instant',toggleCamInstant);   // FASE 75
@@ -1866,6 +1873,7 @@ function setupInteractionUI(){
     else if(!document.getElementById('link-modal').classList.contains('hidden')) closeUiModal('link-modal');
     else if(!document.getElementById('map-modal').classList.contains('hidden')) closeUiModal('map-modal');
     else if(!document.getElementById('profile-modal').classList.contains('hidden')) closeProfileModal();
+    else if(!document.getElementById('aeroinfo-modal').classList.contains('hidden')){ if(_ai.idx>=0) _aiShowList(); else closeAeroInfo(); }
     else if(!document.getElementById('sm-modal').classList.contains('hidden')) closeUiModal('sm-modal');
     else if(!document.getElementById('cafe-modal').classList.contains('hidden')){ clearTimeout(_cafeTimer); closeUiModal('cafe-modal'); }
     else if(!document.getElementById('mate-modal').classList.contains('hidden')){ clearTimeout(_mateTimer); closeUiModal('mate-modal'); }
@@ -2047,6 +2055,7 @@ const CAFE_SIPS=[
 ];
 let _cafeSip=0, _cafeTimer=null;
 function openCafeModal(){
+  uiModalOpen=true;   // FASE 78: también se abre desde el kiosko
   _hidePildora('cafe-pildora');
   _cafeSip=0; clearTimeout(_cafeTimer);
   document.getElementById('cafe-cup').style.setProperty('--level','92%');
@@ -2979,12 +2988,12 @@ function drawTerminalMap(c,W,Hh,here){
   [['ENTRADA',0,50],['CHECK-IN',0,33],['SEGURIDAD',0,12.5],['SALA DE|EMBARQUE',0,-6],['A7',0,-18.5]].forEach(([t,x,z])=>{ const [a,b]=P(x,z); t.split('|').forEach((ln,i,arr)=>c.fillText(ln,a,b+6+(i-(arr.length-1)/2)*20)); });
   // Íconos
   c.font='26px "Segoe UI Emoji",sans-serif';
-  [['🚻',-15,32],['☕',-12,20],['💊',14.5,15],['🩺',-14.5,-7],['ℹ️',0,45],['🛩️',13.6,40],['🧳',-13.6,46.5],['🛂',13.6,46.5],['🍽️',14.5,-5],['📰',-14.5,-21]].forEach(([ic,x,z])=>{ const [a,b]=P(x,z); c.fillStyle='rgba(255,255,255,0.92)'; c.beginPath(); c.arc(a,b,17,0,Math.PI*2); c.fill(); c.fillStyle='#000'; c.fillText(ic,a,b+9); });
+  [['🚻',-15,32],['🛩️',-12,20],['☕',-7,-14.5],['💊',14.5,15],['🩺',-14.5,-7],['ℹ️',0,45],['🕹️',13.6,40],['🧳',-13.6,46.5],['🛂',13.6,46.5],['🍽️',14.5,-5],['📰',-14.5,-21]].forEach(([ic,x,z])=>{ const [a,b]=P(x,z); c.fillStyle='rgba(255,255,255,0.92)'; c.beginPath(); c.arc(a,b,17,0,Math.PI*2); c.fill(); c.fillStyle='#000'; c.fillText(ic,a,b+9); });
   // Leyenda
   c.textAlign='left'; c.font='bold 20px Arial';
   [['#8fb6de','Área pública','Public area'],['#6b7fb8','Sólo pasajeros','Passengers only'],['#f2c230','Check-in','Check-in counters'],['#f59e0b','Control de seguridad','Security'],['#3fc5e8','Pre embarque · A7','Boarding gate'],['#8bd35a','Llegadas (Madrid)','Arrivals']].forEach(([col,a,b],i)=>{
     const y=150+i*64; c.fillStyle=col; c.fillRect(36,y,30,30); c.fillStyle='#ffffff'; c.font='bold 20px Arial'; c.fillText(a,80,y+16); c.fillStyle='#a9bdd3'; c.font='16px Arial'; c.fillText(b,80,y+36); });
-  c.fillStyle='#a9bdd3'; c.font='16px Arial'; c.fillText('🚻 Baños  ☕ Café  💊 Farmacia  🩺 Consultorio',36,560); c.fillText('🛩️ Simulador  🧳 Maleta  🛂 DNI/Pasaporte  ℹ️ Informes',36,588);
+  c.fillStyle='#a9bdd3'; c.font='16px Arial'; c.fillText('🚻 Baños  🛩️ Info aeronáutica  ☕ Café  💊 Farmacia  🩺 Consultorio',36,560,W-60); c.fillText('🕹️ Simulador  🧳 Maleta  🛂 DNI/Pasaporte  ℹ️ Informes',36,588);
   // Estás acá
   if(here){ const [a,b]=P(here.x,here.z); c.fillStyle='#e53935'; c.beginPath(); c.arc(a,b,11,0,Math.PI*2); c.fill(); c.strokeStyle='#fff'; c.lineWidth=3; c.stroke();
     c.fillStyle='#ffffff'; c.font='bold 18px Arial'; c.textAlign='left'; c.fillText('Estás acá',a+16,b-12); }
@@ -4288,7 +4297,7 @@ function _cabinLighting(){
 // agrega cartelería y props propios.
 // ══════════════════════════════════════════════════
 function buildShops(){
-  buildCafe(-15.5,20);
+  buildAeroInfoShop(-15.5,20);   // FASE 78: el local de AeroCafé es ahora el Centro de Información
   buildConvenienceStore(-15.5,40);   // FASE 56: pasa al lugar que dejó el consultorio
   buildNewsstand(-15.5,-17.2);   // FASE 70: entero dentro de la terminal
   buildPharmacy(15.5,15);
@@ -4363,6 +4372,41 @@ function buildCafe(x,z){
     ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.font='19px Arial'; ctx.fillText('Abierto 24h  ·  Open 24h',240,192);
   });
   sign(inX,h-0.15,z,4.0,1.85,0.06,ct,ry,0x110800);
+}
+
+// ── FASE 78: CENTRO DE INFORMACIÓN AERONÁUTICA Y CALMA (ex AeroCafé) ──
+// Mismo local del hall (antes de seguridad), con una pantalla grande en la
+// pared del fondo y dos bancos para mirarla con calma.
+function buildAeroInfoShop(x,z){
+  const {inX,h,ry,s}=buildShopBase(x,z,8.5,2.2,0x0f2340,0x1f6fb0);
+  const bx=x+s*0.15;
+  // Pantalla grande en la pared del fondo (mira al pasillo)
+  const frame=new THREE.Mesh(mkBox(0.12,2.0,3.9),mkStd(0x0b1a2c,0.5,0.2)); frame.position.set(bx+s*0.2,1.65,z); scene.add(frame);
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(3.7,1.85),new THREE.MeshBasicMaterial({map:_aeroInfoScreenTex(),color:0xc8c8c8}));
+  scr.position.set(bx+s*0.27,1.65,z); scr.rotation.y=s>0?Math.PI/2:-Math.PI/2; scene.add(scr);
+  // Franja de luz azul bajo la pantalla y dos bancos
+  const nm=mkMat(0x9fd3ff,{emissive:0x2f8fd8,emissiveIntensity:0.9});
+  const neon=new THREE.Mesh(mkBox(0.05,0.05,3.8),nm); neon.position.set(bx+s*0.25,0.6,z); scene.add(neon);
+  [z-1.6,z+1.6].forEach(tz=>{ box(x+s*1.75,0,tz,0.55,0.45,1.3,0x2f4f6e); box(x+s*1.75,0.45,tz,0.6,0.06,1.35,0xdfe8f0); });
+  // Cartel de la fachada
+  const ct=tex(480,220,(ctx)=>{
+    ctx.fillStyle='#0f2340'; ctx.fillRect(0,0,480,220);
+    const gr=ctx.createLinearGradient(0,170,0,220); gr.addColorStop(0,'#2f8fd8'); gr.addColorStop(1,'#0f2340');
+    ctx.fillStyle=gr; ctx.fillRect(0,168,480,52);
+    ctx.fillStyle='#ffffff'; ctx.textAlign='center'; ctx.font='bold 27px Georgia'; ctx.fillText('🛩️ Centro de Información',240,27,460);
+    ctx.fillStyle='#9fd3ff'; ctx.font='bold 25px Georgia'; ctx.fillText('Aeronáutica y Calma',240,54,460);
+    ctx.fillStyle='rgba(255,255,255,0.7)'; ctx.font='19px Arial'; ctx.fillText('Contenido educativo  ·  Entrada libre',240,196);
+  });
+  sign(inX,h-0.15,z,4.0,1.85,0.06,ct,ry,0x000814);
+}
+function _aeroInfoScreenTex(){
+  return _ckTex(1000,500,(c)=>{ c.fillStyle='#0f2340'; c.fillRect(0,0,1000,500);
+    c.fillStyle='#2f8fd8'; c.fillRect(0,0,1000,74); c.fillStyle='#fff'; c.textAlign='center'; c.font='bold 40px Arial'; c.fillText('Entender el vuelo',500,51);
+    AEROINFO.forEach((it,i)=>{ const col=i%4, row=Math.floor(i/4), x=24+col*242, y=96+row*178;
+      c.fillStyle='#1c3a5c'; c.fillRect(x,y,226,162); c.font='58px Arial'; c.fillStyle='#fff'; c.fillText(it.ico,x+113,y+72);
+      c.font='bold 21px Arial'; c.fillStyle='#e6f1fb'; const w=it.title.split(' '); let l1='',l2=''; w.forEach(t=>{ if((l1+' '+t).length<18&&!l2) l1=(l1?l1+' ':'')+t; else l2=(l2?l2+' ':'')+t; });
+      c.fillText(l1,x+113,y+110,212); if(l2) c.fillText(l2,x+113,y+136,212); });
+    c.fillStyle='#9fc6e4'; c.font='20px Arial'; c.fillText('Contenido educativo · Acercate y tocá para explorar',500,486); });
 }
 
 // ── 2. KIOSCO / TIENDA EXPRESS ───────────────────
@@ -9199,6 +9243,164 @@ function _syncCamUI(){
   const l=document.getElementById('cam-status-label'); if(l) l.textContent=M.name;
   const i=document.getElementById('cam-instant-label'); if(i) i.textContent=_camInstant?'Instantáneo':'Suave';
   const ib=document.getElementById('btn-cam-instant'); if(ib) ib.setAttribute('aria-pressed',_camInstant?'true':'false');
+}
+
+
+// ─── FASE 78 (F44): CENTRO DE INFORMACIÓN AERONÁUTICA Y CALMA ───
+// Pantalla en la sala de embarque con 8 tarjetas educativas: explicación
+// sencilla, ilustración animada (quieta con movimiento reducido o Modo Calma)
+// y lectura en voz alta. Todo es material educativo: no hay pronósticos ni
+// datos de vuelos reales. Textos originales del consultorio, para revisión.
+const AEROINFO=[
+  {id:'vuela',ico:'✈️',title:'Cómo vuela un avión',short:'Alas, aire y motores',anim:'wing',points:[
+    'Las alas tienen una forma y un ángulo que desvían el aire hacia abajo. El aire, a cambio, empuja el ala hacia arriba: eso es la sustentación.',
+    'Los motores no "sostienen" el avión: lo empujan hacia adelante para que el aire siga pasando por las alas.',
+    'Los aviones de dos motores están diseñados y certificados para poder seguir volando y aterrizar con uno solo.',
+    'Aunque no lo veas, el aire es un medio muy firme a esa velocidad: el avión se apoya en él como un barco en el agua.']},
+  {id:'turb',ico:'〰️',title:'Qué es la turbulencia',short:'Aire en movimiento',anim:'turb',points:[
+    'Es aire que se mueve de forma desigual: por el sol que calienta el suelo, las montañas, las nubes o los cambios de viento. Se parece a los pozos de un camino o a las olas para un barco.',
+    'Los aviones se diseñan y prueban para soportar cargas mayores que las de la turbulencia habitual.',
+    'Las tripulaciones la anticipan con pronósticos y reportes de otros aviones, y muchas veces cambian de altura para buscar aire más tranquilo.',
+    'Lo que sí te toca a vos: el cinturón abrochado mientras estés sentado. Las sacudidas se sienten más grandes de lo que realmente son.']},
+  {id:'sonidos',ico:'🔊',title:'Los sonidos del vuelo',short:'Normales y esperables',anim:'sound',points:[
+    'Cambios en el ruido de los motores: después del despegue y al empezar a bajar se reduce la potencia. Es planificado, no es una falla.',
+    'Un golpe seco debajo del piso: el tren de aterrizaje que se guarda o se baja.',
+    'Zumbidos o chirridos en las alas: los flaps, que se extienden para volar más lento en el despegue y el aterrizaje. En algunos aviones Airbus, además, se oye un sonido parecido a un ladrido: es parte del sistema hidráulico.',
+    'Las campanitas ("ding") son avisos entre tripulantes o para los carteles del cinturón.',
+    'Cuando algo requiere que hagas algo, la tripulación te lo dice en voz clara por los altavoces. Si nadie te pide nada, lo que escuchás es parte del funcionamiento normal.']},
+  {id:'despegue',ico:'🛫',title:'El despegue',short:'Paso a paso',anim:'takeoff',points:[
+    'Los motores suben la potencia y el avión acelera por la pista: vas a sentir que el asiento te empuja la espalda. La carrera dura menos de un minuto.',
+    'El piloto levanta la nariz y el avión se separa del suelo. Es común sentir un pequeño "vacío" en el estómago.',
+    'Se escucha el golpe del tren que se guarda. Al rato bajan un poco la potencia y el ruido: es normal.',
+    'De noche apagan o atenúan las luces de la cabina para que los ojos se acostumbren a la oscuridad de afuera.']},
+  {id:'aterrizaje',ico:'🛬',title:'El aterrizaje',short:'Descenso y llegada',anim:'landing',points:[
+    'El descenso empieza bastante antes de llegar y es gradual. Para los oídos ayuda tragar, bostezar o masticar.',
+    'Vas a oír los flaps y el tren de aterrizaje que baja, con un golpe y más ruido de aire.',
+    'El contacto con la pista puede ser suave o firme. En pista mojada a veces se apoya con firmeza a propósito, para frenar mejor.',
+    'Después se escucha un rugido fuerte y se siente un empuje hacia adelante: son los frenos y los reversores de los motores ayudando a frenar.']},
+  {id:'goaround',ico:'🔁',title:'Aproximación frustrada (go-around)',short:'Volver a intentar',anim:'goaround',points:[
+    'A veces, en lugar de aterrizar, el avión vuelve a subir y da una vuelta para intentarlo de nuevo.',
+    'Se hace cuando algo no está ideal: la pista todavía ocupada, viento cambiante o una aproximación que no quedó prolija.',
+    'Es una maniobra normal, entrenada y prevista: es una decisión de seguridad, no una emergencia.',
+    'Se siente así: los motores aceleran de golpe, la nariz sube y se guarda el tren. A los pocos minutos se vuelve a aproximar y se aterriza.']},
+  {id:'seguridad',ico:'🛡️',title:'Cómo funciona la seguridad',short:'Capas que se cuidan',anim:'checks',points:[
+    'Dos pilotos que se controlan entre sí y siguen listas de verificación en cada etapa del vuelo.',
+    'Controladores de tránsito aéreo que separan a los aviones y los guían desde tierra.',
+    'Mantenimiento programado y sistemas importantes duplicados: si uno falla, hay otro.',
+    'La demostración de seguridad es obligatoria en todos los vuelos. Que te la expliquen no significa que algo vaya a pasar: es parte de la rutina.']},
+  {id:'cuerpo',ico:'💓',title:'Sensaciones en el cuerpo',short:'Qué puede aparecer',anim:'body',points:[
+    'Con ansiedad pueden aparecer: corazón rápido, falta de aire, manos que transpiran, tensión, mareo o "nudo" en el estómago.',
+    'Son la respuesta de alarma del cuerpo (adrenalina). Son molestas, pero no son peligrosas, y bajan solas con el tiempo.',
+    'Ayuda: soltar el aire lento, apoyar los pies en el piso, nombrar lo que ves y escuchar, y recordar que la sensación sube y después baja.',
+    'Si aparece algo distinto a lo habitual o un síntoma que te preocupa, avisale a la tripulación: está para ayudarte.']}
+];
+let _ai={ idx:-1, raf:0, t0:0 };
+function _aiDraw(kind,ctx,W,H,t){
+  ctx.clearRect(0,0,W,H);
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#dff0fb'); g.addColorStop(1,'#f5fafd'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  const navy='#16324a', acc='#2f8fd8', soft='#9fc6e4';
+  const plane=(x,y,a,sc)=>{ ctx.save(); ctx.translate(x,y); ctx.rotate(a); ctx.scale(sc,sc); ctx.fillStyle=navy;
+    ctx.beginPath(); ctx.ellipse(0,0,46,8,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-6,0); ctx.lineTo(-20,26); ctx.lineTo(-10,26); ctx.lineTo(10,0); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-34,-2); ctx.lineTo(-46,-20); ctx.lineTo(-38,-20); ctx.lineTo(-26,-2); ctx.fill(); ctx.restore(); };
+  ctx.lineCap='round';
+  if(kind==='wing'){
+    ctx.strokeStyle=soft; ctx.lineWidth=3;
+    for(let i=0;i<6;i++){ const y=H*0.28+i*H*0.09; ctx.setLineDash([18,14]); ctx.lineDashOffset=-t*60; ctx.beginPath(); ctx.moveTo(20,y); ctx.bezierCurveTo(W*0.4,y-(i<3?24:-6),W*0.6,y+(i<3?6:22),W-20,y+(i<3?24:30)); ctx.stroke(); }
+    ctx.setLineDash([]);
+    ctx.fillStyle=navy; ctx.beginPath(); ctx.moveTo(W*0.3,H*0.52); ctx.bezierCurveTo(W*0.38,H*0.36,W*0.62,H*0.4,W*0.72,H*0.56); ctx.bezierCurveTo(W*0.6,H*0.55,W*0.42,H*0.56,W*0.3,H*0.52); ctx.fill();
+    const up=Math.sin(t*2)*4; ctx.strokeStyle='#1a9050'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(W*0.5,H*0.42); ctx.lineTo(W*0.5,H*0.16+up); ctx.stroke();
+    ctx.fillStyle='#1a9050'; ctx.beginPath(); ctx.moveTo(W*0.5-12,H*0.2+up); ctx.lineTo(W*0.5+12,H*0.2+up); ctx.lineTo(W*0.5,H*0.1+up); ctx.fill();
+    ctx.font='bold 16px Arial'; ctx.fillText('Sustentación',W*0.5+18,H*0.2);
+    ctx.fillStyle=acc; ctx.fillText('Aire',24,H*0.24);
+  } else if(kind==='turb'){
+    ctx.strokeStyle=soft; ctx.lineWidth=3;
+    for(let i=0;i<4;i++){ const y=H*0.3+i*H*0.15; ctx.beginPath(); for(let x=0;x<=W;x+=8){ const yy=y+Math.sin(x*0.03+t*1.5+i)*7; x?ctx.lineTo(x,yy):ctx.moveTo(x,yy); } ctx.stroke(); }
+    plane(W*0.5,H*0.5+Math.sin(t*2.2)*4,Math.sin(t*1.7)*0.03,1.4);
+    ctx.fillStyle=navy; ctx.font='bold 15px Arial'; ctx.textAlign='center'; ctx.fillText('Movimientos de pocos metros: se sienten más grandes',W/2,H-16); ctx.textAlign='left';
+  } else if(kind==='sound'){
+    const items=[['Motores','⚙️'],['Tren','⬇️'],['Flaps','〰️'],['Ding','🔔']];
+    items.forEach((it,i)=>{ const x=W*(0.14+i*0.24), y=H*0.48;
+      for(let k=0;k<3;k++){ const r=((t*0.6+k/3+i*0.2)%1); ctx.strokeStyle=`rgba(47,143,216,${(1-r)*0.6})`; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(x,y,18+r*40,0,Math.PI*2); ctx.stroke(); }
+      ctx.font='30px Arial'; ctx.textAlign='center'; ctx.fillText(it[1],x,y+10); ctx.fillStyle=navy; ctx.font='bold 15px Arial'; ctx.fillText(it[0],x,y+76); });
+    ctx.textAlign='left';
+  } else if(kind==='takeoff'||kind==='landing'){
+    ctx.fillStyle='#5d6b78'; ctx.fillRect(0,H*0.8,W,H*0.2); ctx.fillStyle='#fff'; for(let x=0;x<W;x+=60) ctx.fillRect((x-(t*90)%60)+0,H*0.89,30,4);
+    const p=(t*0.18)%1;
+    if(kind==='takeoff'){ const x=W*0.1+p*W*0.85, lift=p<0.45?0:(p-0.45)*1.6; plane(x,H*0.74-lift*H*0.55,-Math.min(0.28,lift*0.6),1.2); }
+    else { const x=W*0.05+p*W*0.85, dn=Math.min(1,p/0.6); plane(x,H*0.2+dn*(H*0.54),dn<1?0.06:0,1.2); }
+  } else if(kind==='goaround'){
+    ctx.fillStyle='#5d6b78'; ctx.fillRect(W*0.55,H*0.84,W*0.4,10);
+    ctx.strokeStyle=soft; ctx.lineWidth=3; ctx.setLineDash([10,10]);
+    ctx.beginPath(); ctx.moveTo(W*0.05,H*0.25); ctx.lineTo(W*0.55,H*0.72); ctx.bezierCurveTo(W*0.72,H*0.85,W*0.9,H*0.5,W*0.85,H*0.25); ctx.bezierCurveTo(W*0.8,H*0.05,W*0.3,H*0.05,W*0.12,H*0.2); ctx.stroke(); ctx.setLineDash([]);
+    const p=(t*0.12)%1; let x,y,a;
+    if(p<0.45){ const k=p/0.45; x=W*0.05+k*W*0.5; y=H*0.25+k*H*0.47; a=0.12; }
+    else { const k=(p-0.45)/0.55, ang=Math.PI*0.9*k; x=W*0.55+Math.sin(ang)*W*0.3; y=H*0.72-(1-Math.cos(ang))*H*0.3; a=-0.25; }
+    plane(x,y,a,1.1); ctx.fillStyle=navy; ctx.font='bold 15px Arial'; ctx.fillText('Sube, da la vuelta y vuelve a aproximar',W*0.05,H-12);
+  } else if(kind==='checks'){
+    const L=['Dos pilotos','Listas de verificación','Control de tránsito aéreo','Sistemas duplicados','Mantenimiento'];
+    const n=Math.floor((t*0.8)%(L.length+2));
+    L.forEach((txt,i)=>{ const y=H*0.16+i*H*0.15; ctx.fillStyle='#fff'; ctx.fillRect(W*0.12,y,W*0.76,H*0.11); ctx.strokeStyle='#cfe0ee'; ctx.strokeRect(W*0.12,y,W*0.76,H*0.11);
+      const on=i<n; ctx.fillStyle=on?'#1a9050':'#cfe0ee'; ctx.beginPath(); ctx.arc(W*0.17,y+H*0.055,10,0,Math.PI*2); ctx.fill();
+      if(on){ ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(W*0.17-5,y+H*0.055); ctx.lineTo(W*0.17-1,y+H*0.055+4); ctx.lineTo(W*0.17+6,y+H*0.055-4); ctx.stroke(); }
+      ctx.fillStyle=navy; ctx.font='bold 16px Arial'; ctx.fillText(txt,W*0.21,y+H*0.07); });
+  } else if(kind==='body'){
+    ctx.strokeStyle='#e05a5a'; ctx.lineWidth=3; ctx.beginPath();
+    for(let x=0;x<=W*0.55;x+=4){ const ph=(x/W*6-t*1.2)%1, k=(ph+1)%1; const y=H*0.4+(k>0.45&&k<0.5?-30:k>0.5&&k<0.55?20:0); x?ctx.lineTo(x,y):ctx.moveTo(x,y); } ctx.stroke();
+    const br=0.5+0.5*Math.sin(t*0.9); ctx.fillStyle='rgba(47,143,216,0.18)'; ctx.beginPath(); ctx.arc(W*0.77,H*0.45,30+br*34,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle=navy; ctx.font='bold 15px Arial'; ctx.textAlign='center'; ctx.fillText(br>0.5?'Inhalá…':'Soltá lento…',W*0.77,H*0.47);
+    ctx.fillText('La sensación sube… y baja',W*0.28,H*0.78); ctx.textAlign='left';
+  }
+  ctx.fillStyle='rgba(22,50,74,0.55)'; ctx.font='11px Arial'; ctx.textAlign='right'; ctx.fillText('Ilustración educativa',W-8,14); ctx.textAlign='left';
+}
+function _aiStill(){ return calmMode||prefersReducedMotion(); }
+function _aiLoop(){
+  const cv=document.getElementById('aeroinfo-canvas'); if(!cv||_ai.idx<0) return;
+  const ctx=cv.getContext('2d'), it=AEROINFO[_ai.idx];
+  const t=_aiStill()?2.2:(performance.now()-_ai.t0)/1000;
+  _aiDraw(it.anim,ctx,cv.width,cv.height,t);
+  if(!_aiStill()) _ai.raf=requestAnimationFrame(_aiLoop);
+}
+function openAeroInfo(){
+  const grid=document.getElementById('aeroinfo-grid');
+  if(grid&&!grid.children.length) AEROINFO.forEach((it,i)=>{ const b=document.createElement('button'); b.type='button'; b.className='ai-card'; b.dataset.ai=i;
+    const ic=document.createElement('span'); ic.className='ai-ico'; ic.textContent=it.ico;
+    const tt=document.createElement('span'); tt.className='ai-t'; tt.textContent=it.title;
+    const sh=document.createElement('span'); sh.className='ai-s'; sh.textContent=it.short;
+    b.append(ic,tt,sh); grid.appendChild(b); });
+  _aiShowList();
+  openUiModal('aeroinfo-modal');
+  logInteraction('aeroinfo','ver');
+}
+function _aiShowList(){
+  cancelAnimationFrame(_ai.raf); _ai.idx=-1; stopSpeech();
+  document.getElementById('aeroinfo-list').classList.remove('hidden');
+  document.getElementById('aeroinfo-detail').classList.add('hidden');
+}
+function _aiShowCard(i){
+  const it=AEROINFO[i]; if(!it) return;
+  _ai.idx=i; _ai.t0=performance.now(); stopSpeech();
+  document.getElementById('aeroinfo-list').classList.add('hidden');
+  document.getElementById('aeroinfo-detail').classList.remove('hidden');
+  document.getElementById('aeroinfo-dt').textContent=it.ico+' '+it.title;
+  const ul=document.getElementById('aeroinfo-points'); ul.innerHTML=''; it.points.forEach(p=>{ const li=document.createElement('li'); li.textContent=p; ul.appendChild(li); });
+  document.getElementById('btn-ai-prev').disabled=i===0; document.getElementById('btn-ai-next').disabled=i===AEROINFO.length-1;
+  cancelAnimationFrame(_ai.raf); _aiLoop();
+  logInteraction('aeroinfo',it.id);
+  const box=document.querySelector('#aeroinfo-modal .interact-box'); if(box) box.scrollTop=0;
+}
+function _aiSpeak(){ const it=AEROINFO[_ai.idx]; if(it) _speakTTS(it.title+'. '+it.points.join(' ')); }
+function closeAeroInfo(){ cancelAnimationFrame(_ai.raf); _ai.idx=-1; stopSpeech(); closeUiModal('aeroinfo-modal'); }
+function buildAeroInfoCenter(){
+  // Frente del local (buildAeroInfoShop(-15.5,20): fachada en x≈-13.3), donde antes estaba la pausa de café
+  const g=new THREE.Group(); g.name='aeroinfoSpot';
+  const mk=_markerSprite('🛩️','Centro de Información Aeronáutica','#2f8fd8');
+  mk.position.set(-12.8,2.9,20); g.add(mk);
+  const hit=new THREE.Mesh(new THREE.BoxGeometry(2.4,3,8.5),new THREE.MeshBasicMaterial({visible:false}));
+  hit.position.set(-14.4,1.5,20); g.add(hit);
+  scene.add(g);
+  addInteractable({id:'aeroinfo',x:-12.0,z:20,radius:3.0,icon:'🛩️',label:'Abrir el Centro de Información Aeronáutica y Calma',
+    root:g,marker:mk,markerBaseY:2.9,onTrigger:openAeroInfo});
 }
 
 // ─── FASE 77 (F43): AVATAR DEL JUGADOR ──────────────────────
