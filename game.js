@@ -7058,6 +7058,7 @@ function startGame(){
   const ci=ZONE_DATA.find(z=>z.id==='checkin');
   camera.position.set(ci.position.x,PLAYER_HEIGHT,ci.position.z+ci.radius+0.8); // más cerca del check-in que de la Entrada
   _welcomeShown=false;
+  if(playerMesh) scene.remove(playerMesh);   // FASE 77: una sola instancia aunque se juegue de nuevo
   playerMesh=buildPlayerBody();
   playerMesh.visible=false;
   scene.add(playerMesh);
@@ -8977,38 +8978,72 @@ function showToast(text){ const t=document.getElementById('toast'); t.textConten
 // ══════════════════════════════════════════════════
 let ringTime=0;
 
-function buildPlayerBody(){
-  const g=new THREE.Group();
-  const skin=mkStd(0xfde0bd,0.62,0.0);const shirt=mkStd(0x1a4a99,0.88,0.0);const pants=mkStd(0x223344,0.85,0.0);const shoes=mkStd(0x111111,0.35,0.15);
-  const BX=(w,h,d,m,px,py,pz)=>{const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(px,py,pz);o.castShadow=true;o.receiveShadow=true;return o;};
-  const CY=(rt,rb,h,s,m,px,py,pz)=>{const o=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,s),m);o.position.set(px,py,pz);o.castShadow=true;return o;};
-  const SP=(r,segs,m,px,py,pz)=>{const o=new THREE.Mesh(new THREE.SphereGeometry(r,segs,Math.ceil(segs*0.7)),m);o.position.set(px,py,pz);o.castShadow=true;return o;};
-  // Shoes
-  [-0.1,0.1].forEach(sx=>{g.add(BX(0.2,0.04,0.28,shoes,sx,0.02,0.03));});
-  // Lower legs
-  [-0.09,0.09].forEach(sx=>{g.add(CY(0.075,0.07,0.40,8,pants,sx,0.22,0));});
-  // Upper legs
-  [-0.09,0.09].forEach(sx=>{g.add(CY(0.08,0.075,0.42,8,pants,sx,0.64,0));});
-  // Torso (wider for visibility)
-  g.add(BX(0.38,0.36,0.20,shirt,0,1.05,0));g.add(BX(0.30,0.24,0.18,shirt,0,1.20,0.01));
-  // Shoulders (prominent)
-  [-0.20,0.20].forEach(sx=>{g.add(SP(0.09,8,shirt,sx,1.10,-0.05));});
-  // Upper arms
-  g.add(CY(0.065,0.06,0.30,8,shirt,-0.22,1.05,-0.04,0,Math.PI/2));
-  g.add(CY(0.065,0.06,0.30,8,shirt,0.22,1.05,-0.04,0,-Math.PI/2));
-  // Forearms
-  g.add(BX(0.07,0.22,0.07,shoes,-0.22,0.85,-0.07,0,Math.PI/2));
-  g.add(BX(0.07,0.22,0.07,shoes,0.22,0.85,-0.07,0,-Math.PI/2));
-  // Hands
-  g.add(SP(0.04,6,skin,-0.22,0.71,-0.07));g.add(SP(0.04,6,skin,0.22,0.71,-0.07));
-  // Neck
-  g.add(CY(0.05,0.06,0.08,8,skin,0,1.60,0));
-  // Head
-  g.add(BX(0.16,0.14,0.16,skin,0,1.82,0));
-  g.add(SP(0.07,10,skin,0,1.95,0));
-  g.add(SP(0.03,8,0x050508,0.02,1.97,-0.03));g.add(SP(0.03,8,0x050508,-0.02,1.97,-0.03));
-  g.add(SP(0.008,6,0xffffff,0,1.97,-0.065));
-    g.castShadow=true;return g;
+// ─── FASE 77 (F43): AVATAR DEL JUGADOR ──────────────────────
+// El cuerpo de cajas se reemplaza por el mismo sistema de personajes que usan
+// las personas del aeropuerto (buildCharacter): proporciones humanas, pelo,
+// ropa, calzado y articulaciones. Tres aspectos base (F76 los hará elegibles).
+// Estados: espera (balanceo de peso), caminar (paso articulado según la
+// velocidad real), girar en el lugar (pasitos cortos) y detenerse (vuelve a
+// reposo suave). Sólo se anima cuando se ve (tercera persona, F75).
+const PLAYER_LOOKS={
+  femenino:{skin:0xf1c7a3,hair:0x3b1f0f,top:0x2a6f8f,pants:0x2f3a4a,shoes:0x2b2b2b,female:true, hairStyle:'long',lashes:true,lipColor:0xc98a85,seed:771},
+  masculino:{skin:0xe8b88a,hair:0x2a1a10,top:0x2a6f8f,pants:0x2f3a4a,shoes:0x2b2b2b,female:false,hairStyle:'short',seed:772},
+  neutro:{skin:0xe9bf98,hair:0x6b4a2e,top:0x2a6f8f,pants:0x3b3f46,shoes:0x2b2b2b,female:false,hairStyle:'swept',seed:773}
+};
+let playerLook='neutro';
+const _pav={ last:null, speed:0, k:0, ph:0, heading:0, yawPrev:null, turnRate:0, idle:0 };
+function buildPlayerBody(look){
+  const L=Object.assign({role:'civilian',glasses:false,noHat:true},PLAYER_LOOKS[look||playerLook]||PLAYER_LOOKS.neutro);
+  const g=buildCharacter(L);
+  g.name='playerAvatar'; g.userData.isPlayer=true;
+  g.userData.armLag=0.22; g.userData.armAmp=0.28; g.userData.strideAmp=0.4;   // paso fijo (sin azar)
+  _pav.last=null; _pav.k=0; _pav.speed=0; _pav.yawPrev=null;
+  return g;
+}
+// El avatar sólo se ve cuando la imagen se dibuja desde una cámara distinta de
+// la del jugador (tercera persona de F75). Hasta entonces queda oculto, como antes.
+function _playerViewCam(){ return (typeof viewCam!=='undefined'&&viewCam&&isThirdPerson)?viewCam:camera; }
+function updatePlayerAvatar(delta){
+  const m=playerMesh; if(!m||delta<=0) return;
+  const p=camera.position;
+  // Velocidad real (teclado, joystick, caminata automática): sale del desplazamiento
+  if(!_pav.last){ _pav.last=new THREE.Vector3(p.x,0,p.z); }
+  const dx=p.x-_pav.last.x, dz=p.z-_pav.last.z; _pav.last.set(p.x,0,p.z);
+  const dist=Math.hypot(dx,dz);
+  const inst=dist>2?0:dist/delta;                        // un salto (teletransporte) no es caminar
+  _pav.speed+=(inst-_pav.speed)*Math.min(1,delta*8);
+  // Hacia dónde mira la persona (dirección de la cámara en el plano)
+  const fw=new THREE.Vector3(); camera.getWorldDirection(fw);
+  const yaw=Math.atan2(fw.x,fw.z);
+  if(_pav.yawPrev==null) _pav.yawPrev=yaw;
+  let dy=((yaw-_pav.yawPrev+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI; _pav.yawPrev=yaw;
+  _pav.turnRate+=(Math.abs(dy)/delta-_pav.turnRate)*Math.min(1,delta*6);
+  const moving=_pav.speed>0.25;
+  // Rumbo: al caminar, hacia donde avanza; quieto, hacia donde mira
+  const target=moving&&dist>1e-4?Math.atan2(dx,dz):yaw;
+  _pav.heading=_lerpAngle(_pav.heading,target,Math.min(1,delta*(moving?9:5)));
+  m.position.set(p.x,p.y-PLAYER_HEIGHT,p.z);
+  m.rotation.y=_pav.heading;
+  const vis=_playerViewCam()!==camera&&!_flight;
+  m.visible=vis;
+  if(!vis) return;                                       // oculto: no se anima (rendimiento)
+  const turning=!moving&&_pav.turnRate>0.9;
+  const kT=moving?Math.min(1,_pav.speed/PLAYER_SPEED):(turning?0.3:0);
+  _pav.k+=(kT-_pav.k)*Math.min(1,delta*(kT>_pav.k?6:4)); // arranca y frena con transición
+  const calm=calmMode?0.8:1;
+  if(_pav.k>0.02){
+    const rate=moving?(Math.PI*2/1.5)*_pav.speed:5.5;     // un ciclo cada ~1,5 m; pasitos al girar
+    _pav.ph+=delta*rate*(calmMode?0.9:1);
+    _walkPose(m,_pav.ph,_pav.k*calm);
+    m.position.y+=Math.abs(Math.cos(_pav.ph))*(calmMode?0.012:0.022)*_pav.k;
+    m.rotation.z=Math.sin(_pav.ph)*0.014*_pav.k;
+    _pav.idle=0;
+  } else {
+    _relaxPose(m,1-Math.min(1,delta*4));
+    _pav.idle+=delta;
+    m.rotation.z=Math.sin(_pav.idle*0.9)*0.006;           // balanceo de peso, casi imperceptible
+    const hg=m.userData.headGroup; if(hg&&!calmMode) hg.rotation.y=Math.sin(_pav.idle*0.35)*0.12;
+  }
 }
 
 // ══════════════════════════════════════════════════
@@ -9342,15 +9377,8 @@ function animate(){
   camera.fov += (targetFov - camera.fov) * 0.03;
   camera.updateProjectionMatrix();
 
-  // Third-person camera offset — character always behind camera in local -Z
-  if(playerMesh){
-    playerMesh.visible=isThirdPerson;
-    if(isThirdPerson){
-      const bx=new THREE.Vector3(0,0,1).applyQuaternion(camera.quaternion);
-      playerMesh.position.copy(camera.position).add(bx.multiplyScalar(2.8));
-      playerMesh.position.y=camera.position.y-PLAYER_HEIGHT;
-    }
-  }
+  // FASE 77: avatar del jugador en su posición real, con rumbo y animación
+  updatePlayerAvatar(delta);
 
   // Render: sin bloom en móvil o en modo calma
   if(composer && !calmMode) composer.render(delta);
