@@ -240,6 +240,7 @@ function init(){
   _T('spawnNPCs',()=>spawnNPCs(isMobile)); // en celular, versión liviana (5 caminantes + tripulación)
   _T('upgradeHallWalkers',()=>upgradeHallWalkers()); // FASE 86: personas del hall con esqueleto (se cargan solas)
   _T('spawnStaffNPCs',()=>spawnStaffNPCs());
+  _T('upgradeStaff',()=>upgradeStaff());   // FASE 88: personal sin rostro propio con esqueleto
   _T('loadCabinCrew',()=>loadCabinCrew());
   _T('optimizeSceneResources',()=>optimizeSceneResources()); // FASE 36: comparte materiales/geometrías y fusiona props fijos
   _T('setupPostProcessing',()=>setupPostProcessing());
@@ -2639,11 +2640,12 @@ function buildAirside(){
   // Operarios con chaleco reflectivo y gorra
   [[cx+5.4,-35.6,-Math.PI/2],[cx+3.9,-26.0,-2.2],[cx+8.5,-29.5,2.6]].forEach(([x,z,ry],i)=>{
     const w=buildCharacter({skin:SKINS[(i+1)%SKINS.length],hair:HAIRS[i%HAIRS.length],top:0xd8ee3a,pants:0x23324a,shoes:0x111111,role:'civilian',female:i===1,hairStyle:'cap',glasses:false,seed:71+i});
-    w.position.set(x,AP,z); w.rotation.y=ry; scene.add(w);
+    w.position.set(x,AP,z); w.rotation.y=ry; scene.add(w); _handlers.push(w);   // FASE 88
     BX(0.44,0.035,0.3,mkStd(0xeeeeee,0.3,0),x,AP+1.14,z,0,ry);                     // franja reflectiva
   });
   _air={bags,b0:{x:bx0,y:by0},b1:{x:bx1,y:by1},bAng,t:0,train,path:{cx:cx+14,cz:-31,rx:6.5,rz:4.6}};
 }
+let _handlers=[];   // FASE 88: operarios de la plataforma (para el modelo con esqueleto)
 function updateAirside(delta){
   const S=_air; if(!S) return;
   const k=calmMode?0.6:1; S.t+=delta*k;
@@ -9323,7 +9325,8 @@ const NPC_GLB_SLOTS={
   M_Suit:{top:['Suit'],h:1.04},
   W_Casual:{top:['White'],pants:['Orange'],h:0.96},
   W_Formal:{top:['LimeGreen'],h:0.96},
-  W_Suit:{top:['Black'],h:0.96}
+  W_Suit:{top:['Black'],h:0.96},
+  M_Worker:{}, W_Worker:{h:0.96}
 };
 // Ropa: colores de viaje reales y bien distintos de la piel (la paleta pastel de
 // los muñecos por código a veces daba beige "color piel")
@@ -9335,14 +9338,14 @@ const _glbNPCs=[];
 function upgradeHallWalkers(){
   if(!gltfLoader||!THREE.SkeletonUtils) return;
   // En celular, sólo 2 modelos (menos descarga); en computadora, los 6
-  const models=isMobile?['W_Casual','M_Casual_Hoodie']:Object.keys(NPC_GLB_SLOTS);
+  const models=isMobile?['W_Casual','M_Casual_Hoodie']:['M_Casual_2','M_Casual_Hoodie','M_Suit','W_Casual','W_Formal','W_Suit'];   // sólo ropa de viajero
   // F86: hall (z>6). F87: también la sala de embarque, hasta el ventanal de la puerta A7
   // (no la cabina ni Madrid); incluye los trayectos que cruzan el control de seguridad.
   const hall=npcs.filter(n=>{ const u=n.userData; return u.isNPC&&!u.isStaff&&u.role==='civilian'&&n.scale.x>0.9&&u.start&&u.dest&&u.start.z>GATE.z&&u.dest.z>GATE.z; });
   hall.forEach((npc,i)=>{ const model=models[(i*5+3)%models.length]; _getGlb(model).then(gl=>_attachGlbNPC(npc,gl,model,i)).catch(e=>console.warn('[F86] modelo',model,e)); });
   return hall.length;
 }
-function _attachGlbNPC(npc,gl,model,i){
+function _attachGlbNPC(npc,gl,model,i,fixed){
   if(npc.userData.glb||!npc.parent) return;
   const root=THREE.SkeletonUtils.clone(gl.scene), S=NPC_GLB_SLOTS[model];
   const rnd=k=>{ const x=Math.sin((i+7)*12.9898+k*78.233)*43758.5453; return x-Math.floor(x); };
@@ -9351,6 +9354,7 @@ function _attachGlbNPC(npc,gl,model,i){
   (S.pants||[]).forEach(n=>col[n]=NPC_GLB_PANTS[Math.floor(rnd(2)*NPC_GLB_PANTS.length)]);
   const sk=SKINS[Math.floor(rnd(3)*SKINS.length)]; col.Skin=sk; col.Skin_Darker=sk;
   const hr=HAIRS[Math.floor(rnd(4)*HAIRS.length)]; col.Hair=hr; col.Hair_Brown=hr; col.Hair_Blond=hr;
+  if(fixed) Object.assign(col,fixed);                   // FASE 88: uniforme
   const own={}, shadows=!isMobile&&currentQuality!=='low';
   root.traverse(o=>{
     if(!o.isMesh) return;
@@ -9367,6 +9371,32 @@ function _attachGlbNPC(npc,gl,model,i){
   idle.play(); walk.play(); idle.time=rnd(6)*2; walk.time=rnd(7)*1.2;
   npc.userData.glb={mixer,idle,walk,speed:0,k:0,last:new THREE.Vector3().copy(npc.position),acc:0};
   _glbNPCs.push(npc);
+}
+
+// ─── FASE 88: PERSONAL SIN ROSTRO PROPIO ────────────────────
+// Agentes de check-in (menos la del B2), agente de la puerta A7, agente de
+// informes y operarios de handling pasan a personajes con esqueleto, con
+// uniforme: traje azul marino con corbata de color o chaleco reflectivo. Los
+// personajes inspirados en personas reales (PSA, TCP, pilotos, B2, doctor) y
+// el personal de Madrid no se tocan acá. En celular se mantienen los de siempre
+// (serían ~3,5 MB más de descarga).
+const STAFF_NAVY=0x1a2a4a;
+function upgradeStaff(){
+  if(isMobile||!gltfLoader||!THREE.SkeletonUtils) return 0;
+  const ties=[0x003399,0xcc7700,0xb3262e,0x0d6e5a];
+  const jobs=[];
+  npcs.forEach((n,i)=>{
+    const u=n.userData; if(!u.isStaff||u.role!=='agent'||u.glb) return;
+    if(Math.abs(n.position.x-5.5)<0.1&&Math.abs(n.position.z-24.2)<0.3) return;   // B2: rostro propio
+    if(n.position.z<ARR.regionZ) return;                                         // Madrid: otra fase
+    const gate=Math.abs(n.position.z-(GATE.z+0.55))<0.3;
+    const fem=!gate&&(jobs.length%2===1);
+    jobs.push([n,fem?'W_Suit':'M_Suit',fem?{Black:STAFF_NAVY}:{Suit:STAFF_NAVY,Tie:gate?0xb3262e:ties[jobs.length%ties.length]}]);
+  });
+  _handlers.forEach((w,i)=>jobs.push([w,i===1?'W_Worker':'M_Worker',
+    {Worker_Vest:0xd8ee3a,Worker_Yellow:0xf2f2ee,LightBrown:0x2a3a55,White:0x2a3a55,Brown:0x23324a,Brown2:0x1c2a44,Brown_02:0x23324a}]));
+  jobs.forEach(([n,m,c],k)=>_getGlb(m).then(gl=>_attachGlbNPC(n,gl,m,100+k,c)).catch(e=>console.warn('[F88] modelo',m,e)));
+  return jobs.length;
 }
 const _gv=new THREE.Vector3(), _gf=new THREE.Vector3();
 function updateGlbNPCs(delta){
