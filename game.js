@@ -9336,7 +9336,9 @@ function upgradeHallWalkers(){
   if(!gltfLoader||!THREE.SkeletonUtils) return;
   // En celular, sólo 2 modelos (menos descarga); en computadora, los 6
   const models=isMobile?['W_Casual','M_Casual_Hoodie']:Object.keys(NPC_GLB_SLOTS);
-  const hall=npcs.filter(n=>{ const u=n.userData; return u.isNPC&&!u.isStaff&&u.role==='civilian'&&n.scale.x>0.9&&u.start&&u.dest&&u.start.z>6&&u.dest.z>6; });
+  // F86: hall (z>6). F87: también la sala de embarque, hasta el ventanal de la puerta A7
+  // (no la cabina ni Madrid); incluye los trayectos que cruzan el control de seguridad.
+  const hall=npcs.filter(n=>{ const u=n.userData; return u.isNPC&&!u.isStaff&&u.role==='civilian'&&n.scale.x>0.9&&u.start&&u.dest&&u.start.z>GATE.z&&u.dest.z>GATE.z; });
   hall.forEach((npc,i)=>{ const model=models[(i*5+3)%models.length]; _getGlb(model).then(gl=>_attachGlbNPC(npc,gl,model,i)).catch(e=>console.warn('[F86] modelo',model,e)); });
   return hall.length;
 }
