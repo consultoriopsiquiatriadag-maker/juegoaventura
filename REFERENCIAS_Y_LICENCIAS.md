@@ -8,7 +8,7 @@
 
 | Recurso | Uso | Licencia / condición |
 |---|---|---|
-| Three.js r128 (+ PointerLockControls, EffectComposer, RenderPass, ShaderPass, UnrealBloomPass, shaders, GLTFLoader, Sky) | Motor 3D, por CDN (cdnjs, jsDelivr) | MIT |
+| Three.js r128 (+ PointerLockControls, EffectComposer, RenderPass, ShaderPass, UnrealBloomPass, shaders, GLTFLoader, SkeletonUtils, Sky) | Motor 3D, por CDN (cdnjs, jsDelivr) | MIT |
 | Google Fonts (DM Sans, Playfair Display) | Tipografías | SIL Open Font License |
 | Google Tag Manager `GTM-NLW39K7T` | Medición de visitas, **sólo con consentimiento** | Términos de Google; Consent Mode v2 |
 | Netlify | Publicación del sitio estático | Términos del servicio |
@@ -27,7 +27,7 @@
 
 | Recurso | Cómo se usa | Condición |
 |---|---|---|
-| **Personajes del jugador** `assets/avatar/*.glb` (6 modelos) | Avatar elegible en "Personalizar mi experiencia" | **CC0 1.0** — Quaternius, *Ultimate Modular Men* (feb. 2022) y *Ultimate Modular Women* (abr. 2022). Convertidos a GLB con sólo 5 animaciones (Idle, Idle_Neutral, Walk, Run, Wave); se quitó la pistola del modelo "Suit" |
+| **Personajes con esqueleto** `assets/avatar/*.glb` (6 modelos) | Avatar elegible en "Personalizar mi experiencia" y pasajeros del hall (F86, con colores de ropa variados) | **CC0 1.0** — Quaternius, *Ultimate Modular Men* (feb. 2022) y *Ultimate Modular Women* (abr. 2022). Convertidos a GLB con sólo 5 animaciones (Idle, Idle_Neutral, Walk, Run, Wave); se quitó la pistola del modelo "Suit" |
 | **Sonido del hall** `audios/ambiente/hall-aeropuerto.mp3` | Fondo del hall (procesado: graves recortados, bucle) | ⚠️ **Licencia no confirmada.** Archivo descargado ("Sonido Ultra Realista 3D Binaural"). Confirmar permiso del autor o reemplazar por grabación propia o CC0 |
 | Playlist "Animate a volar" — Aerolíneas Argentinas | Sólo enlace a YouTube, con atribución | Sin logos, sin descarga, sin embebido; se aclara que no hay convenio ni patrocinio |
 | GeoFS (Cessna 172 en Buenos Aires) | Enlace externo | Servicio de terceros, se abre en otra pestaña |

@@ -238,6 +238,7 @@ function init(){
   window._lightFit=fitLightsToGPU(); // FASE 41: evita la pantalla blanca en GPUs de celular
   _T('captureFloorReflections',()=>captureFloorReflections()); // después del mundo y antes de las personas
   _T('spawnNPCs',()=>spawnNPCs(isMobile)); // en celular, versión liviana (5 caminantes + tripulación)
+  _T('upgradeHallWalkers',()=>upgradeHallWalkers()); // FASE 86: personas del hall con esqueleto (se cargan solas)
   _T('spawnStaffNPCs',()=>spawnStaffNPCs());
   _T('loadCabinCrew',()=>loadCabinCrew());
   _T('optimizeSceneResources',()=>optimizeSceneResources()); // FASE 36: comparte materiales/geometrías y fusiona props fijos
@@ -6215,9 +6216,9 @@ function spawnNPCs(lite){ // lite: celular -- menos personas, mismas rutas princ
       const bc=TOPS[Math.floor(Math.random()*TOPS.length)];
       // Fase 9: mkLamb para accesorios pequeños -- sin especular necesario
       const bag=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.38,0.14),mkLamb(bc));
-      bag.position.set(0.32,0.18,0); npc.add(bag);
+      bag.position.set(0.32,0.18,0); bag.userData.keep=true; npc.add(bag);
       const bh=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.06,0.02),mkLamb(0x888888));
-      bh.position.set(0.32,0.36,0); npc.add(bh);
+      bh.position.set(0.32,0.36,0); bh.userData.keep=true; npc.add(bh);
     }
     npcs.push(npc); scene.add(npc);
   });
@@ -6486,6 +6487,7 @@ function _lerpAngle(a,b,t){ let d=((b-a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI
 function _joint(c){ if(c._jt===undefined) c._jt=c.children.find(o=>o.userData&&o.userData.isJoint)||null; return c._jt; }
 function _walkPose(npc,ph,k){
   const ud=npc.userData;
+  if(ud.glb) return;                                   // FASE 86: lo anima su esqueleto
   if(ud.armLag==null){ ud.armLag=0.18+Math.random()*0.25; ud.armAmp=0.24+Math.random()*0.12; ud.strideAmp=0.36+Math.random()*0.08; }
   npc.children.forEach(c=>{
     const u=c.userData;
@@ -6503,6 +6505,7 @@ function _walkPose(npc,ph,k){
   });
 }
 function _relaxPose(npc,f){
+  if(npc.userData.glb) return;                         // FASE 86
   npc.children.forEach(c=>{
     if(c.userData.isLeg||c.userData.isArm){ c.rotation.x*=f; const j=_joint(c); if(j) j.rotation.x*=f; }
   });
@@ -9307,6 +9310,83 @@ function setupProfileUI(){
   document.getElementById('profile-name').addEventListener('keydown',(e)=>{ if(e.key==='Enter'){ e.preventDefault(); saveProfileModal(); } });
 }
 
+
+// ─── FASE 86: PERSONAS DEL HALL CON ESQUELETO ────────────────
+// Los pasajeros que caminan o esperan en el hall (antes de seguridad) usan los
+// mismos personajes de Quaternius que el avatar (CC0). Cada modelo se descarga
+// una sola vez y se copia (SkeletonUtils) para varias personas, con ropa, piel y
+// pelo de otro color. La animación se actualiza sólo si la persona está cerca o
+// a la vista. La lógica de recorrido (rutas, pausas, conversación) no cambia.
+const NPC_GLB_SLOTS={
+  M_Casual_2:{top:['LightBrown'],pants:['LightBlue']},
+  M_Casual_Hoodie:{top:['Purple'],pants:['LightBlue']},
+  M_Suit:{top:['Suit'],h:1.04},
+  W_Casual:{top:['White'],pants:['Orange'],h:0.96},
+  W_Formal:{top:['LimeGreen'],h:0.96},
+  W_Suit:{top:['Black'],h:0.96}
+};
+// Ropa: colores de viaje reales y bien distintos de la piel (la paleta pastel de
+// los muñecos por código a veces daba beige "color piel")
+const NPC_GLB_TOPS=[0x1f3a5f,0x2a6f8f,0x7a1f2b,0x2e5e3e,0xb8862b,0x3b3f46,0x5a3b6e,0xe9e9e6,0x9b3a26,0x1d5c63,0x222327,0x4d6b8a];
+const NPC_GLB_PANTS=[0x1c2a44,0x2b3a55,0x222327,0x3b3f46,0x4a3b2a,0x5b5048,0x203248];
+const _glbCache={};
+function _getGlb(model){ return _glbCache[model]||(_glbCache[model]=new Promise((ok,ko)=>gltfLoader.load('assets/avatar/'+model+'.glb?v='+AVATAR_VER,ok,undefined,ko))); }
+const _glbNPCs=[];
+function upgradeHallWalkers(){
+  if(!gltfLoader||!THREE.SkeletonUtils) return;
+  // En celular, sólo 2 modelos (menos descarga); en computadora, los 6
+  const models=isMobile?['W_Casual','M_Casual_Hoodie']:Object.keys(NPC_GLB_SLOTS);
+  const hall=npcs.filter(n=>{ const u=n.userData; return u.isNPC&&!u.isStaff&&u.role==='civilian'&&n.scale.x>0.9&&u.start&&u.dest&&u.start.z>6&&u.dest.z>6; });
+  hall.forEach((npc,i)=>{ const model=models[(i*5+3)%models.length]; _getGlb(model).then(gl=>_attachGlbNPC(npc,gl,model,i)).catch(e=>console.warn('[F86] modelo',model,e)); });
+  return hall.length;
+}
+function _attachGlbNPC(npc,gl,model,i){
+  if(npc.userData.glb||!npc.parent) return;
+  const root=THREE.SkeletonUtils.clone(gl.scene), S=NPC_GLB_SLOTS[model];
+  const rnd=k=>{ const x=Math.sin((i+7)*12.9898+k*78.233)*43758.5453; return x-Math.floor(x); };
+  const col={};
+  (S.top||[]).forEach(n=>col[n]=NPC_GLB_TOPS[Math.floor(rnd(1)*NPC_GLB_TOPS.length)]);
+  (S.pants||[]).forEach(n=>col[n]=NPC_GLB_PANTS[Math.floor(rnd(2)*NPC_GLB_PANTS.length)]);
+  const sk=SKINS[Math.floor(rnd(3)*SKINS.length)]; col.Skin=sk; col.Skin_Darker=sk;
+  const hr=HAIRS[Math.floor(rnd(4)*HAIRS.length)]; col.Hair=hr; col.Hair_Brown=hr; col.Hair_Blond=hr;
+  const own={}, shadows=!isMobile&&currentQuality!=='low';
+  root.traverse(o=>{
+    if(!o.isMesh) return;
+    o.castShadow=shadows; o.receiveShadow=false;
+    const fix=m=>{ if(col[m.name]==null) return m; if(!own[m.name]){ own[m.name]=m.clone(); own[m.name].color.set(col[m.name]); } return own[m.name]; };
+    o.material=Array.isArray(o.material)?o.material.map(fix):fix(o.material);
+  });
+  const bb=new THREE.Box3().setFromObject(root), k=1.72*(S.h||1)*(0.96+rnd(5)*0.08)/(bb.max.y-bb.min.y);
+  root.scale.setScalar(k); root.position.y=-bb.min.y*k;
+  npc.children.forEach(c=>{ if(!c.userData.keep) c.visible=false; });          // oculta el muñeco por código
+  npc.add(root);
+  const mixer=new THREE.AnimationMixer(root), clip=(...ns)=>ns.map(n=>gl.animations.find(a=>a.name===n)).find(Boolean);
+  const idle=mixer.clipAction(clip('Idle_Neutral','Idle')), walk=mixer.clipAction(clip('Walk'));
+  idle.play(); walk.play(); idle.time=rnd(6)*2; walk.time=rnd(7)*1.2;
+  npc.userData.glb={mixer,idle,walk,speed:0,k:0,last:new THREE.Vector3().copy(npc.position),acc:0};
+  _glbNPCs.push(npc);
+}
+const _gv=new THREE.Vector3(), _gf=new THREE.Vector3();
+function updateGlbNPCs(delta){
+  if(!_glbNPCs.length) return;
+  camera.getWorldDirection(_gf);
+  const cp=camera.position;
+  for(const n of _glbNPCs){
+    const G=n.userData.glb; if(!G||!n.visible) continue;
+    const d=Math.hypot(n.position.x-G.last.x,n.position.z-G.last.z); G.last.copy(n.position);
+    const sp=delta>0&&d<2?d/delta:0; G.speed+=(sp-G.speed)*Math.min(1,delta*6);
+    const kT=Math.min(1,G.speed/0.6); G.k+=(kT-G.k)*Math.min(1,delta*4);
+    G.acc+=delta;
+    // Sólo se anima si está cerca o a la vista (las de atrás o muy lejos esperan)
+    _gv.set(n.position.x-cp.x,0,n.position.z-cp.z); const dist=_gv.length();
+    if(dist>45||(dist>6&&(_gv.x*_gf.x+_gv.z*_gf.z)<0)) continue;
+    if(dist>22&&G.acc<1/15) continue;                    // lejos: 15 cuadros por segundo alcanzan
+    G.idle.setEffectiveWeight(1-G.k); G.walk.setEffectiveWeight(G.k);
+    G.walk.timeScale=Math.max(0.6,Math.min(1.5,G.speed/1.25));
+    G.mixer.update(G.acc); G.acc=0;
+  }
+}
+
 // ─── FASE 75 (F41): CÁMARAS INTERCAMBIABLES ─────────────────
 // Tres vistas: primera persona, tercera cercana y tercera panorámica. La vista
 // externa sigue a la persona por detrás, se acerca si hay una pared o una
@@ -10135,7 +10215,8 @@ function animate(){
   }
 
     // Fase 9: parametrizar NPCs para calmMode - reduccion de velocidad y actividad
-  updateNPCs(delta * (_care.open ? 0.08 : (calmMode ? 0.2 : 1.0)));   // FASE 79: casi quietos durante la pausa // calm=0.2x, normal=1x (mas lento que antes)
+  updateNPCs(delta * (_care.open ? 0.08 : (calmMode ? 0.2 : 1.0)));
+  updateGlbNPCs(delta);   // FASE 86   // FASE 79: casi quietos durante la pausa // calm=0.2x, normal=1x (mas lento que antes)
 
   // Ciclo sutil de luz ambiental -- simula variación de iluminación del aeropuerto
   // Período ~52 s, amplitud ±0.03 → imperceptible pero da vida al espacio
