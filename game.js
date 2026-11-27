@@ -241,6 +241,7 @@ function init(){
   _T('upgradeHallWalkers',()=>upgradeHallWalkers()); // FASE 86: personas del hall con esqueleto (se cargan solas)
   _T('spawnStaffNPCs',()=>spawnStaffNPCs());
   _T('upgradeStaff',()=>upgradeStaff());   // FASE 88: personal sin rostro propio con esqueleto
+  _T('upgradeRoles',()=>upgradeRoles());   // FASE 89: Madrid, PSA, B2 y doctor
   _T('loadCabinCrew',()=>loadCabinCrew());
   _T('optimizeSceneResources',()=>optimizeSceneResources()); // FASE 36: comparte materiales/geometrías y fusiona props fijos
   _T('setupPostProcessing',()=>setupPostProcessing());
@@ -9345,7 +9346,7 @@ function upgradeHallWalkers(){
   hall.forEach((npc,i)=>{ const model=models[(i*5+3)%models.length]; _getGlb(model).then(gl=>_attachGlbNPC(npc,gl,model,i)).catch(e=>console.warn('[F86] modelo',model,e)); });
   return hall.length;
 }
-function _attachGlbNPC(npc,gl,model,i,fixed){
+function _attachGlbNPC(npc,gl,model,i,fixed,acc){
   if(npc.userData.glb||!npc.parent) return;
   const root=THREE.SkeletonUtils.clone(gl.scene), S=NPC_GLB_SLOTS[model];
   const rnd=k=>{ const x=Math.sin((i+7)*12.9898+k*78.233)*43758.5453; return x-Math.floor(x); };
@@ -9366,10 +9367,11 @@ function _attachGlbNPC(npc,gl,model,i,fixed){
   root.scale.setScalar(k); root.position.y=-bb.min.y*k;
   npc.children.forEach(c=>{ if(!c.userData.keep) c.visible=false; });          // oculta el muñeco por código
   npc.add(root);
+  if(acc){ npc.updateMatrixWorld(true); acc(root); }                 // FASE 89: accesorios (en pose de reposo)
   const mixer=new THREE.AnimationMixer(root), clip=(...ns)=>ns.map(n=>gl.animations.find(a=>a.name===n)).find(Boolean);
   const idle=mixer.clipAction(clip('Idle_Neutral','Idle')), walk=mixer.clipAction(clip('Walk'));
   idle.play(); walk.play(); idle.time=rnd(6)*2; walk.time=rnd(7)*1.2;
-  npc.userData.glb={mixer,idle,walk,speed:0,k:0,last:new THREE.Vector3().copy(npc.position),acc:0};
+  npc.userData.glb={mixer,idle,walk,speed:0,k:0,last:new THREE.Vector3().copy(npc.position),acc:0,head:root.getObjectByName('Head')};
   _glbNPCs.push(npc);
 }
 
@@ -9398,6 +9400,72 @@ function upgradeStaff(){
   jobs.forEach(([n,m,c],k)=>_getGlb(m).then(gl=>_attachGlbNPC(n,gl,m,100+k,c)).catch(e=>console.warn('[F88] modelo',m,e)));
   return jobs.length;
 }
+
+// ─── FASE 89: MADRID Y PERSONAJES CON ROL (PSA, B2, DOCTOR) ──
+// Accesorios enganchados a los huesos: se ubican en coordenadas del personaje
+// (x a su izquierda, y arriba, z adelante) en la pose de reposo y después
+// acompañan cada movimiento del hueso.
+const _av3=new THREE.Vector3(), _aq=new THREE.Quaternion(), _aq2=new THREE.Quaternion(), _as=new THREE.Vector3();
+function _glbAcc(root,boneName,obj,off,rot){
+  const b=root.getObjectByName(boneName); if(!b) return;
+  const holder=root.parent; holder.getWorldQuaternion(_aq);
+  const wp=new THREE.Vector3(); b.getWorldPosition(wp);
+  wp.add(_av3.copy(off).applyQuaternion(_aq));
+  const wq=_aq.clone().multiply(_aq2.setFromEuler(rot||new THREE.Euler()));
+  b.add(obj); b.updateMatrixWorld(true);
+  obj.position.copy(b.worldToLocal(wp.clone()));
+  const bq=new THREE.Quaternion(); b.getWorldQuaternion(bq);
+  obj.quaternion.copy(bq.invert().multiply(wq));
+  b.getWorldScale(_as); obj.scale.set(1/_as.x,1/_as.y,1/_as.z);
+}
+const _accM=(c,r=0.55,m=0.1)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
+function _accGroup(parts){ const g=new THREE.Group(); parts.forEach(([geo,mat,x,y,z,rx,ry,rz])=>{ const o=new THREE.Mesh(geo,mat); o.position.set(x||0,y||0,z||0); o.rotation.set(rx||0,ry||0,rz||0); g.add(o); }); return g; }
+function _accPoliceCap(){ const n=_accM(0x141c2c,0.6), gold=_accM(0xd4a832,0.3,0.6), blk=_accM(0x0a0a0a,0.3,0.2);
+  return _accGroup([[new THREE.CylinderGeometry(0.128,0.122,0.075,20),n,0,0.035,0],[new THREE.CylinderGeometry(0.145,0.128,0.03,20),n,0,0.085,0.005],
+    [new THREE.CylinderGeometry(0.129,0.129,0.022,20),blk,0,0.012,0],[new THREE.CylinderGeometry(0.11,0.11,0.012,20,1,false,-Math.PI/2,Math.PI),blk,0,0.002,0.06,0.25],
+    [new THREE.BoxGeometry(0.035,0.028,0.006),gold,0,0.05,0.118]]); }
+function _accEpaulette(stripes,col){ const base=_accM(col||0x141c2c,0.6), gold=_accM(0xd4a832,0.3,0.6), parts=[[new THREE.BoxGeometry(0.06,0.012,0.13),base,0,0,0]];
+  for(let i=0;i<(stripes||1);i++) parts.push([new THREE.BoxGeometry(0.062,0.004,0.01),gold,0,0.008,-0.04+i*0.022]);
+  parts.push([new THREE.SphereGeometry(0.008,6,4),gold,0,0.009,0.055]); return _accGroup(parts); }
+function _accHolster(){ const l=_accM(0x1a1410,0.5), m=_accM(0x222428,0.4,0.6);
+  return _accGroup([[new THREE.BoxGeometry(0.05,0.16,0.1),l,0,0,0],[new THREE.BoxGeometry(0.035,0.07,0.04),m,0,0.1,-0.02,-0.25,0,0]]); }
+function _accTonfa(){ const m=_accM(0x111111,0.45,0.1);
+  return _accGroup([[new THREE.CylinderGeometry(0.016,0.016,0.5,10),m,0,-0.06,0],[new THREE.CylinderGeometry(0.014,0.014,0.12,8),m,0,0.12,0.06,Math.PI/2,0,0]]); }
+function _accBadge(){ return _accGroup([[new THREE.BoxGeometry(0.05,0.06,0.006),_accM(0xd4a832,0.3,0.7),0,0,0]]); }
+function _accGlasses(){ const f=_accM(0x050506,0.4,0.2), parts=[];
+  [-1,1].forEach(sd=>{ const cx=sd*0.042;
+    parts.push([new THREE.BoxGeometry(0.06,0.006,0.006),f,cx,0.018,0],[new THREE.BoxGeometry(0.06,0.006,0.006),f,cx,-0.018,0],
+               [new THREE.BoxGeometry(0.006,0.042,0.006),f,cx-0.03*sd*-1,0,0],[new THREE.BoxGeometry(0.006,0.042,0.006),f,cx+0.03*sd*-1,0,0],
+               [new THREE.BoxGeometry(0.005,0.005,0.11),f,sd*0.073,0.012,-0.055]); });
+  parts.push([new THREE.BoxGeometry(0.024,0.005,0.006),f,0,0.012,0]); return _accGroup(parts); }
+// Policía (PSA en Buenos Aires, policía de aduana en Madrid)
+function _policeKit(root){
+  _glbAcc(root,'Head',_accPoliceCap(),new THREE.Vector3(0,0.122,0.005));
+  _glbAcc(root,'UpperArmL',_accEpaulette(1),new THREE.Vector3(0,0.055,0));
+  _glbAcc(root,'UpperArmR',_accEpaulette(1),new THREE.Vector3(0,0.055,0));
+  _glbAcc(root,'Hips',_accHolster(),new THREE.Vector3(-0.17,-0.02,0.0));
+  _glbAcc(root,'Hips',_accTonfa(),new THREE.Vector3(0.17,-0.02,0.0));
+  _glbAcc(root,'Chest',_accBadge(),new THREE.Vector3(0.07,0.06,0.13));
+}
+const POLICE_COLS_M={Suit:0x070b14,White:0x0e1626,Tie:0x05070c}, POLICE_COLS_W={Black:0x070b14,White:0x0e1626};   // azul noche (los colores de estos modelos se ven más claros)
+const DOCTOR_COLS={Suit:0x070c1a,White:0xe8e8e6,Tie:0x05123a,Hair:0x4a4743,Skin:0xb98762,Eyebrows:0x2a2622};   // como en su foto: canoso, traje azul noche, corbata azul
+function upgradeRoles(){
+  if(!gltfLoader||!THREE.SkeletonUtils) return 0;
+  const jobs=[];
+  // Madrid: pasajeros de la sala de equipajes y gente que espera en el hall de llegadas
+  const models=isMobile?['W_Casual','M_Casual_Hoodie']:['M_Casual_2','M_Casual_Hoodie','M_Suit','W_Casual','W_Formal','W_Suit'];
+  scene.children.forEach((o,i)=>{ const u=o.userData; if(u&&u.role==='civilian'&&!u.glb&&o!==officeDoctor&&o.position.z<ARR.regionZ&&o.scale.x>0.9&&u.headGroup) jobs.push([o,models[(jobs.length*5+1)%models.length],null,null]); });
+  if(!isMobile){
+    // Policía: uniforme azul oscuro con gorra, charreteras, placa, arma enfundada y tonfa
+    scene.children.forEach(o=>{ const u=o.userData; if(u&&u.role==='police'&&!u.glb) jobs.push([o,u.female?'W_Suit':'M_Suit',u.female?POLICE_COLS_W:POLICE_COLS_M,_policeKit]); });
+    // Agentes que quedaban: B2 (práctica de check-in) y equipaje perdido en Madrid
+    npcs.forEach(n=>{ const u=n.userData; if(u.isStaff&&u.role==='agent'&&!u.glb){ const madrid=n.position.z<ARR.regionZ; jobs.push([n,'W_Suit',{Black:madrid?0x2f5a78:STAFF_NAVY},null]); } });
+    // El doctor: pelo canoso, anteojos rectangulares oscuros, traje azul, camisa blanca y corbata azul
+    if(officeDoctor&&!officeDoctor.userData.glb) jobs.push([officeDoctor,'M_Suit',DOCTOR_COLS,(r)=>_glbAcc(r,'Head',_accGlasses(),new THREE.Vector3(0,0.075,0.115))]);
+  }
+  jobs.forEach(([n,m,c,a],k)=>_getGlb(m).then(gl=>_attachGlbNPC(n,gl,m,200+k,c,a)).catch(e=>console.warn('[F89] modelo',m,e)));
+  return jobs.length;
+}
 const _gv=new THREE.Vector3(), _gf=new THREE.Vector3();
 function updateGlbNPCs(delta){
   if(!_glbNPCs.length) return;
@@ -9416,6 +9484,8 @@ function updateGlbNPCs(delta){
     G.idle.setEffectiveWeight(1-G.k); G.walk.setEffectiveWeight(G.k);
     G.walk.timeScale=Math.max(0.6,Math.min(1.5,G.speed/1.25));
     G.mixer.update(G.acc); G.acc=0;
+    // FASE 89: el giro de cabeza que calcula la lógica de siempre (mirar al visitante) pasa al hueso
+    const hg=n.userData.headGroup; if(G.head&&hg&&(hg.rotation.y||hg.rotation.x)){ G.head.rotateY(hg.rotation.y); G.head.rotateX(-hg.rotation.x*0.6); }
   }
 }
 
