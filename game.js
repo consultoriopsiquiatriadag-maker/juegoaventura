@@ -364,9 +364,11 @@ function setupLighting(){
     sky.scale.setScalar(450);
     scene.add(sky);
     const su=sky.material.uniforms;
-    su['turbidity'].value=2.5;
-    su['rayleigh'].value=2.0;
-    su['mieCoefficient'].value=0.008;
+    // FASE 84: cielo más limpio y azul (antes 2.5 / 2.0 / 0.008 se veía casi blanco
+    // a través de los ventanales y de la puerta A7)
+    su['turbidity'].value=1.2;
+    su['rayleigh'].value=1.0;
+    su['mieCoefficient'].value=0.004;
     su['mieDirectionalG'].value=0.82;
     su['sunPosition'].value.copy(SUN_DIR); // cielo coherente con la luz direccional
     scene.background=null; // Sky reemplaza el fondo sólido
@@ -637,7 +639,10 @@ function captureFloorReflections(){
 //  puerta delantera izquierda del avión → cabina.
 // El cockpit gigante (18 m) se reemplazó por la nariz real del fuselaje con
 // un cockpit compacto: los pilotos se ven por la puerta abierta del mamparo.
-const GATE={ z:-21.6, half:8, open:1.15 };       // línea del gate y medio ancho del frente vidriado
+const GATE={ z:-21.6, half:8, open:1.15 };
+// FASE 84: un solo material de vidrio polarizado para todo el frente de la puerta A7
+let _tintGlass=null;
+function _tintedGlassMat(){ return _tintGlass||(_tintGlass=new THREE.MeshBasicMaterial({color:0x18283a,transparent:true,opacity:0.42,depthWrite:false,side:THREE.DoubleSide})); }       // línea del gate y medio ancho del frente vidriado
 const PLANE_DOOR={ z0:-33.05, z1:-34.15, top:2.1 }; // puerta delantera izquierda (en la cabina)
 // Recorrido de la manga (centro del pasillo), del gate a la puerta del avión
 const JETWAY=[[0,-21.75],[0,-24.6],[-4.3,-24.6],[-4.3,-33.6],[-2.72,-33.6]];
@@ -649,7 +654,7 @@ function buildBoarding(){
   // ── Frente vidriado con marco metálico (deja ver la manga y el avión)
   const glass=new THREE.MeshStandardMaterial({color:0xcfe8f6,transparent:true,opacity:0.22,roughness:0.06,metalness:0.1,depthWrite:false});
   [[-GATE.half,-GATE.open-0.45],[GATE.open+0.45,GATE.half]].forEach(([a,b])=>{
-    const gp=new THREE.Mesh(new THREE.BoxGeometry(b-a,2.9,0.05),glass); gp.position.set((a+b)/2,1.6,Z); scene.add(gp);
+    const gp=new THREE.Mesh(new THREE.BoxGeometry(b-a,2.9,0.05),_tintedGlassMat()); gp.position.set((a+b)/2,1.6,Z); scene.add(gp);   // FASE 84: polarizado
     for(let px=a;px<=b+0.01;px+=(b-a)/5) box(px,0.09,Z,0.08,3.0,0.12,0x5b6670);
   });
   box(0,3.09,Z,GATE.half*2+0.1,0.16,0.18,0x5b6670);           // riel superior
@@ -2520,7 +2525,10 @@ function buildAirside(){
   const add=(geo,m,x,y,z,rx=0,ry=0,rz=0)=>{ const o=new THREE.Mesh(geo,m); o.position.set(x,y,z); o.rotation.set(rx,ry,rz); o.castShadow=true; o.receiveShadow=true; scene.add(o); return o; };
   const BX=(w,h,d,m,x,y,z,rx,ry,rz)=>add(new THREE.BoxGeometry(w,h,d),m,x,y,z,rx,ry,rz);
   // ── Ventanal de pared a pared (piso a techo) en la línea de la puerta A7
-  const glassM=new THREE.MeshStandardMaterial({color:0xcfe6f5,transparent:true,opacity:0.16,roughness:0.05,metalness:0.1,depthWrite:false,side:THREE.DoubleSide});
+  // FASE 84: vidrio polarizado, como en los aeropuertos reales. Afuera el sol pega
+  // de lleno y, con el vidrio claro, cielo, avión y plataforma se veían casi
+  // blancos; el tinte oscuro uniforme devuelve los detalles sin tocar el interior.
+  const glassM=_tintedGlassMat();
   const frameM=mkStd(0x5b6670,0.4,0.5), Z=GATE.z;
   [[-17,-GATE.half],[GATE.half,17]].forEach(([a,b])=>{ const p=new THREE.Mesh(new THREE.PlaneGeometry(b-a,12.9),glassM); p.position.set((a+b)/2,6.55,Z); p.renderOrder=2; scene.add(p); });
   { const p=new THREE.Mesh(new THREE.PlaneGeometry(GATE.half*2,9.75),glassM); p.position.set(0,3.25+9.75/2,Z); p.renderOrder=2; scene.add(p); }
