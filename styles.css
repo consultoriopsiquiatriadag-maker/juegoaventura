@@ -2083,3 +2083,9 @@ body.has-bag #bag-chip { display: block; }
 #flight-setup { z-index: 120; }
 /* FASE 81: los paneles tapan los botones del HUD (Salir, Necesito una pausa) */
 .overlay-dark { z-index: 98; }
+
+/* ── FASE 85: elegir personaje ── */
+.pf-models { display: grid; grid-template-columns: 64px repeat(3, 1fr); gap: 6px 8px; align-items: center; }
+.pf-models .pf-group { font-size: .78rem; font-weight: 600; color: var(--text-light); }
+.pf-models .pf-choice { padding: 7px 8px; text-align: center; }
+.pf-models .pf-group:nth-last-of-type(1) ~ .pf-choice { grid-column: span 1; }

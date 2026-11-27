@@ -10,7 +10,7 @@ Consultorio Dr. Pedro Nicolas Dagnino · Médico especialista en Psiquiatría y 
 ## Qué incluye
 
 - **Recorrido:** entrada, check-in, control de seguridad (con la PSA), sala de embarque, puerta A7, manga, cabina, vuelo a Madrid, desembarque, sala de equipajes y encuentro en el hall.
-- **Tu personaje:** "Personalizar mi experiencia" (nombre, femenino / masculino / neutro, colores, cámara inicial). Se guarda sólo en el dispositivo.
+- **Tu personaje:** "Personalizar mi experiencia": nombre, 6 personajes con esqueleto y animaciones (mujer u hombre: casual, vestido/buzo, traje) o el muñeco clásico neutro con colores, y cámara inicial. Se guarda sólo en el dispositivo; el modelo 3D (~0,9 MB) se descarga recién al usar la tercera persona.
 - **Tres cámaras:** primera persona, tercera cercana y panorámica (Tab, botón 🎥 o Pausa).
 - **🤲 Necesito una pausa** (tecla P): presente, grounding 5-4-3-2-1, respiración suave, relajación muscular, sensaciones, pensamientos, Modo Calma.
 - **Centro de Información Aeronáutica y Calma:** 8 tarjetas educativas con ilustración y lectura en voz.

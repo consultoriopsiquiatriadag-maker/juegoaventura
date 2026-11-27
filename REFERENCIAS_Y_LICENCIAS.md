@@ -18,7 +18,7 @@
 
 | Recurso | Origen |
 |---|---|
-| Código, escenarios 3D y personajes | Originales, generados por código (sin modelos de terceros) |
+| Código, escenarios 3D y personas del aeropuerto | Originales, generados por código |
 | Voces (`audios/voz`, `altoparlantes`, `tripulacion`, `comandante`) | Grabaciones propias del consultorio (los originales `.m4a` no se publican) |
 | `assets/dr-dagnino.jpg` | Foto propia del Dr. Pedro Nicolas Dagnino |
 | Textos de zonas, Centro de Información, pausa y vuelo | Redacción original del proyecto; **pendiente revisión profesional final** |
@@ -27,6 +27,7 @@
 
 | Recurso | Cómo se usa | Condición |
 |---|---|---|
+| **Personajes del jugador** `assets/avatar/*.glb` (6 modelos) | Avatar elegible en "Personalizar mi experiencia" | **CC0 1.0** — Quaternius, *Ultimate Modular Men* (feb. 2022) y *Ultimate Modular Women* (abr. 2022). Convertidos a GLB con sólo 5 animaciones (Idle, Idle_Neutral, Walk, Run, Wave); se quitó la pistola del modelo "Suit" |
 | **Sonido del hall** `audios/ambiente/hall-aeropuerto.mp3` | Fondo del hall (procesado: graves recortados, bucle) | ⚠️ **Licencia no confirmada.** Archivo descargado ("Sonido Ultra Realista 3D Binaural"). Confirmar permiso del autor o reemplazar por grabación propia o CC0 |
 | Playlist "Animate a volar" — Aerolíneas Argentinas | Sólo enlace a YouTube, con atribución | Sin logos, sin descarga, sin embebido; se aclara que no hay convenio ni patrocinio |
 | GeoFS (Cessna 172 en Buenos Aires) | Enlace externo | Servicio de terceros, se abre en otra pestaña |

@@ -687,15 +687,24 @@
                     <label class="pf-label" for="profile-name">Nombre <span id="profile-count" class="pf-count">0/24</span></label>
                     <input id="profile-name" class="pf-input" type="text" maxlength="24" autocomplete="off" autocapitalize="words" spellcheck="false" placeholder="Cómo querés que te llamemos">
                     <p class="pf-label" id="pf-look-l">Personaje</p>
-                    <div class="pf-choices" role="group" aria-labelledby="pf-look-l">
-                        <button type="button" class="pf-choice" data-look="femenino">Femenino</button>
-                        <button type="button" class="pf-choice" data-look="masculino">Masculino</button>
-                        <button type="button" class="pf-choice" data-look="neutro">Neutro</button>
+                    <div class="pf-models" role="group" aria-labelledby="pf-look-l">
+                        <span class="pf-group">Mujer</span>
+                        <button type="button" class="pf-choice" data-model="W_Casual">Casual</button>
+                        <button type="button" class="pf-choice" data-model="W_Formal">Vestido</button>
+                        <button type="button" class="pf-choice" data-model="W_Suit">Traje</button>
+                        <span class="pf-group">Hombre</span>
+                        <button type="button" class="pf-choice" data-model="M_Casual_2">Casual</button>
+                        <button type="button" class="pf-choice" data-model="M_Casual_Hoodie">Buzo</button>
+                        <button type="button" class="pf-choice" data-model="M_Suit">Traje</button>
+                        <span class="pf-group">Neutro</span>
+                        <button type="button" class="pf-choice" data-model="clasico">Clásico</button>
                     </div>
+                    <div id="pf-colors">
                     <p class="pf-label" id="pf-top-l">Color de ropa</p>
                     <div id="profile-tops" class="pf-swatches" role="group" aria-labelledby="pf-top-l"></div>
                     <p class="pf-label" id="pf-hair-l">Color de pelo</p>
                     <div id="profile-hairs" class="pf-swatches" role="group" aria-labelledby="pf-hair-l"></div>
+                    </div>
                     <p class="pf-label" id="pf-cam-l">Cámara al empezar</p>
                     <div class="pf-choices" role="group" aria-labelledby="pf-cam-l">
                         <button type="button" class="pf-choice" data-cam="0">👁️ Primera persona</button>

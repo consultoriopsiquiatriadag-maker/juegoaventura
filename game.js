@@ -7180,6 +7180,7 @@ function startGame(){
   camera.position.set(ci.position.x,PLAYER_HEIGHT,ci.position.z+ci.radius+0.8); // más cerca del check-in que de la Entrada
   _welcomeShown=false;
   if(playerMesh) scene.remove(playerMesh);   // FASE 77: una sola instancia aunque se juegue de nuevo
+  _glbAv=null;                               // FASE 85: el personaje GLB se vuelve a cargar al verse
   if(playerProfile.cam!=null) setCamMode(playerProfile.cam,true);   // FASE 76: cámara inicial elegida
   playerMesh=buildPlayerBody();
   playerMesh.visible=false;
@@ -9216,7 +9217,8 @@ function openProfileModal(){
 }
 function _pfSync(){
   const d=_pf.draft;
-  document.querySelectorAll('#profile-modal [data-look]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.look===d.look?'true':'false'));
+  document.querySelectorAll('#profile-modal [data-model]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.model===d.model?'true':'false'));
+  const cl=document.getElementById('pf-colors'); if(cl) cl.classList.toggle('hidden',d.model!=='clasico');   // colores: sólo el clásico
   document.querySelectorAll('#profile-modal [data-cam]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.cam===d.cam?'true':'false'));
   document.querySelectorAll('#profile-modal [data-top]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.top===d.top?'true':'false'));
   document.querySelectorAll('#profile-modal [data-hair]').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.hair===d.hair?'true':'false'));
@@ -9232,7 +9234,10 @@ function _pfBuildSwatches(){
     b.setAttribute('aria-label',col==null?'Color de pelo del aspecto elegido':'Color de pelo '+i); hairs.appendChild(b); });
 }
 function _pfStartPreview(){
-  const cv=document.getElementById('profile-preview'); if(!cv) return;
+  const old=document.getElementById('profile-preview'); if(!old) return;
+  // FASE 85: lienzo nuevo cada vez. Al cerrar se libera el contexto WebGL
+  // (forceContextLoss) y ese lienzo ya no sirve: la 2ª apertura quedaba sin vista previa.
+  const cv=old.cloneNode(false); cv.classList.remove('hidden'); old.replaceWith(cv);
   try{
     const r=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true});
     r.setPixelRatio(Math.min(devicePixelRatio,2)); r.setSize(cv.clientWidth||220,cv.clientHeight||280,false);
@@ -9245,7 +9250,11 @@ function _pfStartPreview(){
     Object.assign(_pf,{renderer:r,scene:sc,cam});
     _pfRebuild();
     const still=prefersReducedMotion();
-    const loop=()=>{ if(!_pf||!_pf.renderer) return; if(_pf.char&&!still) _pf.char.rotation.y+=0.012; _pf.renderer.render(_pf.scene,_pf.cam); _pf.raf=requestAnimationFrame(loop); };
+    let last=performance.now();
+    const loop=()=>{ if(!_pf||!_pf.renderer) return; const now=performance.now(), dt=Math.min(0.05,(now-last)/1000); last=now;
+      if(_pf.char&&!still) _pf.char.rotation.y+=0.012;
+      const av=_pf.char&&_pf.char.userData.av; if(av){ av.idle.setEffectiveWeight(av.waving?0:1); av.mixer.update(dt); }   // FASE 85
+      _pf.renderer.render(_pf.scene,_pf.cam); _pf.raf=requestAnimationFrame(loop); };
     loop();
   }catch(e){ cv.classList.add('hidden'); }
 }
@@ -9253,6 +9262,7 @@ function _pfRebuild(){
   if(!_pf||!_pf.scene) return;
   const ry=_pf.char?_pf.char.rotation.y:0.5;
   if(_pf.char) _pf.scene.remove(_pf.char);
+  if(_pf.char&&_pf.char.userData.glbModel===_pf.draft.model&&_pf.draft.model!=='clasico'){ _pf.scene.add(_pf.char); return; }   // mismo modelo: no recargar
   _pf.char=buildPlayerBody(_pf.draft); _pf.char.rotation.y=ry; _pf.scene.add(_pf.char);
 }
 function _pfStopPreview(){
@@ -9288,7 +9298,7 @@ function setupProfileUI(){
   m.addEventListener('click',(e)=>{
     const b=e.target.closest('button'); if(!b||!_pf) return;
     const d=_pf.draft;
-    if(b.dataset.look){ d.look=b.dataset.look; _pfSync(); }
+    if(b.dataset.model){ d.model=b.dataset.model; if(d.model==='clasico') d.look='neutro'; _pfSync(); }
     else if(b.dataset.cam!=null&&b.dataset.cam!==''){ d.cam=+b.dataset.cam; _pfSync(); }
     else if(b.dataset.top!=null&&b.dataset.top!==''){ d.top=+b.dataset.top; _pfSync(); }
     else if(b.dataset.hair!=null&&b.dataset.hair!==''){ d.hair=+b.dataset.hair; _pfSync(); }
@@ -9685,6 +9695,20 @@ const PLAYER_LOOKS={
   neutro:{skin:0xe9bf98,hair:0x6b4a2e,top:0x2a6f8f,pants:0x3b3f46,shoes:0x2b2b2b,female:false,hairStyle:'swept',seed:773}
 };
 let playerLook='neutro';
+// ─── FASE 85: PERSONAJES CON ESQUELETO (GLB) ────────────────
+// Quaternius "Ultimate Modular Men/Women" (CC0), vestidos, con animaciones
+// Idle / Walk / Run / Wave, reducidos a ~0,9 MB en assets/avatar/. "Clásico" es
+// el muñeco por código de F77 (neutro, con colores elegibles).
+const PLAYER_MODELS={
+  W_Casual:{group:'Mujer',label:'Casual',female:true},
+  W_Formal:{group:'Mujer',label:'Vestido',female:true},
+  W_Suit:{group:'Mujer',label:'Traje',female:true},
+  M_Casual_2:{group:'Hombre',label:'Casual'},
+  M_Casual_Hoodie:{group:'Hombre',label:'Buzo'},
+  M_Suit:{group:'Hombre',label:'Traje'},
+  clasico:{group:'Neutro',label:'Clásico'}
+};
+const DEFAULT_MODEL='M_Casual_Hoodie';
 // ─── FASE 76 (F42): PERFIL LOCAL DEL VISITANTE ──────────────
 // Nombre (hasta 24 caracteres), aspecto, colores y cámara inicial. Se guarda
 // sólo en este navegador (localStorage 'aerocalma_profile'); no se envía a
@@ -9692,7 +9716,7 @@ let playerLook='neutro';
 const PROFILE_KEY='aerocalma_profile';
 const PROFILE_TOPS=[0x2a6f8f,0x7a4fc8,0xb5483f,0x2e8b57,0x3b3f46,0xd9a441];
 const PROFILE_HAIRS=[null,0x0f0b08,0x3b1f0f,0x6b4a2e,0xd4a832,0x9a9a9a];   // null: el del aspecto elegido
-let playerProfile={name:'',look:'neutro',top:0,hair:0,cam:null};
+let playerProfile={name:'',model:DEFAULT_MODEL,look:'neutro',top:0,hair:0,cam:null};
 function _cleanName(n){ return String(n==null?'':n).replace(/[\u0000-\u001f\u007f<>]/g,'').replace(/\s+/g,' ').trim().slice(0,24); }
 function loadProfile(){
   try{
@@ -9703,6 +9727,8 @@ function loadProfile(){
       if(p.top>=0&&p.top<PROFILE_TOPS.length) playerProfile.top=p.top|0;
       if(p.hair>=0&&p.hair<PROFILE_HAIRS.length) playerProfile.hair=p.hair|0;
       playerProfile.cam=(p.cam>=0&&p.cam<3)?(p.cam|0):null;
+      // FASE 85: perfiles anteriores (sin modelo) conservan su muñeco clásico
+      playerProfile.model=PLAYER_MODELS[p.model]?p.model:(p.look?'clasico':DEFAULT_MODEL);
     }
   }catch(e){}
   playerLook=playerProfile.look;
@@ -9710,7 +9736,7 @@ function loadProfile(){
 function saveProfile(){ try{ localStorage.setItem(PROFILE_KEY,JSON.stringify(playerProfile)); return true; }catch(e){ return false; } }
 function clearProfile(){
   try{ localStorage.removeItem(PROFILE_KEY); localStorage.removeItem('aerocalma_cam'); }catch(e){}
-  playerProfile={name:'',look:'neutro',top:0,hair:0,cam:null}; playerLook='neutro';
+  playerProfile={name:'',model:DEFAULT_MODEL,look:'neutro',top:0,hair:0,cam:null}; playerLook='neutro';
 }
 function _profileLook(prof){
   const P=prof||playerProfile;
@@ -9737,11 +9763,44 @@ function buildPlayerBody(look){
   const L=Object.assign({role:'civilian',glasses:false,noHat:true},base||PLAYER_LOOKS.neutro);
   const g=buildCharacter(L);
   if(!look&&playerProfile.name) g.add(_nameTag(playerProfile.name));
+  // FASE 85: personaje con esqueleto. En la vista previa se carga enseguida; en el
+  // juego, recién la primera vez que se ve (tercera persona): quien juega en
+  // primera persona no descarga nada.
+  const model=(look&&typeof look==='object')?look.model:(look?null:playerProfile.model);
+  if(model&&model!=='clasico'&&PLAYER_MODELS[model]){
+    g.userData.glbModel=model;
+    if(look) _loadGlbAvatar(g,model,(av)=>{ g.userData.av=av; _glbWave(av); });
+    else g.userData.glbPending=true;
+  }
   g.name='playerAvatar'; g.userData.isPlayer=true;
   g.userData.armLag=0.22; g.userData.armAmp=0.28; g.userData.strideAmp=0.4;   // paso fijo (sin azar)
   _pav.last=null; _pav.k=0; _pav.speed=0; _pav.yawPrev=null;
   return g;
 }
+let _glbAv=null;           // personaje GLB del jugador, ya cargado
+const AVATAR_VER=1;        // subir si se reemplazan los .glb (evita copias viejas en caché)
+function _loadGlbAvatar(wrapper,model,onReady){
+  if(!gltfLoader) return;
+  const t0=performance.now();
+  gltfLoader.load('assets/avatar/'+model+'.glb?v='+AVATAR_VER,(g)=>{
+    const root=g.scene;
+    root.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.frustumCulled=false; } });
+    const bb=new THREE.Box3().setFromObject(root), h=bb.max.y-bb.min.y, k=1.72/h;   // ~1,72 m
+    root.scale.setScalar(k); root.position.y=-bb.min.y*k;
+    wrapper.children.forEach(c=>{ if(c.name!=='nameTag') c.visible=false; });       // oculta el muñeco clásico
+    wrapper.add(root);
+    const mixer=new THREE.AnimationMixer(root), clip=(...ns)=>ns.map(n=>g.animations.find(a=>a.name===n)).find(Boolean);
+    const idle=mixer.clipAction(clip('Idle_Neutral','Idle')), walk=mixer.clipAction(clip('Walk')), jog=mixer.clipAction(clip('Run'));
+    [idle,walk,jog].forEach(a=>{ a.play(); a.setEffectiveWeight(0); }); idle.setEffectiveWeight(1);
+    const wc=clip('Wave'), wave=wc?mixer.clipAction(wc):null;
+    if(wave){ wave.setLoop(THREE.LoopOnce,1); wave.clampWhenFinished=false; }
+    const av={mixer,idle,walk,jog,wave,root,wrapper,ms:Math.round(performance.now()-t0)};
+    mixer.addEventListener('finished',(e)=>{ if(e.action===wave){ wave.stop(); av.waving=false; } });
+    onReady(av);
+  },undefined,(e)=>console.warn('[F85] no se pudo cargar el personaje',model,e));
+}
+// Saludo con la mano (una vez) y vuelta a estar parado
+function _glbWave(av){ if(!av||!av.wave||calmMode&&prefersReducedMotion()) return; av.wave.reset(); av.wave.setEffectiveWeight(1); av.wave.play(); av.waving=true; }
 // El avatar sólo se ve cuando la imagen se dibuja desde una cámara distinta de
 // la del jugador (tercera persona de F75). Hasta entonces queda oculto, como antes.
 function _playerViewCam(){ return (_vc.active&&!_vc.eye)?viewCam:camera; }   // FASE 75
@@ -9769,9 +9828,19 @@ function updatePlayerAvatar(delta){
   const vis=_playerViewCam()!==camera&&!_flight;
   m.visible=vis;
   if(!vis) return;                                       // oculto: no se anima (rendimiento)
+  if(m.userData.glbPending){ m.userData.glbPending=false; _loadGlbAvatar(m,m.userData.glbModel,(av)=>{ if(playerMesh===m){ _glbAv=av; _glbWave(av); } }); }   // FASE 85
   const turning=!moving&&_pav.turnRate>0.9;
   const kT=moving?Math.min(1,_pav.speed/PLAYER_SPEED):(turning?0.3:0);
   _pav.k+=(kT-_pav.k)*Math.min(1,delta*(kT>_pav.k?6:4)); // arranca y frena con transición
+  // FASE 85: con el avatar GLB, las animaciones del modelo reemplazan a la pose calculada
+  if(_glbAv&&_glbAv.wrapper===m){
+    const j=Math.max(0,Math.min(1,(_pav.speed-1.8)/1.2));      // caminar → trotar según la velocidad
+    _glbAv.idle.setEffectiveWeight(_glbAv.waving?0:1-_pav.k);
+    _glbAv.walk.setEffectiveWeight(_pav.k*(1-j)); _glbAv.jog.setEffectiveWeight(_pav.k*j);
+    _glbAv.walk.timeScale=Math.max(0.8,Math.min(1.6,_pav.speed/1.4)); _glbAv.jog.timeScale=Math.max(0.8,Math.min(1.3,_pav.speed/3.2));
+    _glbAv.mixer.update(delta*(calmMode?0.9:1));
+    return;
+  }
   const calm=calmMode?0.8:1;
   if(_pav.k>0.02){
     const rate=moving?(Math.PI*2/1.5)*_pav.speed:5.5;     // un ciclo cada ~1,5 m; pasitos al girar
