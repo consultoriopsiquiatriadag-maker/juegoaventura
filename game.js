@@ -9599,6 +9599,40 @@ function updateGlbNPCs(delta){
 }
 
 
+
+// ─── FASE 94: NO TRASPASAR A LAS PERSONAS ───────────────────
+// El jugador choca con las personas (un círculo de ~0,5 m alrededor de cada una)
+// y, si las empuja un rato desde atrás o de costado, la persona se da vuelta
+// molesta y se lo dice; el jugador se detiene un momento.
+const NPC_RADIUS=0.5;
+const BACK_LINES=['¡Ey! No me empuje, por favor.','¡Disculpe! Un poquito de espacio, por favor.','¡Uy! Cuidado, que me pisa los talones.'];
+const _push={t:0,npc:null,cool:4};
+function collidePlayerNPCs(pos,delta){
+  if(_flight||_autoWalk||_deplaning) return;
+  let touching=null;
+  for(const n of npcs){
+    if(!n.visible||!n.parent||n.parent!==scene) continue;
+    const dx=pos.x-n.position.x, dz=pos.z-n.position.z;
+    if(Math.abs(dx)>NPC_RADIUS+0.1||Math.abs(dz)>NPC_RADIUS+0.1) continue;
+    const d=Math.hypot(dx,dz)||0.001, R=NPC_RADIUS*(n.scale.x||1);
+    if(d<R){ pos.x=n.position.x+dx/d*R; pos.z=n.position.z+dz/d*R; touching=n; }   // te empuja hacia afuera
+  }
+  if(_push.cool>0) _push.cool-=delta;
+  if(touching&&touching===_push.npc&&_pav.speed>0.4) _push.t+=delta; else { _push.t=Math.max(0,_push.t-delta*2); if(touching) _push.npc=touching; }
+  if(_push.t>0.35&&_push.cool<=0&&!uiModalOpen&&isGameActive&&_push.npc.userData.role==='civilian'){   // sólo pasajeros (no la PSA ni el personal)
+    const n=_push.npc, ud=n.userData;
+    _push.t=0; _push.cool=20+Math.random()*10;
+    _bump.freeze=Math.max(_bump.freeze,1.2); releaseMovementKeys(); joystick.nx=joystick.ny=0; velocity.set(0,0,0);
+    if(ud.behaviorState){ ud.behaviorState='pause'; ud.behaviorTimer=3; }
+    ud.lookTarget={x:pos.x,z:pos.z};
+    n.rotation.y=Math.atan2(pos.x-n.position.x,pos.z-n.position.z);          // se da vuelta hacia vos
+    const line=BACK_LINES[Math.floor(Math.random()*BACK_LINES.length)];
+    showToast('😠 «'+line+'»');
+    if(audioEnabled&&!isSpeaking) _speakTTS(line);
+    logInteraction('npc','empujon');
+  }
+}
+
 // ─── FASE 93: "¡TENGA CUIDADO EN SU PASO, POR FAVOR!" ───────
 // Si vas rápido directo hacia alguien y casi lo chocás, esa persona se frena,
 // te mira y te lo dice; vos te detenés solo un momento. Cada tanto, no siempre.
@@ -10447,6 +10481,7 @@ function animate(){
     if(pos.z<ARR.regionZ) _clampArrivals(pos,delta); // FASE 48: manga y pasillo de llegadas
     else { pos.x=Math.max(inWC?RESTROOM.x0+0.75:-16,Math.min(16,pos.x)); pos.z=Math.max(-60.6,Math.min(54,pos.z)); pos.y=PLAYER_HEIGHT; } // -60.6: fondo de la cabina (a Madrid se llega volando)
     if(pos.z>=ARR.regionZ&&!_flight&&!_autoWalk&&!_deplaning) _clampAirside(pos,_px,_pz);   // FASE 70
+    collidePlayerNPCs(pos,delta);   // FASE 94: no traspasar a las personas
     if(_flight) updateFlight(delta,t); // FASE 46: sentado en el 14C
     checkZones();
   }
