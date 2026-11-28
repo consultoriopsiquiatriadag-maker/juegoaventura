@@ -27,14 +27,14 @@
 
 | Recurso | Cómo se usa | Condición |
 |---|---|---|
-| **Personajes con esqueleto** `assets/avatar/*.glb` (8 modelos) | Avatar elegible en "Personalizar mi experiencia", pasajeros del hall y la sala de embarque (F86–F87) personal sin rostro propio: agentes y handling (F88, modelos Suit y Worker recoloreados como uniforme) y, en F89, Madrid, la PSA (con gorra, charreteras, placa, arma enfundada y tonfa modeladas por código), la agente del B2 y el doctor | **CC0 1.0** — Quaternius, *Ultimate Modular Men* (feb. 2022) y *Ultimate Modular Women* (abr. 2022). Convertidos a GLB con sólo 5 animaciones (Idle, Idle_Neutral, Walk, Run, Wave); se quitó la pistola del modelo "Suit" |
+| **Personajes con esqueleto** `assets/avatar/*.glb` (8 modelos) | Avatar elegible en "Personalizar mi experiencia", pasajeros del hall y la sala de embarque (F86–F87) personal sin rostro propio: agentes y handling (F88, modelos Suit y Worker recoloreados como uniforme) y, en F89, Madrid, la PSA (con gorra, charreteras, placa, arma enfundada y tonfa modeladas por código), la agente del B2 y el doctor; en F90, TCP (gorro, pañuelo, alas) y pilotos (gorra, anteojos de sol, charreteras, alas; pose sentada y saludo armados sobre los huesos) | **CC0 1.0** — Quaternius, *Ultimate Modular Men* (feb. 2022) y *Ultimate Modular Women* (abr. 2022). Convertidos a GLB con sólo 5 animaciones (Idle, Idle_Neutral, Walk, Run, Wave); se quitó la pistola del modelo "Suit" |
 | **Sonido del hall** `audios/ambiente/hall-aeropuerto.mp3` | Fondo del hall (procesado: graves recortados, bucle) | ⚠️ **Licencia no confirmada.** Archivo descargado ("Sonido Ultra Realista 3D Binaural"). Confirmar permiso del autor o reemplazar por grabación propia o CC0 |
 | Playlist "Animate a volar" — Aerolíneas Argentinas | Sólo enlace a YouTube, con atribución | Sin logos, sin descarga, sin embebido; se aclara que no hay convenio ni patrocinio |
 | GeoFS (Cessna 172 en Buenos Aires) | Enlace externo | Servicio de terceros, se abre en otra pestaña |
 | RENAPER (argentina.gob.ar) | Enlace externo | Sitio oficial |
 | Sitios del consultorio (juegosconsultoriodagnino, Te Paso a Buscar) | Enlaces y vistas previas dibujadas | Propios |
 | Cabina 737 de TurboSquid | **Sólo referencia visual**; la cabina se dibujó por código | No se descargó ni se usó el modelo (licenciado) |
-| Fotos de amigos, colegas y personal | Fueron **sólo referencia de estilo** para los personajes por código (F62–F68); desde F89 la PSA y la agente del B2 usan personajes genéricos | No se incluyen en el juego |
+| Fotos de amigos, colegas y personal | Fueron **sólo referencia de estilo** para los personajes por código (F62–F68); desde F89–F90 la PSA, la agente del B2, las TCP y los pilotos usan personajes genéricos con accesorios modelados por código | No se incluyen en el juego |
 | SkyGuru (phobia.aero) y VALK | **Sólo referencia conceptual** de propósito | No se copió código, interfaz ni contenido |
 
 ## 4. Marcas

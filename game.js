@@ -243,6 +243,7 @@ function init(){
   _T('upgradeStaff',()=>upgradeStaff());   // FASE 88: personal sin rostro propio con esqueleto
   _T('upgradeRoles',()=>upgradeRoles());   // FASE 89: Madrid, PSA, B2 y doctor
   _T('loadCabinCrew',()=>loadCabinCrew());
+  _T('upgradeCrew',()=>upgradeCrew());     // FASE 90: TCP y pilotos (después de crear la tripulación de cabina)
   _T('optimizeSceneResources',()=>optimizeSceneResources()); // FASE 36: comparte materiales/geometrías y fusiona props fijos
   _T('setupPostProcessing',()=>setupPostProcessing());
   _T('setupEvents',()=>setupEvents());
@@ -9371,7 +9372,8 @@ function _attachGlbNPC(npc,gl,model,i,fixed,acc){
   const mixer=new THREE.AnimationMixer(root), clip=(...ns)=>ns.map(n=>gl.animations.find(a=>a.name===n)).find(Boolean);
   const idle=mixer.clipAction(clip('Idle_Neutral','Idle')), walk=mixer.clipAction(clip('Walk'));
   idle.play(); walk.play(); idle.time=rnd(6)*2; walk.time=rnd(7)*1.2;
-  npc.userData.glb={mixer,idle,walk,speed:0,k:0,last:new THREE.Vector3().copy(npc.position),acc:0,head:root.getObjectByName('Head')};
+  npc.userData.glb={mixer,idle,walk,speed:0,k:0,last:new THREE.Vector3().copy(npc.position),acc:0,head:root.getObjectByName('Head'),root};
+  _glbCaptureRest(npc.userData.glb);                                  // FASE 90: pose de reposo de los huesos
   _glbNPCs.push(npc);
 }
 
@@ -9466,26 +9468,115 @@ function upgradeRoles(){
   jobs.forEach(([n,m,c,a],k)=>_getGlb(m).then(gl=>_attachGlbNPC(n,gl,m,200+k,c,a)).catch(e=>console.warn('[F89] modelo',m,e)));
   return jobs.length;
 }
-const _gv=new THREE.Vector3(), _gf=new THREE.Vector3();
+
+// ─── FASE 90: TRIPULACIÓN (TCP Y PILOTOS) CON ESQUELETO ─────
+// Poses armadas sobre los huesos (el paquete no trae "sentado"): muslos hacia
+// adelante, rodillas dobladas y pies apoyados (los pies del modelo son huesos
+// sueltos, por eso se reubican debajo de cada rodilla); manos a los comandos y
+// saludo con el brazo cuando el piloto se da vuelta.
+const _GB=['Root','UpperLegL','UpperLegR','LowerLegL','LowerLegR','FootL','FootR','UpperArmL','UpperArmR','LowerArmL','LowerArmR'];
+function _glbCaptureRest(G){
+  G.bn={}; G.rest={}; G.restPos={};
+  if(G.head) G.headRest=G.head.quaternion.clone();
+  _GB.forEach(n=>{ const b=G.root.getObjectByName(n); if(b){ G.bn[n]=b; G.rest[n]=b.quaternion.clone(); G.restPos[n]=b.position.clone(); } });
+  if(G.bn.LowerLegL&&G.bn.FootL){ G.root.updateMatrixWorld(true); const a=new THREE.Vector3(), b=new THREE.Vector3(); G.bn.LowerLegL.getWorldPosition(a); G.bn.FootL.getWorldPosition(b); G.shin=a.distanceTo(b); }
+}
+const _kp=new THREE.Vector3(), _kd=new THREE.Vector3(), _kq=new THREE.Quaternion();
+const _q1=new THREE.Quaternion(), _q2=new THREE.Quaternion(), _q3=new THREE.Quaternion(), _v1=new THREE.Vector3(), _v2=new THREE.Vector3();
+// Apunta un hueso (su eje Y) hacia una dirección dada en coordenadas del personaje
+// (x a su izquierda, y arriba, z adelante). Sirve para cualquier modelo, sin
+// depender de cómo esté orientado cada hueso por dentro.
+function _aimBone(G,name,dir){
+  const b=G.bn[name]; if(!b) return;
+  b.quaternion.copy(G.rest[name]); b.updateMatrixWorld(true);
+  b.getWorldQuaternion(_q1); _v1.set(0,1,0).applyQuaternion(_q1);
+  G.root.parent.getWorldQuaternion(_q2); _v2.copy(dir).normalize().applyQuaternion(_q2);
+  _q3.setFromUnitVectors(_v1,_v2).multiply(_q1);
+  b.parent.getWorldQuaternion(_q2); b.quaternion.copy(_q2.invert().multiply(_q3)); b.updateMatrixWorld(true);
+}
+const _DIR={thigh:new THREE.Vector3(0,0.06,1), shin:new THREE.Vector3(0,-1,0.12)};
+function _glbSit(G){
+  G.root.updateMatrixWorld(true);
+  ['L','R'].forEach(sd=>{ _aimBone(G,'UpperLeg'+sd,_DIR.thigh); _aimBone(G,'LowerLeg'+sd,_DIR.shin);
+    const ll=G.bn['LowerLeg'+sd], ft=G.bn['Foot'+sd]; if(!ll||!ft||!G.shin) return;
+    ll.getWorldPosition(_kp); ll.getWorldQuaternion(_kq); _kd.set(0,1,0).applyQuaternion(_kq);
+    _kp.addScaledVector(_kd,G.shin); ft.position.copy(ft.parent.worldToLocal(_kp)); ft.updateMatrixWorld(true); });
+}
+// Manos a los comandos y, si saluda, el brazo de afuera arriba moviendo la mano
+const _aD=new THREE.Vector3();
+function _glbArms(G,k,wave,t){
+  G.root.updateMatrixWorld(true);
+  // brazo de afuera: el más lejos del centro de la cabina
+  if(G.outer==null&&G.bn.UpperArmL&&G.bn.UpperArmR){ const a=new THREE.Vector3(), b=new THREE.Vector3(); G.bn.UpperArmL.getWorldPosition(a); G.bn.UpperArmR.getWorldPosition(b); G.outer=Math.abs(a.x-CABIN.x)>Math.abs(b.x-CABIN.x)?'L':'R'; }
+  ['L','R'].forEach(sd=>{ const out=sd==='L'?1:-1;
+    if(sd===G.outer&&wave>0.01){
+      _aimBone(G,'UpperArm'+sd,_aD.set(out*(0.45+0.3*(1-wave)),0.85*wave-0.6*(1-wave),0.15));
+      _aimBone(G,'LowerArm'+sd,_aD.set(out*(0.15+Math.sin(t*11)*0.35*wave),1*wave-0.3*(1-wave),0.2));
+    } else if(k>0.05){
+      _aimBone(G,'UpperArm'+sd,_aD.set(out*0.28,-0.75+0.3*k,0.35+0.5*k));
+      _aimBone(G,'LowerArm'+sd,_aD.set(-out*0.1,-0.45+0.25*k,0.4+0.6*k));
+    }
+  });
+}
+// Accesorios de tripulación
+function _accPilotCap(){ const c=_accPoliceCap(); c.children[4].material=_accM(0xd4a832,0.25,0.7); c.children[4].scale.set(1.5,1.0,1); return c; }
+function _accSunglasses(){ const g=_accGlasses(); const lens=new THREE.MeshStandardMaterial({color:0x101418,roughness:0.15,metalness:0.4,transparent:true,opacity:0.85});
+  [-1,1].forEach(sd=>{ const l=new THREE.Mesh(new THREE.BoxGeometry(0.056,0.034,0.004),lens); l.position.set(sd*0.042,0,0.002); g.add(l); }); return g; }
+function _accWings(){ const gold=_accM(0xd4a832,0.25,0.7); return _accGroup([[new THREE.BoxGeometry(0.09,0.014,0.005),gold,0,0,0],[new THREE.SphereGeometry(0.012,8,6),gold,0,0,0.003]]); }
+function _accScarf(col){ const m=_accM(col,0.6,0); return _accGroup([[new THREE.TorusGeometry(0.075,0.018,6,18,Math.PI*1.2),m,0,0,0,Math.PI/2,0,Math.PI*0.9],[new THREE.ConeGeometry(0.035,0.09,4),m,0.03,-0.06,0.02,0.3,0,Math.PI]]); }
+function _accTcpHat(col){ const m=_accM(col,0.55,0.05), b=_accM(0xd4a832,0.3,0.6); return _accGroup([[new THREE.CylinderGeometry(0.075,0.08,0.07,18),m,0,0.035,0],[new THREE.CylinderGeometry(0.081,0.081,0.012,18),b,0,0.006,0]]); }
+const CREW_NAVY=0x0b1630, TCP_SCARF=0x4fa8e0;
+function _pilotKit(stripes){ return (r)=>{
+  _glbAcc(r,'Head',_accPilotCap(),new THREE.Vector3(0,0.125,0.005));
+  _glbAcc(r,'Head',_accSunglasses(),new THREE.Vector3(0,0.075,0.115));
+  _glbAcc(r,'UpperArmL',_accEpaulette(stripes,0x0b1630),new THREE.Vector3(0,0.055,0));
+  _glbAcc(r,'UpperArmR',_accEpaulette(stripes,0x0b1630),new THREE.Vector3(0,0.055,0));
+  _glbAcc(r,'Chest',_accWings(),new THREE.Vector3(0.07,0.075,0.13)); }; }
+function _tcpKit(fem){ return (r)=>{
+  _glbAcc(r,'Chest',_accWings(),new THREE.Vector3(0.07,0.075,0.13));
+  if(fem){ _glbAcc(r,'Neck',_accScarf(TCP_SCARF),new THREE.Vector3(0,0.0,0.06)); _glbAcc(r,'Head',_accTcpHat(CREW_NAVY),new THREE.Vector3(0.02,0.13,-0.01),new THREE.Euler(0,0,-0.18)); } }; }
+function upgradeCrew(){
+  if(isMobile||!gltfLoader||!THREE.SkeletonUtils) return 0;
+  const jobs=[];
+  // TCP (en la puerta, en la demostración y caminando por el pasillo)
+  npcs.forEach(n=>{ const u=n.userData; if(u.role!=='attendant'||u.glb) return;
+    const fem=!!u.female; jobs.push([n,fem?'W_Suit':'M_Suit',fem?{Black:CREW_NAVY,White:0xf2f2f0}:{Suit:CREW_NAVY,White:0xf2f2f0,Tie:TCP_SCARF},_tcpKit(fem)]); });
+  // Piloto que camina por el hall
+  npcs.forEach(n=>{ const u=n.userData; if(u.role!=='pilot'||u.glb) return; jobs.push([n,'M_Suit',{Suit:CREW_NAVY,White:0xf2f2f0,Tie:0x0a0a0a},_pilotKit(4)]); });
+  // Pilotos sentados en la cabina de mando: se dan vuelta y saludan
+  _pilots.forEach((P,i)=>{ if(P.n.userData.glb) return;
+    const fem=!!P.n.userData.female;
+    P.n.userData.glbPose=(G)=>{ if(!G.seatAdj){ G.root.position.y-=0.14; G.seatAdj=true; } _glbSit(G);
+      const k=1-Math.min(1,Math.abs(P.turn)/1.3);
+      const a=P.state==='wave'?Math.min(1,P.t*3)*(P.t>2.3?Math.max(0,(2.8-P.t)/0.5):1):0;
+      _glbArms(G,Math.max(0.15,k),a,P.t); };
+    jobs.push([P.n,fem?'W_Suit':'M_Suit',fem?{Black:CREW_NAVY,White:0xf2f2f0}:{Suit:CREW_NAVY,White:0xf2f2f0,Tie:0x0a0a0a},_pilotKit(i===0?4:3)]); });
+  jobs.forEach(([n,m,c,a],k)=>_getGlb(m).then(gl=>_attachGlbNPC(n,gl,m,300+k,c,a)).catch(e=>console.warn('[F90] modelo',m,e)));
+  return jobs.length;
+}
+const _gv=new THREE.Vector3(), _gf=new THREE.Vector3(), _gw=new THREE.Vector3();
 function updateGlbNPCs(delta){
   if(!_glbNPCs.length) return;
   camera.getWorldDirection(_gf);
   const cp=camera.position;
   for(const n of _glbNPCs){
     const G=n.userData.glb; if(!G||!n.visible) continue;
-    const d=Math.hypot(n.position.x-G.last.x,n.position.z-G.last.z); G.last.copy(n.position);
+    n.getWorldPosition(_gw);                                          // FASE 90: posición real (algunos están dentro de otro grupo)
+    const d=Math.hypot(_gw.x-G.last.x,_gw.z-G.last.z); G.last.copy(_gw);
     const sp=delta>0&&d<2?d/delta:0; G.speed+=(sp-G.speed)*Math.min(1,delta*6);
     const kT=Math.min(1,G.speed/0.6); G.k+=(kT-G.k)*Math.min(1,delta*4);
     G.acc+=delta;
     // Sólo se anima si está cerca o a la vista (las de atrás o muy lejos esperan)
-    _gv.set(n.position.x-cp.x,0,n.position.z-cp.z); const dist=_gv.length();
+    _gv.set(_gw.x-cp.x,0,_gw.z-cp.z); const dist=_gv.length();
     if(dist>45||(dist>6&&(_gv.x*_gf.x+_gv.z*_gf.z)<0)) continue;
     if(dist>22&&G.acc<1/15) continue;                    // lejos: 15 cuadros por segundo alcanzan
     G.idle.setEffectiveWeight(1-G.k); G.walk.setEffectiveWeight(G.k);
     G.walk.timeScale=Math.max(0.6,Math.min(1.5,G.speed/1.25));
+    if(G.head&&G.headRest) G.head.quaternion.copy(G.headRest);      // FASE 90: la animación no mueve la cabeza: sin esto el giro se acumulaba
     G.mixer.update(G.acc); G.acc=0;
     // FASE 89: el giro de cabeza que calcula la lógica de siempre (mirar al visitante) pasa al hueso
     const hg=n.userData.headGroup; if(G.head&&hg&&(hg.rotation.y||hg.rotation.x)){ G.head.rotateY(hg.rotation.y); G.head.rotateX(-hg.rotation.x*0.6); }
+    if(n.userData.glbPose) n.userData.glbPose(G);                     // FASE 90: sentado / saludo
   }
 }
 
