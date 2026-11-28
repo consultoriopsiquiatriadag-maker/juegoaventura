@@ -9354,7 +9354,7 @@ const _glbNPCs=[];
 function upgradeHallWalkers(){
   if(!gltfLoader||!THREE.SkeletonUtils) return;
   // En celular, sólo 2 modelos (menos descarga); en computadora, los 6
-  const models=isMobile?['W_Casual','M_Casual_Hoodie']:['M_Casual_2','M_Casual_Hoodie','M_Suit','W_Casual','W_Formal','W_Suit'];   // sólo ropa de viajero
+  const models=['M_Casual_2','M_Casual_Hoodie','M_Suit','W_Casual','W_Formal','W_Suit'];   // sólo ropa de viajero · F95: también en celular (probado en teléfonos reales)
   // F86: hall (z>6). F87: también la sala de embarque, hasta el ventanal de la puerta A7
   // (no la cabina ni Madrid); incluye los trayectos que cruzan el control de seguridad.
   const hall=npcs.filter(n=>{ const u=n.userData; return u.isNPC&&!u.isStaff&&u.role==='civilian'&&n.scale.x>0.9&&u.start&&u.dest&&u.start.z>GATE.z&&u.dest.z>GATE.z; });
@@ -9396,11 +9396,11 @@ function _attachGlbNPC(npc,gl,model,i,fixed,acc){
 // informes y operarios de handling pasan a personajes con esqueleto, con
 // uniforme: traje azul marino con corbata de color o chaleco reflectivo. Los
 // personajes inspirados en personas reales (PSA, TCP, pilotos, B2, doctor) y
-// el personal de Madrid no se tocan acá. En celular se mantienen los de siempre
-// (serían ~3,5 MB más de descarga).
+// el personal de Madrid no se tocan acá. Desde F95 también en celular
+// (probado en teléfonos reales).
 const STAFF_NAVY=0x1a2a4a;
 function upgradeStaff(){
-  if(isMobile||!gltfLoader||!THREE.SkeletonUtils) return 0;
+  if(!gltfLoader||!THREE.SkeletonUtils) return 0;   // F95: también en celular
   const ties=[0x003399,0xcc7700,0xb3262e,0x0d6e5a];
   const jobs=[];
   npcs.forEach((n,i)=>{
@@ -9469,9 +9469,9 @@ function upgradeRoles(){
   if(!gltfLoader||!THREE.SkeletonUtils) return 0;
   const jobs=[];
   // Madrid: pasajeros de la sala de equipajes y gente que espera en el hall de llegadas
-  const models=isMobile?['W_Casual','M_Casual_Hoodie']:['M_Casual_2','M_Casual_Hoodie','M_Suit','W_Casual','W_Formal','W_Suit'];
+  const models=['M_Casual_2','M_Casual_Hoodie','M_Suit','W_Casual','W_Formal','W_Suit'];   // F95: igual en celular
   scene.children.forEach((o,i)=>{ const u=o.userData; if(u&&u.role==='civilian'&&!u.glb&&o!==officeDoctor&&o.position.z<ARR.regionZ&&o.scale.x>0.9&&u.headGroup) jobs.push([o,models[(jobs.length*5+1)%models.length],null,null]); });
-  if(!isMobile){
+  {   // F95: también en celular
     // Policía: uniforme azul oscuro con gorra, charreteras, placa, arma enfundada y tonfa
     scene.children.forEach(o=>{ const u=o.userData; if(u&&u.role==='police'&&!u.glb) jobs.push([o,u.female?'W_Suit':'M_Suit',u.female?POLICE_COLS_W:POLICE_COLS_M,_policeKit]); });
     // Agentes que quedaban: B2 (práctica de check-in) y equipaje perdido en Madrid
@@ -9554,7 +9554,7 @@ function _tcpKit(fem){ return (r)=>{
   _glbAcc(r,'Chest',_accWings(),new THREE.Vector3(0.07,0.075,0.13));
   if(fem){ _glbAcc(r,'Neck',_accScarf(TCP_SCARF),new THREE.Vector3(0,0.0,0.06)); _glbAcc(r,'Head',_accTcpHat(CREW_NAVY),new THREE.Vector3(0.02,0.13,-0.01),new THREE.Euler(0,0,-0.18)); } }; }
 function upgradeCrew(){
-  if(isMobile||!gltfLoader||!THREE.SkeletonUtils) return 0;
+  if(!gltfLoader||!THREE.SkeletonUtils) return 0;   // F95: también en celular
   const jobs=[];
   // TCP (en la puerta, en la demostración y caminando por el pasillo)
   npcs.forEach(n=>{ const u=n.userData; if(u.role!=='attendant'||u.glb) return;
@@ -10016,7 +10016,11 @@ function _aiShowCard(i){
   logInteraction('aeroinfo',it.id);
   const box=document.querySelector('#aeroinfo-modal .interact-box'); if(box) box.scrollTop=0;
 }
-function _aiSpeak(){ const it=AEROINFO[_ai.idx]; if(it) _speakTTS(it.title+'. '+it.points.join(' ')); }
+// FASE 95: tu voz grabada (audios/voz/30–37-info-*.mp3); si todavía falta, voz genérica
+const AEROINFO_VOZ={vuela:'30-info-como-vuela',turb:'31-info-turbulencia',sonidos:'32-info-sonidos',despegue:'33-info-despegue',
+  aterrizaje:'34-info-aterrizaje',goaround:'35-info-go-around',seguridad:'36-info-seguridad',cuerpo:'37-info-sensaciones'};
+function _aiSpeak(){ const it=AEROINFO[_ai.idx]; if(!it) return; const txt=it.title+'. '+it.points.join(' ');
+  const v=AEROINFO_VOZ[it.id]; if(v) _playSrc(VOICE_DIR+v+'.mp3',txt); else _speakTTS(txt); }
 function closeAeroInfo(){ cancelAnimationFrame(_ai.raf); _ai.idx=-1; stopSpeech(); closeUiModal('aeroinfo-modal'); }
 function buildAeroInfoCenter(){
   // Frente del local (buildAeroInfoShop(-15.5,20): fachada en x≈-13.3), donde antes estaba la pausa de café
