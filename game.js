@@ -6563,16 +6563,26 @@ function updateNPCs(delta, speedFactor){
       }
 
        if(ud.behaviorState!=='pause'){
-         // ── FASE 25: EVITACIÓN DEL JUGADOR ── desvío simple por distancia
-         var avoidX=0,avoidZ=0;
-         var pdx=camera.position.x-npc.position.x;
-         var pdz=camera.position.z-npc.position.z;
-         var pdist=Math.sqrt(pdx*pdx+pdz*pdz);
-         if(pdist<6&&pdist>0.3){
-           var avoidStr=(3-pdist)*0.6;
-           var avoidAng=Math.atan2(-pdz,-pdx)+Math.PI/2;
-           avoidX=Math.sin(avoidAng)*avoidStr*delta*2;
-           avoidZ=Math.cos(avoidAng)*avoidStr*delta*2;
+         // ── FASE 93: ESQUIVE REAL DEL JUGADOR ── si estás en su camino se corre de
+         // costado (el desvío se acumula y después vuelve solo a su trayecto) y baja el paso.
+         var avoidX=0,avoidZ=0, avoidSlow=1;
+         { const dv=_npcDir.copy(ud.dest).sub(ud.start); dv.y=0; const L=dv.length()||1; dv.multiplyScalar(1/L);
+           const px=-dv.z, pz=dv.x;                                        // perpendicular al recorrido
+           const pdx=camera.position.x-npc.position.x, pdz=camera.position.z-npc.position.z;
+           const ahead=pdx*dv.x+pdz*dv.z, lat=pdx*px+pdz*pz, so=ud.sideOff||0;
+           const maxOff=npc.position.z<GATE.z?0.12:1.3;                    // en el pasillo del avión casi no hay lugar
+           let want=0;
+           const latP=lat+so;                                              // tu posición respecto del trayecto (no de la persona ya corrida)
+           if(ahead>-0.5&&ahead<3.4&&Math.abs(latP)<2.2){
+             const side=Math.abs(so)>0.05?Math.sign(so):(latP>=0?-1:1);    // elige un lado y lo mantiene (sin dudar)
+             want=side<0?Math.min(0,latP-1.15):Math.max(0,latP+1.15);       // dejar ~1,15 m entre vos y la persona
+           }
+           else if(Math.hypot(pdx,pdz)<2.2) want=so;                       // todavía cerca: mantiene el desvío
+           want=Math.max(-maxOff,Math.min(maxOff,want));
+           ud.sideOff=so+Math.max(-1.6*delta,Math.min(1.6*delta,want-so));
+           avoidX=px*ud.sideOff; avoidZ=pz*ud.sideOff;
+           if(ahead>0&&ahead<1.4&&Math.abs(lat)<0.9) avoidSlow=0.25;
+           _maybeBump(npc,ud,pdx,pdz);
          }
         const dir=ud.dest.clone().sub(ud.start).normalize();
         if(ud.turnT>0){
@@ -6581,7 +6591,7 @@ function updateNPCs(delta, speedFactor){
           npc.position.y=0; npc.rotation.z*=0.9;
           _relaxPose(npc,1-Math.min(1,delta*5));
         } else {
-          ud.progress+=delta*ud.spd*0.055*walkMult*(speedFactor||1.0);
+          ud.progress+=delta*ud.spd*0.055*walkMult*(speedFactor||1.0)*(typeof avoidSlow==='number'?avoidSlow:1);
           if(ud.progress>=1){ ud.progress=0; const tmp=ud.start.clone(); ud.start.copy(ud.dest); ud.dest.copy(tmp); ud.turnT=1.3; }
           const pos=ud.start.clone().lerp(ud.dest,ud.progress);
           // Ciclo de paso (FASE 55): cadencia propia de cada persona, rodillas que
@@ -6590,7 +6600,7 @@ function updateNPCs(delta, speedFactor){
           ud.wt+=delta*ud.spd*ud.cadence*(calmMode?0.85:1);
           _walkPose(npc,ud.wt,calmMode?0.8:1);
           const bob=calmMode?0.016:0.028;
-          npc.position.set(pos.x+avoidX,Math.abs(Math.cos(ud.wt))*bob*npc.scale.y,pos.z+avoidZ);
+          npc.position.set(pos.x+avoidX,Math.abs(Math.cos(ud.wt))*bob*npc.scale.y,pos.z+avoidZ);   // FASE 93: desvío lateral
           npc.rotation.z=Math.sin(ud.wt)*0.018;
         }
         // Orientación suave hacia la dirección de marcha (gira en ~1 s al dar la vuelta)
@@ -9588,6 +9598,29 @@ function updateGlbNPCs(delta){
   }
 }
 
+
+// ─── FASE 93: "¡TENGA CUIDADO EN SU PASO, POR FAVOR!" ───────
+// Si vas rápido directo hacia alguien y casi lo chocás, esa persona se frena,
+// te mira y te lo dice; vos te detenés solo un momento. Cada tanto, no siempre.
+const _npcDir=new THREE.Vector3();
+const _bump={cool:6,freeze:0};
+const BUMP_LINES=['¡Tenga cuidado en su paso, por favor!','¡Cuidado, por favor! Vamos con calma.','¡Epa! Con cuidado, por favor.'];
+function _maybeBump(npc,ud,pdx,pdz){
+  if(_bump.cool>0||_bump.freeze>0||uiModalOpen||_flight||!isGameActive) return;
+  const d=Math.hypot(pdx,pdz); if(d>1.6||d<0.05) return;            // aunque se corra, si vas directo y rápido te frena
+  if(_pav.speed<1.6||!_pav.mdx&&!_pav.mdz) return;
+  // ¿Te movés hacia esa persona?
+  const toward=-(pdx*_pav.mdx+pdz*_pav.mdz)/d; if(toward<0.65) return;
+  _bump.cool=28+Math.random()*12; _bump.freeze=1.5;
+  releaseMovementKeys(); joystick.nx=joystick.ny=0; velocity.set(0,0,0);
+  ud.behaviorState='pause'; ud.behaviorTimer=3.2; ud.lookTarget={x:camera.position.x,z:camera.position.z};
+  npc.rotation.y=Math.atan2(pdx,pdz);                                 // se da vuelta hacia vos
+  const line=BUMP_LINES[Math.floor(Math.random()*BUMP_LINES.length)];
+  showToast('🙋 «'+line+'»');
+  if(audioEnabled&&!isSpeaking) _speakTTS(line);
+  logInteraction('npc','cuidado');
+}
+
 // ─── FASE 75 (F41): CÁMARAS INTERCAMBIABLES ─────────────────
 // Tres vistas: primera persona, tercera cercana y tercera panorámica. La vista
 // externa sigue a la persona por detrás, se acerca si hay una pared o una
@@ -10093,6 +10126,7 @@ function updatePlayerAvatar(delta){
   const dx=p.x-_pav.last.x, dz=p.z-_pav.last.z; _pav.last.set(p.x,0,p.z);
   const dist=Math.hypot(dx,dz);
   const inst=dist>2?0:dist/delta;                        // un salto (teletransporte) no es caminar
+  if(dist>1e-4&&dist<2){ _pav.mdx=dx/dist; _pav.mdz=dz/dist; }   // FASE 93: hacia dónde te movés
   _pav.speed+=(inst-_pav.speed)*Math.min(1,delta*8);
   // Hacia dónde mira la persona (dirección de la cámara en el plano)
   const fw=new THREE.Vector3(); camera.getWorldDirection(fw);
@@ -10379,7 +10413,9 @@ function animate(){
   // Modo calma activa menor velocidad y FOV reducido
   if(isGameActive && !isPaused && !uiModalOpen && (isMobile || controls.isLocked)){
     const _px=camera.position.x, _pz=camera.position.z;   // FASE 70: para frenar en el ventanal
-    if(isMobile){
+    if(_bump.cool>0) _bump.cool-=delta;
+    if(_bump.freeze>0){ _bump.freeze-=delta; velocity.set(0,0,0); releaseMovementKeys(); joystick.nx=joystick.ny=0; }   // FASE 93: te detenés un momento
+    else if(isMobile){
       // Botones de rotación: velocidad 1.8 rad/s
       if(rotateLeft)  mobileYaw+=1.8*delta;
       if(rotateRight) mobileYaw-=1.8*delta;
