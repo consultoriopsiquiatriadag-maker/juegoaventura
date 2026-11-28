@@ -9334,6 +9334,10 @@ const NPC_GLB_SLOTS={
 // los muñecos por código a veces daba beige "color piel")
 const NPC_GLB_TOPS=[0x1f3a5f,0x2a6f8f,0x7a1f2b,0x2e5e3e,0xb8862b,0x3b3f46,0x5a3b6e,0xe9e9e6,0x9b3a26,0x1d5c63,0x222327,0x4d6b8a];
 const NPC_GLB_PANTS=[0x1c2a44,0x2b3a55,0x222327,0x3b3f46,0x4a3b2a,0x5b5048,0x203248];
+// Altura de los personajes con esqueleto. El aeropuerto está construido a la
+// escala de los muñecos por código (~2 m): con 1,72 m parecían "mini personas"
+// frente a mostradores y asientos. Los accesorios se agrandan en la misma proporción.
+const GLB_HEIGHT=1.96, GLB_HF=GLB_HEIGHT/1.72;
 const _glbCache={};
 function _getGlb(model){ return _glbCache[model]||(_glbCache[model]=new Promise((ok,ko)=>gltfLoader.load('assets/avatar/'+model+'.glb?v='+AVATAR_VER,ok,undefined,ko))); }
 const _glbNPCs=[];
@@ -9364,7 +9368,7 @@ function _attachGlbNPC(npc,gl,model,i,fixed,acc){
     const fix=m=>{ if(col[m.name]==null) return m; if(!own[m.name]){ own[m.name]=m.clone(); own[m.name].color.set(col[m.name]); } return own[m.name]; };
     o.material=Array.isArray(o.material)?o.material.map(fix):fix(o.material);
   });
-  const bb=new THREE.Box3().setFromObject(root), k=1.72*(S.h||1)*(0.96+rnd(5)*0.08)/(bb.max.y-bb.min.y);
+  const bb=new THREE.Box3().setFromObject(root), k=GLB_HEIGHT*(S.h||1)*(0.96+rnd(5)*0.08)/(bb.max.y-bb.min.y);
   root.scale.setScalar(k); root.position.y=-bb.min.y*k;
   npc.children.forEach(c=>{ if(!c.userData.keep) c.visible=false; });          // oculta el muñeco por código
   npc.add(root);
@@ -9412,13 +9416,13 @@ function _glbAcc(root,boneName,obj,off,rot){
   const b=root.getObjectByName(boneName); if(!b) return;
   const holder=root.parent; holder.getWorldQuaternion(_aq);
   const wp=new THREE.Vector3(); b.getWorldPosition(wp);
-  wp.add(_av3.copy(off).applyQuaternion(_aq));
+  wp.add(_av3.copy(off).multiplyScalar(GLB_HF).applyQuaternion(_aq));
   const wq=_aq.clone().multiply(_aq2.setFromEuler(rot||new THREE.Euler()));
   b.add(obj); b.updateMatrixWorld(true);
   obj.position.copy(b.worldToLocal(wp.clone()));
   const bq=new THREE.Quaternion(); b.getWorldQuaternion(bq);
   obj.quaternion.copy(bq.invert().multiply(wq));
-  b.getWorldScale(_as); obj.scale.set(1/_as.x,1/_as.y,1/_as.z);
+  b.getWorldScale(_as); obj.scale.set(GLB_HF/_as.x,GLB_HF/_as.y,GLB_HF/_as.z);
 }
 const _accM=(c,r=0.55,m=0.1)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
 function _accGroup(parts){ const g=new THREE.Group(); parts.forEach(([geo,mat,x,y,z,rx,ry,rz])=>{ const o=new THREE.Mesh(geo,mat); o.position.set(x||0,y||0,z||0); o.rotation.set(rx||0,ry||0,rz||0); g.add(o); }); return g; }
@@ -9463,7 +9467,11 @@ function upgradeRoles(){
     // Agentes que quedaban: B2 (práctica de check-in) y equipaje perdido en Madrid
     npcs.forEach(n=>{ const u=n.userData; if(u.isStaff&&u.role==='agent'&&!u.glb){ const madrid=n.position.z<ARR.regionZ; jobs.push([n,'W_Suit',{Black:madrid?0x2f5a78:STAFF_NAVY},null]); } });
     // El doctor: pelo canoso, anteojos rectangulares oscuros, traje azul, camisa blanca y corbata azul
-    if(officeDoctor&&!officeDoctor.userData.glb) jobs.push([officeDoctor,'M_Suit',DOCTOR_COLS,(r)=>_glbAcc(r,'Head',_accGlasses(),new THREE.Vector3(0,0.075,0.115))]);
+    if(officeDoctor&&!officeDoctor.userData.glb){
+      // F90: sentado en su silla, con las manos hacia el escritorio (misma pose que los pilotos)
+      officeDoctor.userData.glbPose=(G)=>{ if(!G.seatAdj){ G.root.position.y-=0.12; G.seatAdj=true; } _glbSit(G); _glbArms(G,0.8,0,0); };
+      jobs.push([officeDoctor,'M_Suit',DOCTOR_COLS,(r)=>_glbAcc(r,'Head',_accGlasses(),new THREE.Vector3(0,0.075,0.115))]);
+    }
   }
   jobs.forEach(([n,m,c,a],k)=>_getGlb(m).then(gl=>_attachGlbNPC(n,gl,m,200+k,c,a)).catch(e=>console.warn('[F89] modelo',m,e)));
   return jobs.length;
@@ -9546,7 +9554,7 @@ function upgradeCrew(){
   // Pilotos sentados en la cabina de mando: se dan vuelta y saludan
   _pilots.forEach((P,i)=>{ if(P.n.userData.glb) return;
     const fem=!!P.n.userData.female;
-    P.n.userData.glbPose=(G)=>{ if(!G.seatAdj){ G.root.position.y-=0.14; G.seatAdj=true; } _glbSit(G);
+    P.n.userData.glbPose=(G)=>{ if(!G.seatAdj){ G.root.position.y-=0.26; G.seatAdj=true; } _glbSit(G);
       const k=1-Math.min(1,Math.abs(P.turn)/1.3);
       const a=P.state==='wave'?Math.min(1,P.t*3)*(P.t>2.3?Math.max(0,(2.8-P.t)/0.5):1):0;
       _glbArms(G,Math.max(0.15,k),a,P.t); };
@@ -10026,7 +10034,7 @@ function _nameTag(name){
     ctx.fillStyle='#ffffff'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(name,256,66,480); });
   t.encoding=THREE.sRGBEncoding;
   const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthWrite:false,toneMapped:false}));
-  sp.scale.set(0.9,0.225,1); sp.position.set(0,2.08,0); sp.renderOrder=5; sp.name='nameTag';
+  sp.scale.set(0.9,0.225,1); sp.position.set(0,2.32,0); sp.renderOrder=5; sp.name='nameTag';
   return sp;
 }
 const _pav={ last:null, speed:0, k:0, ph:0, heading:0, yawPrev:null, turnRate:0, idle:0 };
@@ -10058,7 +10066,7 @@ function _loadGlbAvatar(wrapper,model,onReady){
   gltfLoader.load('assets/avatar/'+model+'.glb?v='+AVATAR_VER,(g)=>{
     const root=g.scene;
     root.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.frustumCulled=false; } });
-    const bb=new THREE.Box3().setFromObject(root), h=bb.max.y-bb.min.y, k=1.72/h;   // ~1,72 m
+    const bb=new THREE.Box3().setFromObject(root), h=bb.max.y-bb.min.y, k=GLB_HEIGHT/h;   // misma escala que el resto
     root.scale.setScalar(k); root.position.y=-bb.min.y*k;
     wrapper.children.forEach(c=>{ if(c.name!=='nameTag') c.visible=false; });       // oculta el muñeco clásico
     wrapper.add(root);
